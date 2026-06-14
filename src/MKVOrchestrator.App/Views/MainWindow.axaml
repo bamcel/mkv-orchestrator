@@ -46,12 +46,12 @@
                        IsChecked="{Binding IsRenameSection}"
                        Command="{Binding SelectSectionCommand}"
                        CommandParameter="Rename" />
-          <RadioButton Content="Merge / Remux"
+          <RadioButton Content="Mux / Remux"
                        Classes="nav-item"
                        GroupName="MainNavigation"
                        IsChecked="{Binding IsMergeSection}"
                        Command="{Binding SelectSectionCommand}"
-                       CommandParameter="Merge" />
+                       CommandParameter="Mux / Remux" />
           <RadioButton Content="Track Properties"
                        Classes="nav-item"
                        GroupName="MainNavigation"

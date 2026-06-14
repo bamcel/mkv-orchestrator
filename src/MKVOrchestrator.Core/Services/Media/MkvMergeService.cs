@@ -407,9 +407,12 @@ public sealed class MkvMergeService
         }
 
         ReplaceOriginalWithTemp(action.SourceFilePath, tempPath);
-        if (action.DeleteExternalSubtitleAfterSuccess && !string.IsNullOrWhiteSpace(action.ExternalSubtitleFilePath))
+        if (action.DeleteExternalSubtitleAfterSuccess)
         {
-            TryDeleteTempFile(action.ExternalSubtitleFilePath);
+            foreach (var externalSubtitlePath in GetExternalSubtitlePaths(action))
+            {
+                TryDeleteTempFile(externalSubtitlePath);
+            }
         }
 
         onProgressPercent?.Invoke(100);
@@ -507,48 +510,51 @@ public sealed class MkvMergeService
         bool skipIfSubtitleAlreadyExists,
         bool useSafeTempReplacement)
     {
-        var subtitlePath = FindMatchingExternalSubtitle(file.FilePath, formats);
-        if (string.IsNullOrWhiteSpace(subtitlePath))
+        var normalizedLanguage = string.IsNullOrWhiteSpace(language) ? "eng" : language.Trim().ToLowerInvariant();
+        var subtitleInputs = FindMatchingExternalSubtitles(file.FilePath, formats)
+            .Select(path => BuildExternalSubtitleInput(path, file.FilePath, normalizedLanguage, trackName))
+            .Where(input => !skipIfSubtitleAlreadyExists || !HasMatchingSubtitleTrack(file, input.Language, input.TrackName))
+            .ToList();
+
+        if (subtitleInputs.Count == 0)
         {
             return null;
         }
 
-        var normalizedLanguage = string.IsNullOrWhiteSpace(language) ? "eng" : language.Trim().ToLowerInvariant();
-        if (skipIfSubtitleAlreadyExists && file.Tracks.Any(t =>
-                IsSubtitleTrack(t.Type) &&
-                LanguageMatches(t.Language, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { normalizedLanguage })))
-        {
-            return null;
-        }
+        var subtitlePaths = subtitleInputs.Select(input => input.Path).ToList();
 
         var tempPath = BuildTempOutputPath(file.FilePath);
         var args = new List<string>
         {
             "-o",
             tempPath,
-            file.FilePath,
-            "--language",
-            "0:" + normalizedLanguage
+            file.FilePath
         };
 
-        if (!string.IsNullOrWhiteSpace(trackName))
+        foreach (var input in subtitleInputs)
         {
-            args.Add("--track-name");
-            args.Add("0:" + trackName.Trim());
-        }
+            args.Add("--language");
+            args.Add("0:" + input.Language);
 
-        args.Add(subtitlePath);
+            if (!string.IsNullOrWhiteSpace(input.TrackName))
+            {
+                args.Add("--track-name");
+                args.Add("0:" + input.TrackName);
+            }
+
+            args.Add(input.Path);
+        }
 
         return new MkvMergeRemuxAction
         {
             SourceFilePath = file.FilePath,
             TempOutputPath = tempPath,
             UseSafeTempReplacement = useSafeTempReplacement,
-            Description = $"Mux external subtitle: {Path.GetFileName(subtitlePath)} as {normalizedLanguage}" +
-                          (string.IsNullOrWhiteSpace(trackName) ? string.Empty : $" / \"{trackName.Trim()}\""),
+            Description = BuildExternalSubtitleDescription(subtitleInputs),
             ToolName = "mkvmerge",
             Operation = "mux-external-subtitle",
-            ExternalSubtitleFilePath = subtitlePath,
+            ExternalSubtitleFilePath = subtitlePaths[0],
+            ExternalSubtitleFilePaths = subtitlePaths,
             DeleteExternalSubtitleAfterSuccess = !preserveExternalSubtitleFile,
             Arguments = args
         };
@@ -591,27 +597,162 @@ public sealed class MkvMergeService
         }
     }
 
-    private static string? FindMatchingExternalSubtitle(string mkvPath, string formats)
+    private sealed record ExternalSubtitleInput(string Path, string Language, string TrackName);
+
+    private static IReadOnlyList<string> GetExternalSubtitlePaths(MkvMergeRemuxAction action)
+    {
+        if (action.ExternalSubtitleFilePaths.Count > 0)
+        {
+            return action.ExternalSubtitleFilePaths;
+        }
+
+        return string.IsNullOrWhiteSpace(action.ExternalSubtitleFilePath)
+            ? Array.Empty<string>()
+            : new[] { action.ExternalSubtitleFilePath };
+    }
+
+    private static string BuildExternalSubtitleDescription(IReadOnlyList<ExternalSubtitleInput> subtitleInputs)
+    {
+        if (subtitleInputs.Count == 1)
+        {
+            var input = subtitleInputs[0];
+            return $"Mux external subtitle: {Path.GetFileName(input.Path)} as {input.Language}" +
+                   (string.IsNullOrWhiteSpace(input.TrackName) ? string.Empty : $" / \"{input.TrackName}\"");
+        }
+
+        var parts = subtitleInputs
+            .Select(input => $"{Path.GetFileName(input.Path)} as {input.Language}" +
+                             (string.IsNullOrWhiteSpace(input.TrackName) ? string.Empty : $" / \"{input.TrackName}\""));
+
+        return $"Mux {subtitleInputs.Count} external subtitles: " + string.Join("; ", parts);
+    }
+
+    private static bool HasMatchingSubtitleTrack(MkvFileItem file, string language, string trackName)
+    {
+        return file.Tracks.Any(t =>
+            IsSubtitleTrack(t.Type) &&
+            LanguageMatches(t.Language, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { language }) &&
+            (string.IsNullOrWhiteSpace(trackName) || string.Equals(t.Name?.Trim(), trackName.Trim(), StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static ExternalSubtitleInput BuildExternalSubtitleInput(string subtitlePath, string mkvPath, string fallbackLanguage, string configuredTrackName)
+    {
+        var parts = ParseExternalSubtitleParts(subtitlePath, mkvPath, fallbackLanguage);
+        return new ExternalSubtitleInput(
+            subtitlePath,
+            parts.Language,
+            BuildExternalSubtitleTrackName(configuredTrackName, parts.Language, parts.Tag));
+    }
+
+    private static string BuildExternalSubtitleTrackName(string configuredTrackName, string language, string tag)
+    {
+        if (string.IsNullOrWhiteSpace(configuredTrackName))
+        {
+            return FormatSubtitleTagAsTrackName(tag);
+        }
+
+        return configuredTrackName
+            .Trim()
+            .Replace("{language}", language, StringComparison.OrdinalIgnoreCase)
+            .Replace("{tag}", FormatSubtitleTagAsTrackName(tag), StringComparison.OrdinalIgnoreCase)
+            .Replace("  ", " ", StringComparison.Ordinal)
+            .Trim();
+    }
+
+    private static (string Language, string Tag) ParseExternalSubtitleParts(string subtitlePath, string mkvPath, string fallbackLanguage)
+    {
+        var suffix = GetExternalSubtitleSuffix(subtitlePath, mkvPath);
+        if (string.IsNullOrWhiteSpace(suffix))
+        {
+            return (fallbackLanguage, string.Empty);
+        }
+
+        var segments = suffix
+            .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        if (segments.Count == 0)
+        {
+            return (fallbackLanguage, string.Empty);
+        }
+
+        if (IsLanguageToken(segments[0]))
+        {
+            return (segments[0].ToLowerInvariant(), string.Join(".", segments.Skip(1)));
+        }
+
+        return (fallbackLanguage, suffix);
+    }
+
+    private static bool IsLanguageToken(string value)
+    {
+        return Regex.IsMatch(value ?? string.Empty, "^[a-zA-Z]{2,3}$", RegexOptions.CultureInvariant);
+    }
+
+    private static string GetExternalSubtitleSuffix(string subtitlePath, string mkvPath)
+    {
+        var baseName = Path.GetFileNameWithoutExtension(mkvPath);
+        var subtitleName = Path.GetFileNameWithoutExtension(subtitlePath);
+        if (subtitleName.Equals(baseName, StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        var prefix = baseName + ".";
+        return subtitleName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            ? subtitleName[prefix.Length..]
+            : string.Empty;
+    }
+
+    private static string FormatSubtitleTagAsTrackName(string tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            return string.Empty;
+        }
+
+        var words = Regex.Split(tag, @"[\s._-]+")
+            .Where(word => !string.IsNullOrWhiteSpace(word))
+            .Select(word => char.ToUpperInvariant(word[0]) + (word.Length > 1 ? word[1..].ToLowerInvariant() : string.Empty));
+
+        return string.Join(" ", words);
+    }
+
+    private static IReadOnlyList<string> FindMatchingExternalSubtitles(string mkvPath, string formats)
     {
         var folder = Path.GetDirectoryName(mkvPath);
         if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
         {
-            return null;
+            return Array.Empty<string>();
         }
 
         var baseName = Path.GetFileNameWithoutExtension(mkvPath);
         var extensions = ParseSubtitleExtensions(formats);
+        var extensionOrder = extensions
+            .Select((extension, index) => new { Extension = extension, Index = index })
+            .ToDictionary(item => item.Extension, item => item.Index, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var extension in extensions)
+        return Directory.EnumerateFiles(folder)
+            .Where(path => IsMatchingExternalSubtitlePath(path, baseName, extensions))
+            .OrderBy(path => GetExternalSubtitleSuffix(path, mkvPath).Length == 0 ? 0 : 1)
+            .ThenBy(path => ParseExternalSubtitleParts(path, mkvPath, string.Empty).Language, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(path => ParseExternalSubtitleParts(path, mkvPath, string.Empty).Tag, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(path => extensionOrder.GetValueOrDefault(Path.GetExtension(path), int.MaxValue))
+            .ThenBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static bool IsMatchingExternalSubtitlePath(string path, string baseName, IReadOnlyCollection<string> extensions)
+    {
+        var extension = Path.GetExtension(path);
+        if (!extensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
         {
-            var candidate = Path.Combine(folder, baseName + extension);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
+            return false;
         }
 
-        return null;
+        var subtitleName = Path.GetFileNameWithoutExtension(path);
+        return subtitleName.Equals(baseName, StringComparison.OrdinalIgnoreCase) ||
+               subtitleName.StartsWith(baseName + ".", StringComparison.OrdinalIgnoreCase);
     }
 
     private static List<string> ParseSubtitleExtensions(string formats)

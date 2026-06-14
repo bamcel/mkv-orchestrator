@@ -137,6 +137,13 @@
                 <StackPanel Grid.Row="1" Spacing="3" HorizontalAlignment="Left" Width="318">
                   <CheckBox Content="Mux matching external subtitles"
                             IsChecked="{Binding MergeMuxMatchingExternalSubtitles}" />
+                  <TextBlock Text="File Format: base_name.language.tag.ext"
+                             Foreground="#BD93F9"
+                             Margin="0,0,0,2" />
+                  <TextBlock Text="Fallback language"
+                             Classes="muted"
+                             FontSize="12"
+                             Margin="10,4,0,-1" />
                   <Border Width="300"
                           HorizontalAlignment="Left"
                           Background="#282A36"
@@ -149,18 +156,10 @@
                            MinHeight="36"
                            Padding="10,0,8,0" />
                   </Border>
-                  <Border Width="300"
-                          HorizontalAlignment="Left"
-                          Background="#282A36"
-                          BorderBrush="#44475A"
-                          BorderThickness="1"
-                          CornerRadius="4"
-                          ClipToBounds="False">
-                    <TextBox BorderThickness="0" Background="Transparent" Text="{Binding MergeExternalSubtitleTrackName}"
-                           Watermark="English"
-                           MinHeight="36"
-                           Padding="10,0,8,0" />
-                  </Border>
+                  <TextBlock Text="Subtitle file extensions"
+                             Classes="muted"
+                             FontSize="12"
+                             Margin="10,4,0,-1" />
                   <Border Width="300"
                           HorizontalAlignment="Left"
                           Background="#282A36"
@@ -173,6 +172,9 @@
                            MinHeight="36"
                            Padding="10,0,8,0" />
                   </Border>
+                  <TextBlock Text="Example: Episode 01.eng.Dialogue.ass. See more details on how to use in Settings."
+                             TextWrapping="Wrap"
+                             Classes="muted" />
                 </StackPanel>
 
                 <TextBlock Grid.Row="2" Text="Mux Options" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,8,0,1" />

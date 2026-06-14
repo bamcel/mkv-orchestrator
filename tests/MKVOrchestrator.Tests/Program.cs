@@ -1,5 +1,6 @@
 using MKVOrchestrator.Core.Models;
 using MKVOrchestrator.Core.Services;
+using MKVOrchestrator.Core.Services.Media;
 using MKVOrchestrator.Core.Services.Rename;
 
 var tests = new (string Name, Action Test)[]
@@ -8,7 +9,8 @@ var tests = new (string Name, Action Test)[]
     ("RenamePlanner sanitizes invalid and Windows-risky filename characters", RenamePlannerSanitizesFileNames),
     ("RenamePlanner blocks duplicate targets", RenamePlannerBlocksDuplicateTargets),
     ("CrossPlatformRuntime normalizes quoted and environment paths", CrossPlatformRuntimeNormalizesPaths),
-    ("MkvPropEditCommandBuilder uses type ordinal selectors", MkvPropEditCommandBuilderUsesTrackSelectors)
+    ("MkvPropEditCommandBuilder uses type ordinal selectors", MkvPropEditCommandBuilderUsesTrackSelectors),
+    ("MkvMergeService muxes multiple matching external subtitles", MkvMergeServiceMuxesMultipleMatchingExternalSubtitles)
 };
 
 var failures = 0;
@@ -117,6 +119,65 @@ static void MkvPropEditCommandBuilderUsesTrackSelectors()
     AssertContains("track:v1", result.Arguments);
     AssertContains("track:a2", result.Arguments);
     AssertContains("name=English", result.Arguments);
+}
+
+static void MkvMergeServiceMuxesMultipleMatchingExternalSubtitles()
+{
+    var folder = Path.Combine(Path.GetTempPath(), "mkvo-subtitle-test-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(folder);
+    try
+    {
+        var mkvPath = Path.Combine(folder, "Episode 01.mkv");
+        var signsPath = Path.Combine(folder, "Episode 01.eng.Signs & Songs.ass");
+        var dialoguePath = Path.Combine(folder, "Episode 01.jpn.Dialogue.ass");
+        File.WriteAllText(mkvPath, string.Empty);
+        File.WriteAllText(signsPath, string.Empty);
+        File.WriteAllText(dialoguePath, string.Empty);
+
+        var file = new MkvFileItem
+        {
+            FilePath = mkvPath,
+            Selected = true
+        };
+
+        var plan = new MkvMergeService().BuildRemuxPlan(
+            new[] { file },
+            keepAudioLanguages: "eng,jpn",
+            keepSubtitleLanguages: "eng",
+            removeUnwantedAudioLanguages: false,
+            removeUnwantedSubtitleLanguages: false,
+            removeUnwantedTrackIds: false,
+            removeTrackIdsText: string.Empty,
+            preserveChapters: true,
+            preserveAttachments: true,
+            useSafeTempReplacement: true,
+            muxMatchingExternalSubtitles: true,
+            externalSubtitleLanguage: "und",
+            externalSubtitleTrackName: "{tag}",
+            externalSubtitleFormats: "ass,srt",
+            preserveExternalSubtitleFiles: true,
+            skipMuxIfSubtitleAlreadyExists: true,
+            extractSubtitles: false,
+            extractSubtitleLanguages: "eng",
+            extractOverwriteExistingFiles: false);
+
+        AssertEqual(1, plan.Actions.Count);
+        var action = plan.Actions[0];
+        AssertEqual(2, action.ExternalSubtitleFilePaths.Count);
+        AssertContains(signsPath, action.Arguments);
+        AssertContains(dialoguePath, action.Arguments);
+        AssertContains("0:eng", action.Arguments);
+        AssertContains("0:jpn", action.Arguments);
+        AssertContains("0:Signs & Songs", action.Arguments);
+        AssertContains("0:Dialogue", action.Arguments);
+    }
+    finally
+    {
+        if (Directory.Exists(folder))
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }
 
 static void AssertEqual<T>(T expected, T actual)

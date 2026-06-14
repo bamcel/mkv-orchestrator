@@ -14,7 +14,13 @@
 
               <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Spacing="4">
-                  <TextBox Text="{Binding FolderPath}" Watermark="Select folder containing MKV files" />
+                  <TextBox Text="{Binding FolderPath}"
+                           Watermark="Select folder(s) containing MKV files"
+                           Height="36"
+                           MinHeight="36"
+                           TextWrapping="NoWrap"
+                           AcceptsReturn="False"
+                           ToolTip.Tip="{Binding FolderPath}" />
                   <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6" HorizontalAlignment="Stretch">
                     <Button Grid.Column="0"
                             Content="Browse"

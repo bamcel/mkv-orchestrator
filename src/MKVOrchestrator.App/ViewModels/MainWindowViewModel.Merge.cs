@@ -25,7 +25,6 @@ public partial class MainWindowViewModel
     [ObservableProperty] private string mergeRemoveTrackIdsText = string.Empty;
     [ObservableProperty] private bool mergeMuxMatchingExternalSubtitles;
     [ObservableProperty] private string mergeExternalSubtitleLanguage = "eng";
-    [ObservableProperty] private string mergeExternalSubtitleTrackName = "English";
     [ObservableProperty] private string mergeExternalSubtitleFormat = "srt,ass,ssa,sub,idx";
     [ObservableProperty] private bool mergePreserveExternalSubtitleFiles = true;
     [ObservableProperty] private bool mergeSkipMuxIfSubtitleAlreadyExists = true;
@@ -175,7 +174,7 @@ public partial class MainWindowViewModel
             MergeUseSafeTempReplacement,
             MergeMuxMatchingExternalSubtitles,
             MergeExternalSubtitleLanguage,
-            MergeExternalSubtitleTrackName,
+            "{tag}",
             MergeExternalSubtitleFormat,
             MergePreserveExternalSubtitleFiles,
             MergeSkipMuxIfSubtitleAlreadyExists,

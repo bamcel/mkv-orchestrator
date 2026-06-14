@@ -49,6 +49,8 @@ public partial class MainWindowViewModel : ObservableObject
     private WorkerSettings _workerSettings = WorkerSettings.Defaults;
     private bool _isLoadingSettings;
     private string _lastBrowseFolderPath = string.Empty;
+    private List<string> _selectedScanFolderPaths = new();
+    private bool _isUpdatingFolderPathDisplay;
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _cacheCts;
     private CancellationTokenSource? _auditCts;
@@ -235,7 +237,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool IsDashboardSection => CurrentSection == "Dashboard";
     public bool IsRenameSection => CurrentSection == "Rename";
-    public bool IsMergeSection => CurrentSection == "Merge";
+    public bool IsMergeSection => CurrentSection == "Mux / Remux";
     public bool IsPropertiesSection => CurrentSection == "Properties";
     public bool IsLibraryAuditSection => CurrentSection == "Library";
     public bool IsSettingsSection => CurrentSection == "Settings";
@@ -245,7 +247,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         "Dashboard" => "Scan folders, compare media properties, and inspect tracks.",
         "Rename" => "Match files to provider metadata and preview safe destination names.",
-        "Merge" => "Plan remux operations, language keeps, and track removal.",
+        "Mux / Remux" => "Plan muxing, remux operations, language keeps, subtitle tools, and track removal.",
         "Properties" => "Edit container, track title, language, default, and forced flags.",
         "Library" => "Browse cached watch-folder coverage, season groups, and items that may need attention.",
         "Settings" => "Manage tool paths, providers, presets, cache, and application behavior.",

@@ -50,6 +50,14 @@ public partial class MainWindowViewModel
         LoadPropEditTemplate(value);
     }
 
+    partial void OnFolderPathChanged(string value)
+    {
+        if (!_isUpdatingFolderPathDisplay)
+        {
+            _selectedScanFolderPaths.Clear();
+        }
+    }
+
     partial void OnRootFolderPathChanged(string value) => SaveSettingsIfReady();
     partial void OnSourceFolderStartModeChanged(string value)
     {
@@ -158,8 +166,8 @@ public partial class MainWindowViewModel
     {
         var options = new FolderPickerOpenOptions
         {
-            Title = "Select MKV folder",
-            AllowMultiple = false
+            Title = "Select MKV folder(s)",
+            AllowMultiple = true
         };
 
         var startFolder = GetPreferredSourceFolderPath();
@@ -171,10 +179,19 @@ public partial class MainWindowViewModel
         var folders = await window.StorageProvider.OpenFolderPickerAsync(options);
         if (folders.Count > 0)
         {
-            FolderPath = folders[0].Path.LocalPath;
-            _lastBrowseFolderPath = FolderPath;
+            var paths = folders
+                .Select(folder => folder.Path.LocalPath)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(CrossPlatformRuntime.PathComparer)
+                .ToList();
+
+            _selectedScanFolderPaths = paths;
+            SetFolderPathDisplay(GetCommonFolderPath(paths));
+            _lastBrowseFolderPath = paths.FirstOrDefault() ?? FolderPath;
             SaveSettingsIfReady();
-            Log($"Folder selected: {FolderPath}");
+            Log(paths.Count == 1
+                ? $"Folder selected: {paths[0]}"
+                : $"Folders selected: {paths.Count}; display path: {FolderPath}");
             await EnsureWatchersInitializedAsync();
         }
     }
@@ -192,7 +209,8 @@ public partial class MainWindowViewModel
             RootFolderPath = folders[0].Path.LocalPath;
             if (string.IsNullOrWhiteSpace(FolderPath) || !Directory.Exists(FolderPath))
             {
-                FolderPath = RootFolderPath;
+                _selectedScanFolderPaths = new List<string> { RootFolderPath };
+                SetFolderPathDisplay(RootFolderPath);
                 _lastBrowseFolderPath = RootFolderPath;
             }
             SaveSettingsIfReady();
@@ -387,7 +405,8 @@ public partial class MainWindowViewModel
             return;
         }
 
-        FolderPath = folderPath;
+        _selectedScanFolderPaths = new List<string> { folderPath };
+        SetFolderPathDisplay(folderPath);
         _lastBrowseFolderPath = folderPath;
         SaveSettingsIfReady();
         Log($"Dropped folder selected: {folderPath}");
@@ -399,7 +418,8 @@ public partial class MainWindowViewModel
     [RelayCommand]
     private async Task Scan()
     {
-        if (string.IsNullOrWhiteSpace(FolderPath) || !Directory.Exists(FolderPath))
+        var scanFolders = GetSelectedScanFolders();
+        if (scanFolders.Count == 0)
         {
             Log("Select a valid folder first.");
             return;
@@ -415,7 +435,7 @@ public partial class MainWindowViewModel
 
         // Commit the ignored-subfolder editor and last successful source folder before starting a scan.
         IgnoredScanFolderNameText = NormalizeIgnoredScanFolderText(IgnoredScanFolderNameText);
-        _lastBrowseFolderPath = FolderPath;
+        _lastBrowseFolderPath = scanFolders[0];
         SaveSettingsIfReady();
 
         _cts?.Cancel();
@@ -426,7 +446,7 @@ public partial class MainWindowViewModel
         IsBusy = true;
         BeginGlobalOperation("scan");
         AppState.BeginScan(FolderPath);
-        var scanUsesWatchCache = IsPathUnderAnyWatchFolder(FolderPath);
+        var scanUsesWatchCache = scanFolders.All(IsPathUnderAnyWatchFolder);
         var activeScanPipeline = scanUsesWatchCache ? _scanPipeline : _tempScanPipeline;
         if (!scanUsesWatchCache)
         {
@@ -437,7 +457,9 @@ public partial class MainWindowViewModel
             }
         }
 
-        Log($"Scanning: {FolderPath}");
+        Log(scanFolders.Count == 1
+            ? $"Scanning: {scanFolders[0]}"
+            : $"Scanning {scanFolders.Count} folders from: {FolderPath}");
         Log(scanUsesWatchCache
             ? "Cache scope: watch-folder database"
             : "Cache scope: temp scan database");
@@ -452,28 +474,32 @@ public partial class MainWindowViewModel
                 Log($"Ignoring subfolders named: {string.Join(", ", ignoredFolderNames)}");
             }
 
-            var request = new ScanPipelineRequest(FolderPath, MkvMergePath, FfProbePath, ignoredFolderNames, _workerSettings.CloneNormalized());
             Log($"Scan workers: {_workerSettings.CloneNormalized().MaxScanWorkers}");
-            await activeScanPipeline.ExecuteAsync(
-                request,
-                item =>
-                {
-                    InsertFileSorted(item);
-                    if (SelectedFile is null)
-                    {
-                        SelectedFile = item;
-                        AppState.SelectedFile = item;
-                    }
 
-                    return Task.CompletedTask;
-                },
-                (completed, total) =>
-                {
-                    AppState.UpdateScanProgress(completed, total);
-                    UpdateGlobalOperation(completed, total);
-                },
-                Log,
-                _cts.Token);
+            foreach (var scanFolder in scanFolders)
+            {
+                var request = new ScanPipelineRequest(scanFolder, MkvMergePath, FfProbePath, ignoredFolderNames, _workerSettings.CloneNormalized());
+                await activeScanPipeline.ExecuteAsync(
+                    request,
+                    item =>
+                    {
+                        InsertFileSorted(item);
+                        if (SelectedFile is null)
+                        {
+                            SelectedFile = item;
+                            AppState.SelectedFile = item;
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                    (completed, total) =>
+                    {
+                        AppState.UpdateScanProgress(completed, total);
+                        UpdateGlobalOperation(completed, total);
+                    },
+                    Log,
+                    _cts.Token);
+            }
 
             EvaluateTrackTemplateDeviations();
             CompleteGlobalOperation($"Scan complete: {Files.Count} file(s)");
@@ -494,6 +520,85 @@ public partial class MainWindowViewModel
         }
     }
 
+
+    private IReadOnlyList<string> GetSelectedScanFolders()
+    {
+        var selectedFolders = _selectedScanFolderPaths
+            .Where(Directory.Exists)
+            .Distinct(CrossPlatformRuntime.PathComparer)
+            .ToList();
+
+        if (selectedFolders.Count > 0)
+        {
+            return selectedFolders;
+        }
+
+        return !string.IsNullOrWhiteSpace(FolderPath) && Directory.Exists(FolderPath)
+            ? new[] { FolderPath }
+            : Array.Empty<string>();
+    }
+
+    private void SetFolderPathDisplay(string value)
+    {
+        _isUpdatingFolderPathDisplay = true;
+        try
+        {
+            FolderPath = value;
+        }
+        finally
+        {
+            _isUpdatingFolderPathDisplay = false;
+        }
+    }
+
+    private static string GetCommonFolderPath(IReadOnlyList<string> paths)
+    {
+        var normalizedPaths = paths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            .ToList();
+
+        if (normalizedPaths.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (normalizedPaths.Count == 1)
+        {
+            return normalizedPaths[0];
+        }
+
+        var commonPath = normalizedPaths[0];
+        foreach (var path in normalizedPaths.Skip(1))
+        {
+            while (!PathStartsWithFolder(path, commonPath))
+            {
+                var parent = Path.GetDirectoryName(commonPath);
+                if (string.IsNullOrWhiteSpace(parent))
+                {
+                    return Path.GetPathRoot(normalizedPaths[0]) ?? normalizedPaths[0];
+                }
+
+                commonPath = parent.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+        }
+
+        return commonPath;
+    }
+
+    private static bool PathStartsWithFolder(string path, string folder)
+    {
+        if (path.Equals(folder, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var folderWithSeparator = folder.EndsWith(Path.DirectorySeparatorChar) || folder.EndsWith(Path.AltDirectorySeparatorChar)
+            ? folder
+            : folder + Path.DirectorySeparatorChar;
+
+        return path.StartsWith(folderWithSeparator, StringComparison.OrdinalIgnoreCase);
+    }
 
     private void InsertFileSorted(MkvFileItem item)
     {

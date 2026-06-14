@@ -15,6 +15,7 @@ public sealed class MkvMergeRemuxAction
     public string ToolName { get; set; } = "mkvmerge";
     public string Operation { get; set; } = "remux";
     public string? ExternalSubtitleFilePath { get; set; }
+    public List<string> ExternalSubtitleFilePaths { get; set; } = new();
     public bool DeleteExternalSubtitleAfterSuccess { get; set; }
     public List<string> Arguments { get; set; } = new();
 }

@@ -254,16 +254,16 @@
                   </ScrollViewer>
                 </TabItem>
 
-<TabItem Header="Merge">
+<TabItem Header="Mux / Remux">
                   <ScrollViewer Margin="4">
                     <StackPanel Spacing="10" Margin="4">
                       <TextBlock Text="mkvmerge is used for MKV structure, track IDs, languages, names, and edit planning. ffprobe is used as a lightweight fallback for dashboard video metadata such as codec, resolution, and bit depth. Tool paths are configured under general." TextWrapping="Wrap" Classes="muted" />
                       <TextBlock Text="Scans run in parallel for speed, then dashboard results are naturally sorted by season/episode and filename before display." TextWrapping="Wrap" Classes="muted" />
 
-                      <TextBlock Text="These defaults populate the editable keep-language boxes in the MKVMerge tab. You can still override them there for one-off/special-case remux jobs." TextWrapping="Wrap" Classes="muted" />
+                      <TextBlock Text="These defaults populate the editable keep-language boxes in the Mux / Remux tab. You can still override them there for one-off/special-case remux jobs." TextWrapping="Wrap" Classes="muted" />
                       <Border Classes="panel">
                         <DockPanel LastChildFill="True">
-                      <TextBlock DockPanel.Dock="Top" Text="Merge Defaults" Classes="section-header" />
+                      <TextBlock DockPanel.Dock="Top" Text="Mux / Remux Defaults" Classes="section-header" />
                       <Grid ColumnDefinitions="210,*" RowDefinitions="Auto,Auto" RowSpacing="8" ColumnSpacing="8">
                           <TextBlock Grid.Row="0" Grid.Column="0" Text="Default audio keep languages" VerticalAlignment="Center" />
                           <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding MkvMergeDefaultAudioLanguages}" Watermark="eng,jpn" />
@@ -273,6 +273,33 @@
                         </Grid>
                     </DockPanel>
                   </Border>
+
+                      <Border Classes="panel">
+                        <StackPanel Spacing="8">
+                          <TextBlock Text="Subtitle Mux Usage" Classes="section-header" />
+                          <TextBlock Text="File Format: base_name.language.tag.ext"
+                                     Foreground="#BD93F9"
+                                     FontSize="13"
+                                     FontWeight="SemiBold" />
+                          <TextBlock Text="Place external subtitle files in the same folder as the MKV. The base_name must match the MKV filename without .mkv. The language segment sets the muxed subtitle language, and the tag segment becomes the subtitle track name." TextWrapping="Wrap" Classes="muted" />
+
+                          <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="10">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="MKV file" Classes="muted" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Episode 01.mkv" FontFamily="Consolas" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Signs and songs" Classes="muted" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Episode 01.eng.Signs &amp; Songs.ass" FontFamily="Consolas" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Dialogue" Classes="muted" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="Episode 01.eng.Dialogue.ass" FontFamily="Consolas" />
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Japanese track" Classes="muted" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="Episode 01.jpn.Dialogue.ass" FontFamily="Consolas" />
+                          </Grid>
+
+                          <TextBlock Text="Supported extension filters are configured in the Subtitles tab, for example srt, ass, ssa, sub, idx. If a sidecar has no language segment, the fallback language field is used." TextWrapping="Wrap" Classes="muted" />
+                        </StackPanel>
+                      </Border>
                     </StackPanel>
                   </ScrollViewer>
                 </TabItem>
@@ -314,7 +341,7 @@
                   </ScrollViewer>
                 </TabItem>
 
-<TabItem Header="Advanced">
+<TabItem Header="Library">
                   <ScrollViewer Margin="4">
                     <StackPanel Spacing="10" Margin="4">
                       <TextBlock Text="The cache stores full dashboard media info and track info after a successful mkvmerge scan. Cached rows are only used when file size and modified time still match." TextWrapping="Wrap" Classes="muted" />
