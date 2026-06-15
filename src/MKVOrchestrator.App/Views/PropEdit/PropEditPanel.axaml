@@ -17,7 +17,7 @@
                          FontSize="11"
                          Margin="0,0,0,6" />
 
-              <TextBlock Grid.Row="2" Text="Template File" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,5,0,1" />
+              <TextBlock Grid.Row="2" Text="Template File" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
 
               <StackPanel Grid.Row="3" Spacing="3" HorizontalAlignment="Left" Width="330">
                 <TextBox Text="{Binding PropEditTemplateFileName}"
@@ -32,7 +32,7 @@
                            FontSize="10" />
               </StackPanel>
 
-              <TextBlock Grid.Row="4" Text="Container Title" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,7,0,1" />
+              <TextBlock Grid.Row="4" Text="Container Title" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,7,0,1" />
 
               <StackPanel Grid.Row="5" Spacing="3" HorizontalAlignment="Left" Width="330">
                 <RadioButton Classes="mode-option"
@@ -43,7 +43,7 @@
                       <TextBlock Text="✓" Classes="mode-checkmark" />
                     </Border>
                     <Border Grid.Column="0" Classes="mode-check-empty" IsVisible="{Binding !PropRemoveContainerTitle}" />
-                    <TextBlock Grid.Column="1" Text="Remove title" Foreground="#F8F8F2" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="Remove title" Foreground="{DynamicResource ThemeTextBrush}" VerticalAlignment="Center" />
                   </Grid>
                 </RadioButton>
                 <RadioButton Classes="mode-option"
@@ -54,7 +54,7 @@
                       <TextBlock Text="✓" Classes="mode-checkmark" />
                     </Border>
                     <Border Grid.Column="0" Classes="mode-check-empty" IsVisible="{Binding !PropKeepContainerTitle}" />
-                    <TextBlock Grid.Column="1" Text="Keep existing title" Foreground="#F8F8F2" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="Keep existing title" Foreground="{DynamicResource ThemeTextBrush}" VerticalAlignment="Center" />
                   </Grid>
                 </RadioButton>
                 <RadioButton Classes="mode-option"
@@ -65,7 +65,7 @@
                       <TextBlock Text="✓" Classes="mode-checkmark" />
                     </Border>
                     <Border Grid.Column="0" Classes="mode-check-empty" IsVisible="{Binding !PropContainerTitleFromFile}" />
-                    <TextBlock Grid.Column="1" Text="Use file name" Foreground="#F8F8F2" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="Use file name" Foreground="{DynamicResource ThemeTextBrush}" VerticalAlignment="Center" />
                   </Grid>
                 </RadioButton>
                 <RadioButton Classes="mode-option"
@@ -76,14 +76,14 @@
                       <TextBlock Text="✓" Classes="mode-checkmark" />
                     </Border>
                     <Border Grid.Column="0" Classes="mode-check-empty" IsVisible="{Binding !PropContainerTitleCustom}" />
-                    <TextBlock Grid.Column="1" Text="Custom title" Foreground="#F8F8F2" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="Custom title" Foreground="{DynamicResource ThemeTextBrush}" VerticalAlignment="Center" />
                   </Grid>
                 </RadioButton>
                 <TextBox Text="{Binding PropCustomContainerTitle}"
                          MinHeight="36"
                          Padding="10,0,8,0" />
               </StackPanel>
-              <TextBlock Grid.Row="6" Text="Video Track Name" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,7,0,1" />
+              <TextBlock Grid.Row="6" Text="Video Track Name" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,7,0,1" />
 
               <StackPanel Grid.Row="7" Spacing="3" HorizontalAlignment="Left" Width="330">
                 <RadioButton Classes="mode-option"
@@ -94,7 +94,7 @@
                       <TextBlock Text="✓" Classes="mode-checkmark" />
                     </Border>
                     <Border Grid.Column="0" Classes="mode-check-empty" IsVisible="{Binding !PropRemoveVideoTitle}" />
-                    <TextBlock Grid.Column="1" Text="Remove video name" Foreground="#F8F8F2" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="Remove video name" Foreground="{DynamicResource ThemeTextBrush}" VerticalAlignment="Center" />
                   </Grid>
                 </RadioButton>
                 <RadioButton Classes="mode-option"
@@ -105,7 +105,7 @@
                       <TextBlock Text="✓" Classes="mode-checkmark" />
                     </Border>
                     <Border Grid.Column="0" Classes="mode-check-empty" IsVisible="{Binding !PropKeepVideoTitle}" />
-                    <TextBlock Grid.Column="1" Text="Keep existing name" Foreground="#F8F8F2" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="Keep existing name" Foreground="{DynamicResource ThemeTextBrush}" VerticalAlignment="Center" />
                   </Grid>
                 </RadioButton>
                 <RadioButton Classes="mode-option"
@@ -116,7 +116,7 @@
                       <TextBlock Text="✓" Classes="mode-checkmark" />
                     </Border>
                     <Border Grid.Column="0" Classes="mode-check-empty" IsVisible="{Binding !PropVideoTitleFromFile}" />
-                    <TextBlock Grid.Column="1" Text="Use file name" Foreground="#F8F8F2" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="Use file name" Foreground="{DynamicResource ThemeTextBrush}" VerticalAlignment="Center" />
                   </Grid>
                 </RadioButton>
                 <RadioButton Classes="mode-option"
@@ -127,14 +127,14 @@
                       <TextBlock Text="✓" Classes="mode-checkmark" />
                     </Border>
                     <Border Grid.Column="0" Classes="mode-check-empty" IsVisible="{Binding !PropVideoTitleCustom}" />
-                    <TextBlock Grid.Column="1" Text="Custom video name" Foreground="#F8F8F2" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="Custom video name" Foreground="{DynamicResource ThemeTextBrush}" VerticalAlignment="Center" />
                   </Grid>
                 </RadioButton>
                 <TextBox Text="{Binding PropCustomVideoTitle}"
                          MinHeight="36"
                          Padding="10,0,8,0" />
               </StackPanel>
-              <TextBlock Grid.Row="8" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,7,0,1" />
+              <TextBlock Grid.Row="8" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,7,0,1" />
 
               <StackPanel Grid.Row="9"
                           Orientation="Horizontal"

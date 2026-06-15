@@ -1,31 +1,31 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Style Selector="Window">
-    <Setter Property="Background" Value="#1E1F29" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeWindowBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial" />
   </Style>
 
   <Style Selector="TextBlock">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
   <Style Selector="TextBlock.app-title">
     <Setter Property="FontSize" Value="24" />
     <Setter Property="FontWeight" Value="Bold" />
-    <Setter Property="Foreground" Value="#BD93F9" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeAppTitleBrush}" />
   </Style>
 
   <Style Selector="TextBlock.muted">
-    <Setter Property="Foreground" Value="#CFCFEA" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeMutedTextBrush}" />
   </Style>
 
   <Style Selector="TextBlock.success">
-    <Setter Property="Foreground" Value="#50FA7B" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeSuccessBrush}" />
   </Style>
 
   <Style Selector="ProgressBar">
-    <Setter Property="Foreground" Value="#50FA7B" />
-    <Setter Property="Background" Value="#343746" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeSuccessBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ThemeBorderBrush}" />
   </Style>
 
 </Styles>

@@ -17,15 +17,15 @@
 
     <Style Selector="TabControl.mergeCompactTabs TabItem:selected">
       <Setter Property="FontSize" Value="13" />
-      <Setter Property="Foreground" Value="#F8F8F2" />
+      <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     </Style>
 
     <Style Selector="TabControl.mergeCompactTabs TabItem:selected /template/ ContentPresenter">
-      <Setter Property="Foreground" Value="#F8F8F2" />
+      <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     </Style>
 
     <Style Selector="TabControl.mergeCompactTabs TabItem:selected TextBlock">
-      <Setter Property="Foreground" Value="#F8F8F2" />
+      <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     </Style>
   </UserControl.Styles>
 
@@ -42,7 +42,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" RowSpacing="4" Margin="0,4,0,0">
 
-                <TextBlock Grid.Row="0" Text="Track Removal" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,5,0,1" />
+                <TextBlock Grid.Row="0" Text="Track Removal" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
 
                 <StackPanel Grid.Row="1" Spacing="3" HorizontalAlignment="Left" Width="318">
                   <CheckBox Content="Remove unwanted audio languages"
@@ -53,8 +53,8 @@
                              Margin="10,0,0,-1" />
                   <Border Width="300"
                           HorizontalAlignment="Left"
-                          Background="#282A36"
-                          BorderBrush="#44475A"
+                          Background="{DynamicResource ThemeInputBackgroundBrush}"
+                          BorderBrush="{DynamicResource ThemeButtonBackgroundBrush}"
                           BorderThickness="1"
                           CornerRadius="4"
                           ClipToBounds="False">
@@ -74,8 +74,8 @@
                              Margin="10,0,0,-1" />
                   <Border Width="300"
                           HorizontalAlignment="Left"
-                          Background="#282A36"
-                          BorderBrush="#44475A"
+                          Background="{DynamicResource ThemeInputBackgroundBrush}"
+                          BorderBrush="{DynamicResource ThemeButtonBackgroundBrush}"
                           BorderThickness="1"
                           CornerRadius="4"
                           ClipToBounds="False">
@@ -91,8 +91,8 @@
                             IsChecked="{Binding MergeRemoveUnwantedTrackIds}" />
                   <Border Width="300"
                           HorizontalAlignment="Left"
-                          Background="#282A36"
-                          BorderBrush="#44475A"
+                          Background="{DynamicResource ThemeInputBackgroundBrush}"
+                          BorderBrush="{DynamicResource ThemeButtonBackgroundBrush}"
                           BorderThickness="1"
                           CornerRadius="4"
                           ClipToBounds="False">
@@ -103,7 +103,7 @@
                   </Border>
                 </StackPanel>
 
-                <TextBlock Grid.Row="4" Text="Preservation Options" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,8,0,1" />
+                <TextBlock Grid.Row="4" Text="Preservation Options" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,8,0,1" />
 
                 <StackPanel Grid.Row="5" Spacing="3" HorizontalAlignment="Left" Width="318">
                   <CheckBox Content="Preserve chapters"
@@ -114,7 +114,7 @@
                             IsChecked="{Binding MergeUseSafeTempReplacement}" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="6" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,8,0,1" />
+                <TextBlock Grid.Row="6" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,8,0,1" />
 
                 <StackPanel Grid.Row="7"
                             Orientation="Horizontal"
@@ -132,13 +132,13 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
               <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" RowSpacing="4" Margin="0,4,0,0">
 
-                <TextBlock Grid.Row="0" Text="Subtitle Mux" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,5,0,1" />
+                <TextBlock Grid.Row="0" Text="Subtitle Mux" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
 
                 <StackPanel Grid.Row="1" Spacing="3" HorizontalAlignment="Left" Width="318">
                   <CheckBox Content="Mux matching external subtitles"
                             IsChecked="{Binding MergeMuxMatchingExternalSubtitles}" />
                   <TextBlock Text="File Format: base_name.language.tag.ext"
-                             Foreground="#BD93F9"
+                             Foreground="{DynamicResource ThemeAccentBrush}"
                              Margin="0,0,0,2" />
                   <TextBlock Text="Fallback language"
                              Classes="muted"
@@ -146,8 +146,8 @@
                              Margin="10,4,0,-1" />
                   <Border Width="300"
                           HorizontalAlignment="Left"
-                          Background="#282A36"
-                          BorderBrush="#44475A"
+                          Background="{DynamicResource ThemeInputBackgroundBrush}"
+                          BorderBrush="{DynamicResource ThemeButtonBackgroundBrush}"
                           BorderThickness="1"
                           CornerRadius="4"
                           ClipToBounds="False">
@@ -162,8 +162,8 @@
                              Margin="10,4,0,-1" />
                   <Border Width="300"
                           HorizontalAlignment="Left"
-                          Background="#282A36"
-                          BorderBrush="#44475A"
+                          Background="{DynamicResource ThemeInputBackgroundBrush}"
+                          BorderBrush="{DynamicResource ThemeButtonBackgroundBrush}"
                           BorderThickness="1"
                           CornerRadius="4"
                           ClipToBounds="False">
@@ -177,7 +177,7 @@
                              Classes="muted" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="2" Text="Mux Options" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,8,0,1" />
+                <TextBlock Grid.Row="2" Text="Mux Options" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,8,0,1" />
 
                 <StackPanel Grid.Row="3" Spacing="3" HorizontalAlignment="Left" Width="318">
                   <CheckBox Content="Preserve external subtitle files after mux"
@@ -186,15 +186,15 @@
                             IsChecked="{Binding MergeSkipMuxIfSubtitleAlreadyExists}" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="4" Text="Subtitle Extract" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,8,0,1" />
+                <TextBlock Grid.Row="4" Text="Subtitle Extract" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,8,0,1" />
 
                 <StackPanel Grid.Row="5" Spacing="3" HorizontalAlignment="Left" Width="318">
                   <CheckBox Content="Extract embedded subtitles"
                             IsChecked="{Binding MergeExtractSubtitles}" />
                   <Border Width="300"
                           HorizontalAlignment="Left"
-                          Background="#282A36"
-                          BorderBrush="#44475A"
+                          Background="{DynamicResource ThemeInputBackgroundBrush}"
+                          BorderBrush="{DynamicResource ThemeButtonBackgroundBrush}"
                           BorderThickness="1"
                           CornerRadius="4"
                           ClipToBounds="False">
@@ -207,7 +207,7 @@
                             IsChecked="{Binding MergeExtractOverwriteExistingFiles}" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="6" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,8,0,1" />
+                <TextBlock Grid.Row="6" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,8,0,1" />
 
                 <StackPanel Grid.Row="7"
                             Orientation="Horizontal"

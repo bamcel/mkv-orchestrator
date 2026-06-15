@@ -45,4 +45,12 @@ public sealed class AppSettings
     public List<string> WatchFolders { get; set; } = new();
     public bool EnableLiveWatchFolderMonitoring { get; set; }
     public WorkerSettings Workers { get; set; } = WorkerSettings.Defaults;
+    public string SelectedThemeName { get; set; } = "Midnight";
+    public List<ThemeDefinition> CustomThemes { get; set; } = new();
+}
+
+public sealed class ThemeDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public Dictionary<string, string> Colors { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

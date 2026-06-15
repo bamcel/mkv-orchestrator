@@ -2,9 +2,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <!-- Global dropdown styling: match the Episode Scope selector surface, hover, border, and focus treatment. -->
   <Style Selector="ComboBox">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Padding" Value="10,7" />
     <Setter Property="MinHeight" Value="34" />
@@ -14,107 +14,107 @@
   </Style>
 
   <Style Selector="ComboBox:pointerover">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
   </Style>
 
   <Style Selector="ComboBox:focus">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
 
   <Style Selector="ComboBox:pressed">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
-    <Setter Property="BorderBrush" Value="#BD93F9" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}" />
   </Style>
 
   <Style Selector="ComboBox /template/ Border">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
   </Style>
 
   <Style Selector="ComboBox:pointerover /template/ Border">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
   </Style>
 
   <Style Selector="ComboBox:focus /template/ Border">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
   </Style>
 
   <Style Selector="ComboBox:pressed /template/ Border">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="BorderBrush" Value="#BD93F9" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}" />
   </Style>
 
   <Style Selector="ComboBox /template/ ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="ComboBox:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="ComboBox:focus /template/ ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="ComboBox:pressed /template/ ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="ComboBoxItem">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="Padding" Value="10,7" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
   </Style>
 
   <Style Selector="ComboBoxItem:pointerover">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="ComboBoxItem:selected">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="ComboBox /template/ PopupRoot">
-    <Setter Property="Background" Value="#282A36" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
   </Style>
 
   <Style Selector="ComboBox /template/ ScrollViewer">
-    <Setter Property="Background" Value="#282A36" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
   </Style>
 
   <Style Selector="ComboBoxItem /template/ ContentPresenter">
-    <Setter Property="Background" Value="#282A36" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
   </Style>
 
   <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="ComboBoxItem:selected /template/ ContentPresenter">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
   <!-- PropEdit inline track-name preset ComboBox: paired with TextBox.trackNameEditor. -->
   <Style Selector="ComboBox.trackNameEditor">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Padding" Value="10,7" />
     <Setter Property="MinHeight" Value="34" />
@@ -125,5 +125,4 @@
     <Setter Property="Margin" Value="0" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
-
 </Styles>

@@ -92,6 +92,50 @@
                   </ScrollViewer>
                 </TabItem>
 
+<TabItem Header="Theme">
+                  <ScrollViewer Margin="4">
+                    <StackPanel Spacing="10" Margin="4">
+                      <TextBlock Text="Choose a built-in theme, edit the theme JSON, save custom variants, then reload to refresh the GUI. Built-in themes are read-only starting points." TextWrapping="Wrap" Classes="muted" />
+
+                      <Border Classes="panel">
+                        <StackPanel Spacing="10">
+                          <TextBlock Text="Theme Selection" Classes="section-header" />
+                          <Grid ColumnDefinitions="160,260,140,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="8">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Theme" VerticalAlignment="Center" />
+                            <ComboBox Grid.Row="0" Grid.Column="1"
+                                      ItemsSource="{Binding ThemeOptions}"
+                                      SelectedItem="{Binding SelectedThemeName}"
+                                      MinWidth="240" />
+                            <Button Grid.Row="0" Grid.Column="2" Content="Reload Theme" Command="{Binding ReloadThemeCommand}" />
+                            <TextBlock Grid.Row="0" Grid.Column="3" Text="{Binding ThemeStatusText}" TextWrapping="Wrap" Classes="muted" VerticalAlignment="Center" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Custom name" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding CustomThemeName, UpdateSourceTrigger=PropertyChanged}" Watermark="My Theme" />
+                            <StackPanel Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8">
+                              <Button Content="Save Custom Theme" Command="{Binding SaveCustomThemeCommand}" />
+                              <Button Content="Remove Custom Theme" Command="{Binding RemoveCustomThemeCommand}" />
+                            </StackPanel>
+                          </Grid>
+                        </StackPanel>
+                      </Border>
+
+                      <Border Classes="panel">
+                        <DockPanel>
+                          <TextBlock DockPanel.Dock="Top" Text="Theme File" Classes="section-header" />
+                          <TextBox Classes="settingsConsoleBox"
+                                   Text="{Binding ThemeEditorText, UpdateSourceTrigger=PropertyChanged}"
+                                   AcceptsReturn="True"
+                                   Height="430"
+                                   VerticalContentAlignment="Top"
+                                   TextWrapping="NoWrap"
+                                   FontFamily="Consolas"
+                                   Watermark="{}{ &quot;Name&quot;: &quot;My Theme&quot;, &quot;Colors&quot;: { ... } }" />
+                        </DockPanel>
+                      </Border>
+                    </StackPanel>
+                  </ScrollViewer>
+                </TabItem>
+
 <TabItem Header="API Providers">
                   <ScrollViewer Margin="4">
                     <StackPanel Spacing="10" Margin="4">
@@ -163,7 +207,7 @@
                         <StackPanel Spacing="16">
 
                           <TextBlock Text="Rename Templates" Classes="section-header" />
-                    <Border Background="#313341" BorderBrush="#3B3E52" BorderThickness="1" CornerRadius="8" Padding="14">
+                    <Border Background="{DynamicResource ThemePanelBackgroundBrush}" BorderBrush="{DynamicResource ThemeBorderStrongBrush}" BorderThickness="1" CornerRadius="8" Padding="14">
                             <StackPanel Spacing="12">
                               <StackPanel Spacing="2">
                                 <TextBlock Text="Template Management" Classes="section-header" />
@@ -183,7 +227,7 @@
                                          Text="{Binding RenameTemplate}"
                                          MinWidth="540"
                                          HorizontalAlignment="Left"
-                                         Background="#21222C"
+                                         Background="{DynamicResource ThemeInputBackgroundBrush}"
                                          Watermark="{}{series} - S{season:00}E{episode:00} - {episodeTitle}" />
                               </Grid>
 
@@ -195,7 +239,7 @@
                             </StackPanel>
                           </Border>
 
-                          <Border Background="#313341" BorderBrush="#3B3E52" BorderThickness="1" CornerRadius="8" Padding="14">
+                          <Border Background="{DynamicResource ThemePanelBackgroundBrush}" BorderBrush="{DynamicResource ThemeBorderStrongBrush}" BorderThickness="1" CornerRadius="8" Padding="14">
                             <StackPanel Spacing="12">
                               <StackPanel Spacing="2">
                                 <TextBlock Text="Select the preferred provider used for rename lookups and metadata matching." Classes="muted" />
@@ -225,7 +269,7 @@
                             </StackPanel>
                           </Border>
 
-                          <Border Background="#313341" BorderBrush="#3B3E52" BorderThickness="1" CornerRadius="8" Padding="14">
+                          <Border Background="{DynamicResource ThemePanelBackgroundBrush}" BorderBrush="{DynamicResource ThemeBorderStrongBrush}" BorderThickness="1" CornerRadius="8" Padding="14">
                             <StackPanel Spacing="10">
 
                               <WrapPanel Orientation="Horizontal" ItemWidth="240">
@@ -237,7 +281,7 @@
                                 <TextBlock Text="{}{absolute} → Absolute Episode" Classes="muted" Margin="0,0,0,6" />
                               </WrapPanel>
 
-                              <Border Background="#282A36" BorderBrush="#3B3E52" BorderThickness="1" CornerRadius="6" Padding="10">
+                              <Border Background="{DynamicResource ThemeInputBackgroundBrush}" BorderBrush="{DynamicResource ThemeBorderStrongBrush}" BorderThickness="1" CornerRadius="6" Padding="10">
                                 <StackPanel Spacing="4">
                                   <TextBlock Text="{}{season:00}  → 01" Classes="muted" />
                                   <TextBlock Text="{}{episode:000} → 001" Classes="muted" />
@@ -278,7 +322,7 @@
                         <StackPanel Spacing="8">
                           <TextBlock Text="Subtitle Mux Usage" Classes="section-header" />
                           <TextBlock Text="File Format: base_name.language.tag.ext"
-                                     Foreground="#BD93F9"
+                                     Foreground="{DynamicResource ThemeAccentBrush}"
                                      FontSize="13"
                                      FontWeight="SemiBold" />
                           <TextBlock Text="Place external subtitle files in the same folder as the MKV. The base_name must match the MKV filename without .mkv. The language segment sets the muxed subtitle language, and the tag segment becomes the subtitle track name." TextWrapping="Wrap" Classes="muted" />
@@ -389,7 +433,7 @@
                     <StackPanel Spacing="12" Margin="4">
                       <Border Classes="panel">
                         <StackPanel Spacing="8">
-                          <TextBlock Text="MKV Orchestrator" FontSize="20" FontWeight="SemiBold" Foreground="#F8F8F2" />
+                          <TextBlock Text="MKV Orchestrator" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" />
                           <TextBlock Text="A desktop workflow tool for scanning media folders, reviewing track metadata, planning safe filename changes, and running MKV-focused maintenance tasks with preview-first execution."
                                      TextWrapping="Wrap"
                                      Classes="muted" />
@@ -400,17 +444,17 @@
                         <StackPanel Spacing="8">
                           <TextBlock Text="Format Support" Classes="section-header" />
                           <Grid ColumnDefinitions="92,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="12">
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="MKV" FontWeight="SemiBold" Foreground="#BD93F9" />
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="MKV" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentBrush}" />
                             <TextBlock Grid.Row="0" Grid.Column="1"
                                        Text="Full application workflow support: scan, inspect, rename planning, remux planning, subtitle mux/extract planning, and track property editing through MKVToolNix."
                                        TextWrapping="Wrap" />
 
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="MP4" FontWeight="SemiBold" Foreground="#BD93F9" />
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="MP4" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentBrush}" />
                             <TextBlock Grid.Row="1" Grid.Column="1"
                                        Text="Read-only integration: scan, inspect, cache, library overview, and rename planning through ffprobe metadata. MP4 files are not converted, remuxed, muxed, or property-edited by MKV Orchestrator."
                                        TextWrapping="Wrap" />
 
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Safety" FontWeight="SemiBold" Foreground="#BD93F9" />
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Safety" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentBrush}" />
                             <TextBlock Grid.Row="2" Grid.Column="1"
                                        Text="Execution workflows are preview-first so file changes can be reviewed before applying them."
                                        TextWrapping="Wrap" />
@@ -424,8 +468,8 @@
 
                           <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="12">
                             <Border Grid.Row="0" Grid.Column="0"
-                                    Background="#252733"
-                                    BorderBrush="#3A3D4E"
+                                    Background="{DynamicResource ThemePanelBackgroundBrush}"
+                                    BorderBrush="{DynamicResource ThemeBorderBrush}"
                                     BorderThickness="1"
                                     CornerRadius="8"
                                     Padding="10">
@@ -433,8 +477,8 @@
                                 <Border Grid.Column="0"
                                         Width="82"
                                         Height="72"
-                                        Background="#1F222C"
-                                        BorderBrush="#3A3D4E"
+                                        Background="{DynamicResource ThemeWindowBackgroundBrush}"
+                                        BorderBrush="{DynamicResource ThemeBorderBrush}"
                                         BorderThickness="1"
                                         CornerRadius="6"
                                         HorizontalAlignment="Center"
@@ -455,8 +499,8 @@
                             </Border>
 
                             <Border Grid.Row="0" Grid.Column="1"
-                                    Background="#252733"
-                                    BorderBrush="#3A3D4E"
+                                    Background="{DynamicResource ThemePanelBackgroundBrush}"
+                                    BorderBrush="{DynamicResource ThemeBorderBrush}"
                                     BorderThickness="1"
                                     CornerRadius="8"
                                     Padding="10">
@@ -464,8 +508,8 @@
                                 <Border Grid.Column="0"
                                         Width="82"
                                         Height="72"
-                                        Background="#1F222C"
-                                        BorderBrush="#3A3D4E"
+                                        Background="{DynamicResource ThemeWindowBackgroundBrush}"
+                                        BorderBrush="{DynamicResource ThemeBorderBrush}"
                                         BorderThickness="1"
                                         CornerRadius="6"
                                         HorizontalAlignment="Center"
@@ -486,8 +530,8 @@
                             </Border>
 
                             <Border Grid.Row="1" Grid.Column="0"
-                                    Background="#252733"
-                                    BorderBrush="#3A3D4E"
+                                    Background="{DynamicResource ThemePanelBackgroundBrush}"
+                                    BorderBrush="{DynamicResource ThemeBorderBrush}"
                                     BorderThickness="1"
                                     CornerRadius="8"
                                     Padding="10">
@@ -495,8 +539,8 @@
                                 <Border Grid.Column="0"
                                         Width="82"
                                         Height="72"
-                                        Background="#1F222C"
-                                        BorderBrush="#3A3D4E"
+                                        Background="{DynamicResource ThemeWindowBackgroundBrush}"
+                                        BorderBrush="{DynamicResource ThemeBorderBrush}"
                                         BorderThickness="1"
                                         CornerRadius="6"
                                         HorizontalAlignment="Center"
@@ -517,8 +561,8 @@
                             </Border>
 
                             <Border Grid.Row="1" Grid.Column="1"
-                                    Background="#252733"
-                                    BorderBrush="#3A3D4E"
+                                    Background="{DynamicResource ThemePanelBackgroundBrush}"
+                                    BorderBrush="{DynamicResource ThemeBorderBrush}"
                                     BorderThickness="1"
                                     CornerRadius="8"
                                     Padding="10">
@@ -526,8 +570,8 @@
                                 <Border Grid.Column="0"
                                         Width="82"
                                         Height="72"
-                                        Background="#1F222C"
-                                        BorderBrush="#3A3D4E"
+                                        Background="{DynamicResource ThemeWindowBackgroundBrush}"
+                                        BorderBrush="{DynamicResource ThemeBorderBrush}"
                                         BorderThickness="1"
                                         CornerRadius="6"
                                         HorizontalAlignment="Center"

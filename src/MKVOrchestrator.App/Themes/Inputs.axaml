@@ -2,9 +2,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <!-- Global input styling: match the Episode Scope selector surface, border, hover, and focus treatment. -->
   <Style Selector="TextBox">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Padding" Value="10,7" />
     <Setter Property="MinHeight" Value="34" />
@@ -13,55 +13,55 @@
   </Style>
 
   <Style Selector="TextBox:pointerover">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
   </Style>
 
   <Style Selector="TextBox:focus">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
 
   <Style Selector="TextBox:focus-within">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
 
   <Style Selector="TextBox:pointerover /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="TextBox:focus /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="TextBox:focus-within /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="TextBox /template/ Border">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
   </Style>
 
   <Style Selector="TextBox:pointerover /template/ Border">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
   </Style>
 
   <Style Selector="TextBox:focus /template/ Border">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
   </Style>
 
   <Style Selector="TextBox:focus-within /template/ Border">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
   </Style>
 
   <!-- Multi-line settings text boxes should behave like compact console/list editors. -->
@@ -73,9 +73,9 @@
 
   <!-- PropEdit inline custom track-name textbox: visually matches the preset ComboBox it replaces. -->
   <Style Selector="TextBox.trackNameEditor">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="Padding" Value="10,3,10,3" />
     <Setter Property="MinHeight" Value="34" />
@@ -87,27 +87,27 @@
   </Style>
 
   <Style Selector="TextBox.trackNameEditor /template/ Border">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
 
   <Style Selector="TextBox.trackNameEditor:pointerover /template/ Border">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
   </Style>
 
   <Style Selector="TextBox.trackNameEditor:pointerover">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="TextBox.trackNameEditor:focus-within /template/ Border">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
   </Style>
 
   <Style Selector="TextBox.trackNameEditor:focus-within">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
 </Styles>

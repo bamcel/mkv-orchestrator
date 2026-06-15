@@ -25,7 +25,7 @@
                            TextTrimming="CharacterEllipsis" />
               </Border>
 
-              <TextBlock Grid.Row="3" Text="Search Title" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,5,0,1" />
+              <TextBlock Grid.Row="3" Text="Search Title" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
 
               <Grid Grid.Row="4" ColumnDefinitions="*,120" ColumnSpacing="6" HorizontalAlignment="Left" Width="330">
                 <StackPanel Grid.Column="0" Spacing="3">
@@ -43,7 +43,7 @@
                         VerticalAlignment="Bottom" />
               </Grid>
 
-              <TextBlock Grid.Row="5" Text="Database Options" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,5,0,1" />
+              <TextBlock Grid.Row="5" Text="Database Options" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
 
               <Grid Grid.Row="6" ColumnDefinitions="*,*" ColumnSpacing="6" HorizontalAlignment="Left" Width="330">
                 <StackPanel Grid.Column="0" Spacing="3">
@@ -65,7 +65,7 @@
                 <TextBlock Text="{Binding RenameStatusText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
               </StackPanel>
 
-              <TextBlock Grid.Row="8" Text="Series/Movie" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,5,0,1" />
+              <TextBlock Grid.Row="8" Text="Series/Movie" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
 
               <StackPanel Grid.Row="9" Spacing="3" HorizontalAlignment="Left" Width="330" MaxWidth="330">
                 <ComboBox ItemsSource="{Binding TvdbSeriesResults}"
@@ -85,15 +85,15 @@
                 </ComboBox>
               </StackPanel>
 
-              <TextBlock Grid.Row="10" Text="Episodes" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,5,0,1" />
+              <TextBlock Grid.Row="10" Text="Episodes" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
 
               <StackPanel Grid.Row="11" Spacing="3" HorizontalAlignment="Left" Width="330" MaxWidth="330">
                 <Expander Classes="scope-dropdown"
                           HorizontalAlignment="Stretch"
                           MaxWidth="330"
                           MinHeight="36"
-                          Background="#282A36"
-                          BorderBrush="#44475A"
+                          Background="{DynamicResource ThemeInputBackgroundBrush}"
+                          BorderBrush="{DynamicResource ThemeButtonBackgroundBrush}"
                           BorderThickness="1"
                           CornerRadius="4">
                   <Expander.Header>
@@ -110,8 +110,8 @@
                                  VerticalAlignment="Center" />
                     </Border>
                   </Expander.Header>
-                  <Border Background="#282A36"
-                          BorderBrush="#44475A"
+                  <Border Background="{DynamicResource ThemeInputBackgroundBrush}"
+                          BorderBrush="{DynamicResource ThemeButtonBackgroundBrush}"
                           BorderThickness="1"
                           CornerRadius="4"
                           Padding="5"
@@ -133,7 +133,7 @@
                 </Expander>
               </StackPanel>
 
-              <TextBlock Grid.Row="12" Text="Naming Template" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,5,0,1" />
+              <TextBlock Grid.Row="12" Text="Naming Template" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
 
               <StackPanel Grid.Row="13" Spacing="3" HorizontalAlignment="Left" Width="330" MaxWidth="330">
                 <ComboBox ItemsSource="{Binding RenameTemplateOptions}"
@@ -168,7 +168,7 @@
                            FontSize="10" />
               </StackPanel>
 
-              <TextBlock Grid.Row="14" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="#F8F8F2" Margin="0,5,0,1" />
+              <TextBlock Grid.Row="14" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
 
               <StackPanel Grid.Row="15" Orientation="Horizontal" Spacing="6" Margin="0,6,0,0" HorizontalAlignment="Left">
                 <Button Width="96"

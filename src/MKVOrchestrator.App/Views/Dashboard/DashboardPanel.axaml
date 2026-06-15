@@ -70,8 +70,8 @@
               <!-- v1_16 Dashboard File Info sorting: columns have explicit SortMemberPath. -->
               <Grid>
                 <Border IsVisible="{Binding HasNoDashboardFiles}"
-                        Background="#242631"
-                        BorderBrush="#343746"
+                        Background="{DynamicResource ThemeSidebarBackgroundBrush}"
+                        BorderBrush="{DynamicResource ThemeBorderBrush}"
                         BorderThickness="1"
                         CornerRadius="12"
                         Padding="26"
@@ -206,7 +206,7 @@
                         <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedFile.SubtitleSummary}" Foreground="{Binding SelectedFile.SubtitleSummaryVisualState, Converter={StaticResource VisualStateBrushConverter}}" TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="6" Grid.Column="0" Text="Attachments" Classes="muted" />
-                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding SelectedFile.AttachmentSummary}" Foreground="White" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding SelectedFile.AttachmentSummary}" Foreground="{DynamicResource ThemeTextBrush}" TextWrapping="Wrap" />
                       </Grid>
                     </ScrollViewer>
                   </DockPanel>

@@ -15,8 +15,8 @@ public sealed class OutputWindow : Window
         Height = 680;
         MinWidth = 760;
         MinHeight = 420;
-        Background = Brush.Parse("#282A36");
-        Foreground = Brush.Parse("#F8F8F2");
+        Background = ResourceBrush("ThemeCardBackgroundBrush", "#282A36");
+        Foreground = ResourceBrush("ThemeTextBrush", "#F8F8F2");
 
         var header = new TextBlock
         {
@@ -34,9 +34,9 @@ public sealed class OutputWindow : Window
             TextWrapping = TextWrapping.NoWrap,
             FontFamily = new FontFamily("Consolas"),
             FontSize = 12,
-            Background = Brush.Parse("#21222C"),
-            Foreground = Brush.Parse("#F8F8F2"),
-            BorderBrush = Brush.Parse("#44475A"),
+            Background = ResourceBrush("ThemeInputBackgroundBrush", "#21222C"),
+            Foreground = ResourceBrush("ThemeTextBrush", "#F8F8F2"),
+            BorderBrush = ResourceBrush("ThemeButtonBackgroundBrush", "#44475A"),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(10)
         };
@@ -70,5 +70,15 @@ public sealed class OutputWindow : Window
         Grid.SetRow(header, 0);
         Grid.SetRow(outputHost, 1);
         Grid.SetRow(closeButton, 2);
+    }
+
+    private static IBrush ResourceBrush(string key, string fallback)
+    {
+        if (Application.Current?.Resources.TryGetResource(key, null, out var resource) == true && resource is IBrush brush)
+        {
+            return brush;
+        }
+
+        return Brush.Parse(fallback);
     }
 }

@@ -2,45 +2,45 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <!-- Episode scope dropdown/expander surface cleanup. -->
   <Style Selector="Expander.scope-dropdown">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="Expander.scope-dropdown /template/ Border">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
   </Style>
 
   <Style Selector="Expander.scope-dropdown /template/ ContentPresenter">
-    <Setter Property="Background" Value="#282A36" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
   </Style>
 
 
   <!-- Remove the Fluent Expander header/toggle black side surfaces used by the episode scope selector. -->
   <Style Selector="Expander.scope-dropdown ToggleButton">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
     <Setter Property="Padding" Value="0" />
   </Style>
 
   <Style Selector="Expander.scope-dropdown ToggleButton:pointerover">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
   </Style>
 
   <Style Selector="Expander.scope-dropdown ToggleButton:pressed">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="BorderBrush" Value="#BD93F9" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}" />
   </Style>
 
   <Style Selector="Expander.scope-dropdown ToggleButton /template/ Border">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
   </Style>
 
   <Style Selector="Expander.scope-dropdown ToggleButton:pointerover /template/ Border">
-    <Setter Property="Background" Value="#2F3140" />
-    <Setter Property="BorderBrush" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeDisabledTextBrush}" />
   </Style>
 </Styles>

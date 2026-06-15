@@ -1,48 +1,48 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Style Selector="Border.card">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="BorderBrush" Value="#343746" />
+    <Setter Property="Background" Value="{DynamicResource ThemeCardBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="14" />
   </Style>
 
   <Style Selector="Border.panel">
-    <Setter Property="Background" Value="#2B2E3A" />
-    <Setter Property="BorderBrush" Value="#343746" />
+    <Setter Property="Background" Value="{DynamicResource ThemePanelBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="12" />
   </Style>
 
   <Style Selector="Border.soft-card">
-    <Setter Property="Background" Value="#2B2E3A" />
-    <Setter Property="BorderBrush" Value="#343746" />
+    <Setter Property="Background" Value="{DynamicResource ThemePanelBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="14" />
   </Style>
 
   <Style Selector="Border.sidebar">
-    <Setter Property="Background" Value="#232631" />
-    <Setter Property="BorderBrush" Value="#343746" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSidebarBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="14" />
   </Style>
 
   <Style Selector="Border.workspace-header">
-    <Setter Property="Background" Value="#262936" />
-    <Setter Property="BorderBrush" Value="#343746" />
+    <Setter Property="Background" Value="{DynamicResource ThemePanelBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="14,12" />
   </Style>
 
   <Style Selector="Border.status-strip">
-    <Setter Property="Background" Value="#1F222C" />
-    <Setter Property="BorderBrush" Value="#3A3D4E" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderStrongBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="10" />
@@ -50,7 +50,7 @@
 
   <Style Selector="Border.separator">
     <Setter Property="Height" Value="1" />
-    <Setter Property="Background" Value="#3A3D4E" />
+    <Setter Property="Background" Value="{DynamicResource ThemeBorderStrongBrush}" />
     <Setter Property="Margin" Value="0,0,0,10" />
   </Style>
 
@@ -63,42 +63,42 @@
   <Style Selector="TextBlock.workspace-title">
     <Setter Property="FontSize" Value="21" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="TextBlock.nav-caption">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="#8B93A7" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeSubtleTextBrush}" />
   </Style>
 
   <Style Selector="TextBlock.empty-title">
     <Setter Property="FontSize" Value="20" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="TextBlock.empty-subtitle">
     <Setter Property="FontSize" Value="13" />
-    <Setter Property="Foreground" Value="#6272A4" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeSubtleTextBrush}" />
     <Setter Property="TextAlignment" Value="Center" />
   </Style>
 
   <Style Selector="Button:disabled">
-    <Setter Property="Background" Value="#343746" />
-    <Setter Property="Foreground" Value="#6272A4" />
+    <Setter Property="Background" Value="{DynamicResource ThemeBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeDisabledTextBrush}" />
     <Setter Property="Opacity" Value="0.65" />
   </Style>
 
   <!-- Shared status badge used by reusable controls. -->
   <Style Selector="Border.badge">
-    <Setter Property="Background" Value="#303241" />
-    <Setter Property="BorderBrush" Value="#BD93F9" />
+    <Setter Property="Background" Value="{DynamicResource ThemePanelBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccentBrush}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
 
   <Style Selector="ListBox.console">
-    <Setter Property="Background" Value="#282A36" />
+    <Setter Property="Background" Value="{DynamicResource ThemeCardBackgroundBrush}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="2" />
   </Style>

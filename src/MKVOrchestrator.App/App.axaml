@@ -3,7 +3,27 @@
              xmlns:converters="using:MKVOrchestrator.App.Converters"
              x:Class="MKVOrchestrator.App.App">
 
-  <Application.Resources>
+<Application.Resources>
+
+<SolidColorBrush x:Key="ThemeWindowBackgroundBrush" Color="#1E1F29"/>
+<SolidColorBrush x:Key="ThemeCardBackgroundBrush" Color="#282A36"/>
+<SolidColorBrush x:Key="ThemePanelBackgroundBrush" Color="#2B2E3A"/>
+<SolidColorBrush x:Key="ThemeSidebarBackgroundBrush" Color="#232631"/>
+<SolidColorBrush x:Key="ThemeInputBackgroundBrush" Color="#282A36"/>
+<SolidColorBrush x:Key="ThemeInputHoverBackgroundBrush" Color="#2F3140"/>
+<SolidColorBrush x:Key="ThemeButtonBackgroundBrush" Color="#44475A"/>
+<SolidColorBrush x:Key="ThemeButtonHoverBackgroundBrush" Color="#BD93F9"/>
+<SolidColorBrush x:Key="ThemeSelectedBackgroundBrush" Color="#3A3D4F"/>
+<SolidColorBrush x:Key="ThemeBorderBrush" Color="#343746"/>
+<SolidColorBrush x:Key="ThemeBorderStrongBrush" Color="#44475A"/>
+<SolidColorBrush x:Key="ThemeTextBrush" Color="#F8F8F2"/>
+<SolidColorBrush x:Key="ThemeMutedTextBrush" Color="#CFCFEA"/>
+<SolidColorBrush x:Key="ThemeSubtleTextBrush" Color="#8B93A7"/>
+<SolidColorBrush x:Key="ThemeAccentBrush" Color="#BD93F9"/>
+<SolidColorBrush x:Key="ThemeAppTitleBrush" Color="#BD93F9"/>
+<SolidColorBrush x:Key="ThemeSuccessBrush" Color="#50FA7B"/>
+<SolidColorBrush x:Key="ThemeWarningBrush" Color="#FFA500"/>
+<SolidColorBrush x:Key="ThemeDisabledTextBrush" Color="#6272A4"/>
 
 <!-- DataGrid focus/selection outline brushes -->
 <SolidColorBrush x:Key="DataGridCellFocusVisualPrimaryBrush" Color="Transparent"/>
@@ -19,6 +39,9 @@
 <SolidColorBrush x:Key="DataGridCellSelectedUnfocusedBackgroundBrush" Color="#3A3D4F"/>
 <SolidColorBrush x:Key="DataGridCellSelectedForegroundBrush" Color="#F8F8F2"/>
 <SolidColorBrush x:Key="DataGridCellSelectedUnfocusedForegroundBrush" Color="#F8F8F2"/>
+<SolidColorBrush x:Key="DataGridColumnHeaderForegroundBrush" Color="#F8F8F2"/>
+<SolidColorBrush x:Key="DataGridRowForegroundBrush" Color="#F8F8F2"/>
+<SolidColorBrush x:Key="DataGridCellForegroundBrush" Color="#F8F8F2"/>
 <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="#3A3D4F"/>
 <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#3A3D4F"/>
 <SolidColorBrush x:Key="SystemControlHighlightListAccentMediumBrush" Color="#3A3D4F"/>

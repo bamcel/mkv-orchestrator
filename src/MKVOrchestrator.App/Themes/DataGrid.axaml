@@ -2,36 +2,50 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <!-- DataGrid base styling -->
   <Style Selector="DataGrid">
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="GridLinesVisibility" Value="Horizontal" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
 
   <Style Selector="DataGridColumnHeader">
-    <Setter Property="Background" Value="#21222C" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
     <Setter Property="Padding" Value="2,0" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
   </Style>
 
   <Style Selector="DataGridCell">
     <Setter Property="Padding" Value="2,0" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>
 
   <Style Selector="DataGridRow">
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>
 
+  <Style Selector="DataGridColumnHeader TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+  </Style>
+
+  <Style Selector="DataGridRow TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+  </Style>
+
+  <Style Selector="DataGridCell TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
+  </Style>
+
   <Style Selector="DataGridRow:selected">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>
@@ -43,7 +57,7 @@
 
   <Style Selector="DataGridCell:selected">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -84,23 +98,25 @@
   <Style Selector="DataGrid.file-info-grid DataGridCell">
     <Setter Property="Focusable" Value="False" />
     <Setter Property="Padding" Value="2,0" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow">
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow:pointerover DataGridCell">
-    <Setter Property="Background" Value="#343746" />
+    <Setter Property="Background" Value="{DynamicResource ThemeBorderBrush}" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow:selected">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>
@@ -141,8 +157,8 @@
 
   <!-- Dashboard File Info: force selected/current cell surfaces to use the same row highlight, not the default gray cell selection. -->
   <Style Selector="DataGrid.file-info-grid DataGridRow:selected DataGridCell">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
@@ -151,39 +167,39 @@
   <!-- Keep accidental/current cell selection transparent; only DataGridRow:selected should paint the row highlight. -->
   <Style Selector="DataGrid.file-info-grid DataGridCell:selected">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow:selected DataGridCell:current">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow:selected DataGridCell:focus">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow:selected DataGridCell:focus-within">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow:selected:pointerover DataGridCell">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridCell:selected:focus">
@@ -196,56 +212,55 @@
 
   <!-- File Info selected rows: Avalonia can render a different inactive-selection gray when focus moves into cells/checkboxes or away from the grid. Keep all selected states on the same Dracula row color. -->
   <Style Selector="DataGrid.file-info-grid DataGridRow:selected:focus DataGridCell">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow:selected:focus-within DataGridCell">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow:selected CheckBox">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow:selected TextBlock">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
 
   <!-- File Info selected row hover fix: Avalonia can apply pointerover styling to cells after row selection, which caused the selected row to turn dull gray while the mouse is over it. These selectors force selected + hover + current/focused cells to keep the same selected-row color. -->
   <Style Selector="DataGrid.file-info-grid DataGridRow:pointerover:selected DataGridCell">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow:selected DataGridCell:pointerover">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow:pointerover:selected DataGridCell:current">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
 
   <Style Selector="DataGrid.file-info-grid DataGridRow:pointerover:selected DataGridCell:focus-within">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
   </Style>
-
 </Styles>

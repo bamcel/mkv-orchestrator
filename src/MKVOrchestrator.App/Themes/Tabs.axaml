@@ -12,25 +12,25 @@
     <Setter Property="Margin" Value="2,0,2,0"/>
     <Setter Property="FontSize" Value="19"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
-    <Setter Property="Foreground" Value="#8B93A7"/>
+    <Setter Property="Foreground" Value="{DynamicResource ThemeSubtleTextBrush}"/>
   </Style>
 
   <Style Selector="TabItem:pointerover">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="TabItem:pointerover /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
 
   <!-- Selected navigation text uses muted Dracula subtitle color -->
   <Style Selector="TabItem:selected">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="TabItem:selected /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
 
@@ -42,5 +42,4 @@
     <Setter Property="Padding" Value="14,4"/>
     <Setter Property="Margin" Value="2,0,2,0"/>
   </Style>
-
 </Styles>

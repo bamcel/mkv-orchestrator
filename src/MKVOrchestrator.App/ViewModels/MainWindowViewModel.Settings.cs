@@ -3,11 +3,13 @@ using System.Linq;
 using System;
 using System.Collections.ObjectModel;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.Input;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using MKVOrchestrator.App.Services;
 using MKVOrchestrator.Core.Models;
 using MKVOrchestrator.Core.Services;
 
@@ -15,6 +17,11 @@ namespace MKVOrchestrator.App.ViewModels;
 
 public partial class MainWindowViewModel
 {
+    private static readonly JsonSerializerOptions ThemeJsonOptions = new()
+    {
+        WriteIndented = true
+    };
+
     private void LoadSettings()
     {
         _isLoadingSettings = true;
@@ -45,6 +52,7 @@ public partial class MainWindowViewModel
         MergeKeepSubtitleLanguages = MkvMergeDefaultSubtitleLanguages;
         WatchFolderText = string.Join(Environment.NewLine, settings.WatchFolders ?? new List<string>());
         EnableLiveWatchFolderMonitoring = settings.EnableLiveWatchFolderMonitoring;
+        LoadThemeSettings(settings);
         _lastBrowseFolderPath = settings.LastFolderPath ?? string.Empty;
 
         // Startup performance: do not validate the preferred folder synchronously here.
@@ -211,9 +219,173 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
             MkvMergeDefaultSubtitleLanguages = NormalizeLanguageListText(MkvMergeDefaultSubtitleLanguages, "eng"),
             WatchFolders = ParseWatchFolderText(WatchFolderText).ToList(),
             EnableLiveWatchFolderMonitoring = EnableLiveWatchFolderMonitoring,
-            Workers = _workerSettings.CloneNormalized()
+            Workers = _workerSettings.CloneNormalized(),
+            SelectedThemeName = string.IsNullOrWhiteSpace(SelectedThemeName) ? "Midnight" : SelectedThemeName,
+            CustomThemes = _customThemes.Select(ThemeService.Clone).ToList()
         });
     }
+
+    partial void OnSelectedThemeNameChanged(string value)
+    {
+        if (_isLoadingSettings) return;
+        LoadSelectedThemeIntoEditor();
+        SaveSettingsIfReady();
+    }
+
+    [RelayCommand]
+    private void ReloadTheme()
+    {
+        try
+        {
+            var theme = ParseThemeEditor();
+            if (string.IsNullOrWhiteSpace(theme.Name))
+            {
+                theme.Name = string.IsNullOrWhiteSpace(SelectedThemeName) ? "Custom Theme" : SelectedThemeName;
+            }
+
+            ThemeService.Apply(theme);
+            if (ThemeOptions.Any(option => string.Equals(option, theme.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                SelectedThemeName = ThemeOptions.First(option => string.Equals(option, theme.Name, StringComparison.OrdinalIgnoreCase));
+                ThemeStatusText = $"Theme reloaded: {theme.Name}";
+            }
+            else
+            {
+                ThemeStatusText = $"Theme reloaded from editor: {theme.Name}. Save it as a custom theme to keep it.";
+            }
+
+            SaveSettingsIfReady();
+        }
+        catch (Exception ex)
+        {
+            ThemeStatusText = $"Theme reload failed: {ex.Message}";
+            Log(ThemeStatusText);
+        }
+    }
+
+    [RelayCommand]
+    private void SaveCustomTheme()
+    {
+        try
+        {
+            var theme = ParseThemeEditor();
+            var name = string.IsNullOrWhiteSpace(CustomThemeName) ? theme.Name : CustomThemeName.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                ThemeStatusText = "Enter a custom theme name before saving.";
+                return;
+            }
+
+            if (ThemeService.IsBuiltInTheme(name))
+            {
+                ThemeStatusText = "Built-in theme names cannot be overwritten. Enter a new custom name.";
+                return;
+            }
+
+            theme.Name = name;
+            var existing = _customThemes.FindIndex(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (existing >= 0) _customThemes[existing] = theme;
+            else _customThemes.Add(theme);
+
+            RefreshThemeOptions(name);
+            ThemeEditorText = SerializeTheme(theme);
+            ThemeService.Apply(theme);
+            ThemeStatusText = $"Saved and applied custom theme: {name}";
+            SaveSettingsIfReady();
+        }
+        catch (Exception ex)
+        {
+            ThemeStatusText = $"Save custom theme failed: {ex.Message}";
+            Log(ThemeStatusText);
+        }
+    }
+
+    [RelayCommand]
+    private void RemoveCustomTheme()
+    {
+        var selected = SelectedThemeName?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(selected) || ThemeService.IsBuiltInTheme(selected))
+        {
+            ThemeStatusText = "Only custom themes can be removed.";
+            return;
+        }
+
+        var removed = _customThemes.RemoveAll(t => string.Equals(t.Name, selected, StringComparison.OrdinalIgnoreCase));
+        if (removed == 0)
+        {
+            ThemeStatusText = "Selected custom theme was not found.";
+            return;
+        }
+
+        RefreshThemeOptions("Midnight");
+        LoadSelectedThemeIntoEditor();
+        ThemeService.Apply(ThemeService.GetTheme(SelectedThemeName, _customThemes));
+        ThemeStatusText = $"Removed custom theme: {selected}";
+        SaveSettingsIfReady();
+    }
+
+    private void LoadThemeSettings(AppSettings settings)
+    {
+        _customThemes = (settings.CustomThemes ?? new List<ThemeDefinition>())
+            .Where(theme => !string.IsNullOrWhiteSpace(theme.Name) && !ThemeService.IsBuiltInTheme(theme.Name))
+            .Select(ThemeService.Clone)
+            .ToList();
+
+        RefreshThemeOptions(string.IsNullOrWhiteSpace(settings.SelectedThemeName) ? "Midnight" : settings.SelectedThemeName);
+        LoadSelectedThemeIntoEditor();
+        ThemeService.Apply(ThemeService.GetTheme(SelectedThemeName, _customThemes));
+    }
+
+    private void RefreshThemeOptions(string preferredTheme)
+    {
+        ThemeOptions.Clear();
+        foreach (var theme in ThemeService.BuiltInThemes)
+        {
+            ThemeOptions.Add(theme.Name);
+        }
+
+        foreach (var theme in _customThemes.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            ThemeOptions.Add(theme.Name);
+        }
+
+        SelectedThemeName = ThemeOptions.FirstOrDefault(t => string.Equals(t, preferredTheme, StringComparison.OrdinalIgnoreCase))
+            ?? ThemeOptions.FirstOrDefault()
+            ?? "Midnight";
+    }
+
+    private void LoadSelectedThemeIntoEditor()
+    {
+        var theme = ThemeService.GetTheme(SelectedThemeName, _customThemes);
+        ThemeEditorText = SerializeTheme(theme);
+        CustomThemeName = ThemeService.IsBuiltInTheme(theme.Name) ? theme.Name + " Custom" : theme.Name;
+        ThemeStatusText = ThemeService.IsBuiltInTheme(theme.Name)
+            ? "Built-in theme loaded. Edit JSON and save as a custom theme to keep changes."
+            : "Custom theme loaded. Edit JSON, save, then reload to apply changes.";
+    }
+
+    private ThemeDefinition ParseThemeEditor()
+    {
+        var theme = JsonSerializer.Deserialize<ThemeDefinition>(ThemeEditorText, ThemeJsonOptions)
+            ?? throw new InvalidOperationException("Theme JSON is empty.");
+        if (theme.Colors.Count == 0)
+        {
+            throw new InvalidOperationException("Theme JSON must include a Colors object.");
+        }
+
+        foreach (var color in theme.Colors)
+        {
+            if (!Color.TryParse(color.Value, out _))
+            {
+                throw new InvalidOperationException($"{color.Key} is not a valid color value.");
+            }
+        }
+
+        return theme;
+    }
+
+    private static string SerializeTheme(ThemeDefinition theme)
+        => JsonSerializer.Serialize(ThemeService.Clone(theme), ThemeJsonOptions);
 
     private void ApplyWorkerSettings()
     {

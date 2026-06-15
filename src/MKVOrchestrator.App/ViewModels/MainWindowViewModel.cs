@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using MKVOrchestrator.App.Services;
 using MKVOrchestrator.Core.Models;
 using MKVOrchestrator.Core.Services;
 using MKVOrchestrator.Core.Services.Pipeline;
@@ -100,6 +101,8 @@ public partial class MainWindowViewModel : ObservableObject
         "Default root folder",
         "Remember last directory"
     };
+    public ObservableCollection<string> ThemeOptions { get; } = new();
+    private List<ThemeDefinition> _customThemes = new();
     public ObservableCollection<string> RenameConsoleLines { get; } = new();
     public ObservableCollection<string> LibraryAuditWatchFolderOptions { get; } = new();
     public ObservableCollection<LibraryAuditSeasonItem> LibraryAuditItems { get; } = new();
@@ -182,6 +185,10 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string cacheTempEntryCountText = "0";
     [ObservableProperty] private string cacheDatabaseSizeText = "0 B";
     [ObservableProperty] private string cacheLastCleanupText = "Not yet this session";
+    [ObservableProperty] private string selectedThemeName = "Midnight";
+    [ObservableProperty] private string customThemeName = string.Empty;
+    [ObservableProperty] private string themeEditorText = string.Empty;
+    [ObservableProperty] private string themeStatusText = "Select a theme, edit its JSON, then reload to apply.";
     [ObservableProperty] private string mkvToolNixAutoFindStatusText = "Auto-find checks common install folders and PATH.";
     [ObservableProperty] private bool isCacheBusy;
     [ObservableProperty] private int maxScanWorkers = WorkerSettings.Defaults.MaxScanWorkers;

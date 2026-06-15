@@ -1,8 +1,8 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Style Selector="Button">
-    <Setter Property="Background" Value="#44475A" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="12,7" />
     <Setter Property="MinWidth" Value="84" />
@@ -11,35 +11,35 @@
   </Style>
 
   <Style Selector="Button:pointerover">
-    <Setter Property="Background" Value="#BD93F9" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeButtonHoverBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="Button:pressed">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="Button:pointerover /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="Button:pressed /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="Button:disabled">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="Foreground" Value="#CFCFEA" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeMutedTextBrush}" />
     <Setter Property="Opacity" Value="1" />
   </Style>
 
   <Style Selector="Button:disabled /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#CFCFEA" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeMutedTextBrush}" />
   </Style>
 
   <Style Selector="Button:disabled /template/ Border">
-    <Setter Property="Background" Value="#3A3D4F" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
   </Style>
 
   <Style Selector="RadioButton.nav-item">
@@ -51,56 +51,56 @@
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Left" />
     <Setter Property="FontSize" Value="14" />
-    <Setter Property="Foreground" Value="#CFCFEA" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeMutedTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton.nav-item:pointerover">
-    <Setter Property="Background" Value="#2B2E3A" />
-    <Setter Property="BorderBrush" Value="#3A3D4E" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemePanelBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorderStrongBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton.nav-item:checked">
-    <Setter Property="Background" Value="#303744" />
-    <Setter Property="BorderBrush" Value="#CFCFEA" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeMutedTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton.nav-item:checked:pointerover">
-    <Setter Property="Background" Value="#303744" />
-    <Setter Property="BorderBrush" Value="#CFCFEA" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeMutedTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton.nav-item:pointerover:checked">
-    <Setter Property="Background" Value="#303744" />
-    <Setter Property="BorderBrush" Value="#CFCFEA" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeMutedTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton.nav-item:checked /template/ Border">
-    <Setter Property="Background" Value="#303744" />
-    <Setter Property="BorderBrush" Value="#CFCFEA" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeMutedTextBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
   </Style>
 
   <Style Selector="RadioButton.nav-item:checked:pointerover /template/ Border">
-    <Setter Property="Background" Value="#303744" />
-    <Setter Property="BorderBrush" Value="#CFCFEA" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeMutedTextBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
   </Style>
 
   <Style Selector="RadioButton.nav-item:pointerover:checked /template/ Border">
-    <Setter Property="Background" Value="#303744" />
-    <Setter Property="BorderBrush" Value="#CFCFEA" />
+    <Setter Property="Background" Value="{DynamicResource ThemeSelectedBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeMutedTextBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
   </Style>
 
   <Style Selector="RadioButton.nav-item:checked:pointerover /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton.nav-item /template/ Ellipse">
@@ -108,51 +108,51 @@
   </Style>
 
   <Style Selector="RadioButton:pointerover">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton /template/ Ellipse">
-    <Setter Property="Fill" Value="#282A36" />
-    <Setter Property="Stroke" Value="#6272A4" />
+    <Setter Property="Fill" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource ThemeDisabledTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton:pointerover /template/ Ellipse">
-    <Setter Property="Fill" Value="#2F3140" />
-    <Setter Property="Stroke" Value="#44475A" />
+    <Setter Property="Fill" Value="{DynamicResource ThemeInputHoverBackgroundBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
   </Style>
 
   <Style Selector="RadioButton:checked /template/ Ellipse">
-    <Setter Property="Fill" Value="#44475A" />
-    <Setter Property="Stroke" Value="#44475A" />
+    <Setter Property="Fill" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
   </Style>
 
   <Style Selector="RadioButton:checked:pointerover /template/ Ellipse">
-    <Setter Property="Fill" Value="#505366" />
-    <Setter Property="Stroke" Value="#505366" />
+    <Setter Property="Fill" Value="{DynamicResource ThemeBorderStrongBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource ThemeBorderStrongBrush}" />
   </Style>
 
   <Style Selector="RadioButton /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton:pointerover /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton:pressed /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton:focus /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton:checked">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton:checked /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton.mode-option">
@@ -160,7 +160,7 @@
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="CornerRadius" Value="0" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="Padding" Value="0,4" />
     <Setter Property="MinHeight" Value="28" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -171,19 +171,19 @@
   <Style Selector="RadioButton.mode-option:pointerover">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton.mode-option:checked">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton.mode-option:checked:pointerover">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="RadioButton.mode-option /template/ Ellipse">
@@ -191,15 +191,15 @@
   </Style>
 
   <Style Selector="RadioButton.mode-option /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="Border.mode-check">
     <Setter Property="Width" Value="20" />
     <Setter Property="Height" Value="20" />
     <Setter Property="CornerRadius" Value="4" />
-    <Setter Property="Background" Value="#44475A" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
@@ -208,14 +208,14 @@
     <Setter Property="Width" Value="20" />
     <Setter Property="Height" Value="20" />
     <Setter Property="CornerRadius" Value="4" />
-    <Setter Property="Background" Value="#282A36" />
-    <Setter Property="BorderBrush" Value="#44475A" />
+    <Setter Property="Background" Value="{DynamicResource ThemeInputBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ThemeButtonBackgroundBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
   <Style Selector="TextBlock.mode-checkmark">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
     <Setter Property="FontSize" Value="13" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="HorizontalAlignment" Value="Center" />
@@ -223,26 +223,26 @@
   </Style>
 
   <Style Selector="CheckBox">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="CheckBox /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="CheckBox:pointerover">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="CheckBox:pointerover /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="CheckBox:checked">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 
   <Style Selector="CheckBox:checked /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="#F8F8F2" />
+    <Setter Property="Foreground" Value="{DynamicResource ThemeTextBrush}" />
   </Style>
 </Styles>
