@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\MKVO_icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.6" />
@@ -23,6 +24,8 @@
 	<PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Assets\MKVO_icon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\MKVO_icon.png" CopyToOutputDirectory="PreserveNewest" />
     <AvaloniaResource Include="Assets/Logos/**" />
   </ItemGroup>
 

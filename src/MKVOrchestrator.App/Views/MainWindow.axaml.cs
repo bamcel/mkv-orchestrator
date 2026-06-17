@@ -10,6 +10,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        LoadWindowIcon();
         DataContextChanged += (_, _) => ConfigureViewModel();
         Opened += async (_, _) =>
         {
@@ -36,6 +37,15 @@ public partial class MainWindow : Window
             var dialog = new OutputWindow(title, lines);
             _ = dialog.ShowDialog(this);
         };
+    }
+
+    private void LoadWindowIcon()
+    {
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "MKVO_icon.ico");
+        if (!File.Exists(iconPath)) return;
+
+        using var stream = File.OpenRead(iconPath);
+        Icon = new WindowIcon(stream);
     }
 
     private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
