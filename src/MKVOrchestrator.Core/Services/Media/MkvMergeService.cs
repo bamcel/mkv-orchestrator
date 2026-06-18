@@ -978,7 +978,7 @@ public sealed class MkvMergeService
         try
         {
             // File.Replace is preferred when available because it is atomic on supported filesystems.
-            // Some Linux/macOS/Docker-mounted volumes can reject it, so fall back to a conservative
+            // Some Linux/macOS mounted volumes can reject it, so fall back to a conservative
             // move-based replacement that keeps a backup until the new file is in place.
             File.Replace(tempPath, sourcePath, backupPath, ignoreMetadataErrors: true);
             TryDeleteTempFile(backupPath);

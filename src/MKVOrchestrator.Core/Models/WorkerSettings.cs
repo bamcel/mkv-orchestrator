@@ -1,7 +1,7 @@
 namespace MKVOrchestrator.Core.Models;
 
 /// <summary>
-/// Shared worker limits used by desktop, future web, and future Docker entry points.
+/// Shared worker limits used by desktop workflows.
 /// Keep defaults conservative for Unraid/network-share workflows.
 /// </summary>
 public sealed class WorkerSettings

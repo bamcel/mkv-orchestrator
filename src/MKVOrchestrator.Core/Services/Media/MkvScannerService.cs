@@ -157,8 +157,7 @@ public sealed class MkvScannerService
         if (fileCount <= 1) return 1;
 
         // External media probes are process-heavy and often run against network shares.
-        // Use shared worker settings so the desktop app, future web app, and future Docker entry points
-        // all honor the same concurrency profile.
+        // Use shared worker settings so scan paths honor the same concurrency profile.
         var configured = (workers ?? WorkerSettings.Defaults).CloneNormalized().MaxScanWorkers;
         return Math.Min(fileCount, configured);
     }

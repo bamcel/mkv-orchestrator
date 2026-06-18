@@ -1,6 +1,6 @@
 # MKVOrchestrator.Core
 
-`MKVOrchestrator.Core` is the shared engine layer for MKVO. The Windows desktop app references this project now, and future web/CLI/Docker projects should reference the same project instead of duplicating scan, metadata, cache, remux, or planning logic.
+`MKVOrchestrator.Core` is the shared engine layer for MKVO. The desktop app references this project instead of duplicating scan, metadata, cache, remux, or planning logic in the UI layer.
 
 ## Shared responsibility
 
@@ -16,7 +16,7 @@
 
 ## UI responsibility stays outside Core
 
-The desktop UI remains in `MKVOrchestrator.App`. Future browser UI should live in a separate project such as `MKVOrchestrator.Web` and reference this Core project.
+The desktop UI remains in `MKVOrchestrator.App`.
 
 ## UI-neutral status projection
 
@@ -24,7 +24,7 @@ Shared row models expose UI-neutral `VisualState` values for normal/warning stat
 
 ## Shared worker configuration
 
-`WorkerSettings` lives in `MKVOrchestrator.Core.Models` so every future front end uses the same concurrency limits.
+`WorkerSettings` lives in `MKVOrchestrator.Core.Models` so app workflows use the same concurrency limits.
 
 Default profile:
 
@@ -42,4 +42,4 @@ Current implementation:
 - mkvpropedit workers are honored by the Windows app execution path while using the shared Core setting model.
 - remux remains intentionally single-worker by default for Unraid/network-share safety.
 
-Future web/Docker entry points should read the same settings from `/config/settings.json` and pass them into Core rather than introducing separate worker limits.
+Additional entry points should read the same settings and pass them into Core rather than introducing separate worker limits.

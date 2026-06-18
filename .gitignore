@@ -7,6 +7,17 @@ obj/
 *.suo
 .vs/
 
+# MKVO local runtime data
+settings.json
+appsettings*.json
+metadata_cache*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+logs/
+publish/
+
 # OS/editor noise
 .DS_Store
 Thumbs.db

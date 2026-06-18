@@ -1,6 +1,5 @@
 using MKVOrchestrator.Core.Models;
 using MKVOrchestrator.Core.Services;
-using MKVOrchestrator.Core.Services.Media;
 using MKVOrchestrator.Core.Services.Rename;
 
 var tests = new (string Name, Action Test)[]

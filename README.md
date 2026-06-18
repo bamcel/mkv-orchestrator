@@ -24,11 +24,9 @@ The first scanned file is still treated as the standard/template for comparison.
 - File Info grid uses row-only selection with no focused-cell white outline.
 - Use checkbox now toggles with a single click using a template checkbox column.
 
-## Cross-platform / Docker
+## Desktop App
 
-MKVO targets .NET 8 and Avalonia desktop. It can be published for Windows and Linux, and includes Docker scaffolding for Linux GUI/container testing.
-
-See `docs/CROSS_PLATFORM_AND_DOCKER.md` for Docker notes, tool resolution behavior, and platform limitations.
+MKVO is currently maintained as an Avalonia desktop application.
 
 ## v80 - Separate ad hoc scan cache
 
