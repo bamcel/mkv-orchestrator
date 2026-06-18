@@ -98,29 +98,24 @@
           HorizontalScrollBarVisibility="Auto"
           VerticalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
-                  <DataGridTemplateColumn Width="82" MinWidth="82" MaxWidth="96" CanUserResize="True" CanUserSort="False">
-                    <DataGridTemplateColumn.Header>
-                      <TextBlock Text="Use"
-                                 HorizontalAlignment="Left"
-                                 TextAlignment="Left"
-                                 TextTrimming="None"
-                                 Margin="0" />
-                    </DataGridTemplateColumn.Header>
-                    <DataGridTemplateColumn.CellTemplate>
-                      <DataTemplate>
-                        <CheckBox IsChecked="{Binding Selected, Mode=TwoWay}"
-                                  HorizontalAlignment="Left"
-                                  VerticalAlignment="Center"
-                                  Margin="0"
-                                  Focusable="False"
-                                  Click="UseCheckBox_Click" />
-                      </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                  </DataGridTemplateColumn>
                   <DataGridTemplateColumn Header="File" Width="SizeToCells" MinWidth="260" CanUserResize="True" CanUserSort="True" SortMemberPath="FileName">
                     <DataGridTemplateColumn.CellTemplate>
                       <DataTemplate>
-                        <TextBlock Text="{Binding FileName}" Foreground="{Binding RowVisualState, Converter={StaticResource VisualStateBrushConverter}}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FileName}" Margin="2,0,2,0" />
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="2,0,2,0">
+                          <CheckBox Grid.Column="0"
+                                    IsChecked="{Binding Selected, Mode=TwoWay}"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    Margin="0"
+                                    Focusable="False"
+                                    Click="UseCheckBox_Click" />
+                          <TextBlock Grid.Column="1"
+                                     Text="{Binding FileName}"
+                                     Foreground="{Binding RowVisualState, Converter={StaticResource VisualStateBrushConverter}}"
+                                     TextWrapping="NoWrap"
+                                     TextTrimming="CharacterEllipsis"
+                                     ToolTip.Tip="{Binding FileName}" />
+                        </Grid>
                       </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                   </DataGridTemplateColumn>
