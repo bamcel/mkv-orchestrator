@@ -142,7 +142,7 @@
                           Margin="0,4,0,0"
                           HorizontalAlignment="Left">
                 <Button Content="Preview" Width="96" Command="{Binding DryRunCommand}" />
-                <Button Content="Execute" Width="96" Command="{Binding ApplyCommand}" />
+                <Button Content="Apply" Width="96" Command="{Binding ApplyCommand}" />
               </StackPanel>
             </Grid>
           </Border>

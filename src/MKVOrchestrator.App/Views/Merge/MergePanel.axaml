@@ -122,7 +122,7 @@
                             Margin="0,4,0,0"
                             HorizontalAlignment="Left">
                   <Button Content="Preview" Width="96" Command="{Binding BuildMkvMergePreviewCommand}" />
-                  <Button Content="Execute" Width="96" Command="{Binding ExecuteMkvMergeCommand}" />
+                  <Button Content="Apply" Width="96" Command="{Binding ExecuteMkvMergeCommand}" />
                 </StackPanel>
               </Grid>
             </ScrollViewer>
@@ -215,7 +215,7 @@
                             Margin="0,4,0,0"
                             HorizontalAlignment="Left">
                   <Button Content="Preview" Width="96" Command="{Binding BuildMkvMergePreviewCommand}" />
-                  <Button Content="Execute" Width="96" Command="{Binding ExecuteMkvMergeCommand}" />
+                  <Button Content="Apply" Width="96" Command="{Binding ExecuteMkvMergeCommand}" />
                 </StackPanel>
               </Grid>
             </ScrollViewer>

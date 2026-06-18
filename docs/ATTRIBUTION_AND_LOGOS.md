@@ -3,7 +3,7 @@
 MKV Orchestrator includes a centralized attribution area under:
 
 ```text
-Settings → about
+Settings > About
 ```
 
 ## Assets

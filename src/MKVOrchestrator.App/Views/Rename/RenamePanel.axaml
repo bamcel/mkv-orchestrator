@@ -191,7 +191,7 @@
                              HorizontalAlignment="Center"
                              VerticalAlignment="Center" />
                 </Button>
-                <Button Content="Execute" Width="96" Command="{Binding ApplyRenamePreviewCommand}" />
+                <Button Content="Apply" Width="96" Command="{Binding ApplyRenamePreviewCommand}" />
               </StackPanel>
 
               <Border Grid.Row="16" Classes="console" Padding="8" MinHeight="58" HorizontalAlignment="Left" Width="330">
