@@ -77,7 +77,12 @@
                   <ComboBox.ItemTemplate>
                     <DataTemplate>
                       <StackPanel MaxWidth="310" Spacing="1">
-                        <TextBlock Text="{Binding Provider}" FontSize="10" Classes="success" />
+                        <TextBlock Text="{Binding DisplayName}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding ProviderDisplay}" FontSize="10" Classes="success" />
                         <TextBlock Text="{Binding Overview}" FontSize="11" TextWrapping="Wrap" Classes="muted" MaxHeight="36" />
                       </StackPanel>
                     </DataTemplate>
@@ -136,7 +141,7 @@
               <TextBlock Grid.Row="12" Text="Naming Template" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
 
               <StackPanel Grid.Row="13" Spacing="3" HorizontalAlignment="Left" Width="330" MaxWidth="330">
-                <ComboBox ItemsSource="{Binding RenameTemplateOptions}"
+                <ComboBox ItemsSource="{Binding DisplayedRenameTemplateOptions}"
                           SelectedItem="{Binding SelectedRenameTemplateOption}"
                           HorizontalAlignment="Left"
                           Width="330"

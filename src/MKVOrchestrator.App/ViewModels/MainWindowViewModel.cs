@@ -112,6 +112,7 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<string> ExecutionSummaryLines { get; } = new();
     public Action<string, IReadOnlyList<string>>? ShowOutputWindow { get; set; }
     public ObservableCollection<string> RenameTemplateOptions { get; } = new();
+    public ObservableCollection<string> DisplayedRenameTemplateOptions { get; } = new();
     public bool IsTvdbConfigured => !string.IsNullOrWhiteSpace(TvdbApiKey);
     public bool IsTmdbConfigured => !string.IsNullOrWhiteSpace(TmdbApiKey);
     public bool IsSelectedRenameProviderConfigured => IsRenameProviderConfigured(RenameLookupProvider);

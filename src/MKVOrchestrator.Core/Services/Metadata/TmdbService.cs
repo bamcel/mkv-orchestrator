@@ -15,7 +15,7 @@ public sealed class TmdbService
         if (string.IsNullOrWhiteSpace(query)) return Array.Empty<TvdbSeriesSearchResult>();
 
         var lang = NormalizeTmdbLanguage(language);
-        var url = $"{BaseUrl}/search/tv?api_key={Uri.EscapeDataString(apiKey.Trim())}&query={Uri.EscapeDataString(query.Trim())}&language={Uri.EscapeDataString(lang)}&include_adult=false";
+        var url = $"{BaseUrl}/search/multi?api_key={Uri.EscapeDataString(apiKey.Trim())}&query={Uri.EscapeDataString(query.Trim())}&language={Uri.EscapeDataString(lang)}&include_adult=false";
         using var response = await Client.GetAsync(url, token);
         var json = await response.Content.ReadAsStringAsync(token);
         response.EnsureSuccessStatusCode();
@@ -29,12 +29,23 @@ public sealed class TmdbService
         var results = new List<TvdbSeriesSearchResult>();
         foreach (var item in resultsElement.EnumerateArray())
         {
+            var mediaType = ReadString(item, "media_type");
+            if (!mediaType.Equals("tv", StringComparison.OrdinalIgnoreCase)
+                && !mediaType.Equals("movie", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             var id = ReadInt(item, "id");
-            var name = ReadString(item, "name");
+            var name = mediaType.Equals("movie", StringComparison.OrdinalIgnoreCase)
+                ? ReadString(item, "title")
+                : ReadString(item, "name");
             if (id <= 0 || string.IsNullOrWhiteSpace(name)) continue;
 
-            var firstAirDate = ReadString(item, "first_air_date");
-            var year = firstAirDate.Length >= 4 ? firstAirDate[..4] : string.Empty;
+            var date = mediaType.Equals("movie", StringComparison.OrdinalIgnoreCase)
+                ? ReadString(item, "release_date")
+                : ReadString(item, "first_air_date");
+            var year = date.Length >= 4 ? date[..4] : string.Empty;
             results.Add(new TvdbSeriesSearchResult
             {
                 Id = id,
@@ -42,17 +53,22 @@ public sealed class TmdbService
                 Year = year,
                 Overview = ReadString(item, "overview"),
                 Provider = "TMDB",
-                Format = "TV"
+                Format = mediaType.Equals("movie", StringComparison.OrdinalIgnoreCase) ? "Movie" : "TV"
             });
         }
         return results;
     }
 
-    public async Task<IReadOnlyList<TvdbEpisode>> GetEpisodesAsync(string apiKey, int seriesId, string language, CancellationToken token)
+    public async Task<IReadOnlyList<TvdbEpisode>> GetEpisodesAsync(string apiKey, TvdbSeriesSearchResult selectedResult, string language, CancellationToken token)
     {
         if (string.IsNullOrWhiteSpace(apiKey)) throw new InvalidOperationException("Enter a TMDB API key in Settings before loading TMDB episodes.");
+        if (selectedResult.Format.Equals("Movie", StringComparison.OrdinalIgnoreCase))
+        {
+            return await GetMovieAsEpisodeAsync(apiKey, selectedResult, language, token);
+        }
 
         var lang = NormalizeTmdbLanguage(language);
+        var seriesId = selectedResult.Id;
         var detailsUrl = $"{BaseUrl}/tv/{seriesId}?api_key={Uri.EscapeDataString(apiKey.Trim())}&language={Uri.EscapeDataString(lang)}";
         using var detailsResponse = await Client.GetAsync(detailsUrl, token);
         var detailsJson = await detailsResponse.Content.ReadAsStringAsync(token);
@@ -98,6 +114,32 @@ public sealed class TmdbService
         }
 
         return episodes;
+    }
+
+    private async Task<IReadOnlyList<TvdbEpisode>> GetMovieAsEpisodeAsync(string apiKey, TvdbSeriesSearchResult selectedMovie, string language, CancellationToken token)
+    {
+        var lang = NormalizeTmdbLanguage(language);
+        var movieUrl = $"{BaseUrl}/movie/{selectedMovie.Id}?api_key={Uri.EscapeDataString(apiKey.Trim())}&language={Uri.EscapeDataString(lang)}";
+        using var movieResponse = await Client.GetAsync(movieUrl, token);
+        var movieJson = await movieResponse.Content.ReadAsStringAsync(token);
+        movieResponse.EnsureSuccessStatusCode();
+
+        using var movieDocument = JsonDocument.Parse(movieJson);
+        var title = ReadString(movieDocument.RootElement, "title");
+        if (string.IsNullOrWhiteSpace(title)) title = selectedMovie.Name;
+
+        return new[]
+        {
+            new TvdbEpisode
+            {
+                Id = selectedMovie.Id,
+                SeasonNumber = 1,
+                EpisodeNumber = 1,
+                Name = title,
+                Provider = "TMDB",
+                ScopeName = "Movie"
+            }
+        };
     }
 
     private static string NormalizeTmdbLanguage(string language)

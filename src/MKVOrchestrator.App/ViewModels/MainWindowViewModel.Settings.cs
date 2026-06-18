@@ -41,6 +41,7 @@ public partial class MainWindowViewModel
         RenameLookupProvider = string.IsNullOrWhiteSpace(settings.RenameLookupProvider) ? "TVDB" : NormalizeLookupProvider(settings.RenameLookupProvider);
         RenameTemplate = string.IsNullOrWhiteSpace(settings.RenameTemplate) ? DefaultRenameTemplates()[0] : settings.RenameTemplate.Trim();
         ReplaceCollection(RenameTemplateOptions, BuildRenameTemplateList(settings.RenameTemplates, RenameTemplate));
+        RefreshDisplayedRenameTemplateOptions();
         SelectedRenameTemplateOption = RenameTemplateOptions.FirstOrDefault(x => string.Equals(x, RenameTemplate, StringComparison.OrdinalIgnoreCase)) ?? RenameTemplateOptions.FirstOrDefault() ?? string.Empty;
         RootFolderPath = !string.IsNullOrWhiteSpace(settings.RootFolderPath)
             ? settings.RootFolderPath
@@ -209,8 +210,8 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
             TmdbApiKey = TmdbApiKey?.Trim() ?? string.Empty,
             TvdbLanguage = string.IsNullOrWhiteSpace(TvdbLanguage) ? "eng" : TvdbLanguage.Trim(),
             RenameLookupProvider = NormalizeLookupProvider(RenameLookupProvider),
-            RenameTemplate = string.IsNullOrWhiteSpace(RenameTemplate) ? DefaultRenameTemplates()[0] : RenameTemplate.Trim(),
-            RenameTemplates = BuildRenameTemplateList(RenameTemplateOptions, RenameTemplate).ToList(),
+            RenameTemplate = string.IsNullOrWhiteSpace(RenameTemplate) ? DefaultRenameTemplates()[0] : ToStoredRenameTemplate(RenameTemplate),
+            RenameTemplates = BuildRenameTemplateList(RenameTemplateOptions, ToStoredRenameTemplate(RenameTemplate)).ToList(),
             IgnoredScanFolderNames = ParseIgnoredScanFolderNames(IgnoredScanFolderNameText).ToList(),
             AudioNamePresets = AudioNamePresets.ToList(),
             SubtitleNamePresets = SubtitleNamePresets.ToList(),
@@ -407,7 +408,7 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
     [RelayCommand]
     private void SaveRenameTemplate()
     {
-        var clean = NormalizeRenameTemplate(RenameTemplate);
+        var clean = ToStoredRenameTemplate(RenameTemplate);
         if (string.IsNullOrWhiteSpace(clean))
         {
             return;
@@ -417,6 +418,7 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
         if (string.IsNullOrWhiteSpace(existing))
         {
             RenameTemplateOptions.Add(clean);
+            RefreshDisplayedRenameTemplateOptions(clean);
             SelectedRenameTemplateOption = clean;
             Log($"Added rename template: {clean}");
         }
@@ -433,10 +435,10 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
     [RelayCommand]
     private void RemoveRenameTemplate()
     {
-        var selected = NormalizeRenameTemplate(SelectedRenameTemplateOption);
+        var selected = ToStoredRenameTemplate(SelectedRenameTemplateOption);
         if (string.IsNullOrWhiteSpace(selected))
         {
-            selected = NormalizeRenameTemplate(RenameTemplate);
+            selected = ToStoredRenameTemplate(RenameTemplate);
         }
 
         var existing = RenameTemplateOptions.FirstOrDefault(x => string.Equals(x, selected, StringComparison.OrdinalIgnoreCase));
@@ -446,6 +448,7 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
         }
 
         RenameTemplateOptions.Remove(existing);
+        RefreshDisplayedRenameTemplateOptions();
         Log($"Removed rename template: {existing}");
 
         if (RenameTemplateOptions.Count == 0)
@@ -454,6 +457,7 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
             {
                 RenameTemplateOptions.Add(template);
             }
+            RefreshDisplayedRenameTemplateOptions();
         }
 
         SelectedRenameTemplateOption = RenameTemplateOptions.FirstOrDefault() ?? string.Empty;
@@ -465,6 +469,7 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
     private void RestoreDefaultRenameTemplates()
     {
         ReplaceCollection(RenameTemplateOptions, DefaultRenameTemplates());
+        RefreshDisplayedRenameTemplateOptions();
         SelectedRenameTemplateOption = RenameTemplateOptions.FirstOrDefault() ?? string.Empty;
         RenameTemplate = SelectedRenameTemplateOption;
         Log("Restored default rename templates.");
@@ -553,6 +558,8 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
 
     private static List<string> DefaultRenameTemplates() => new()
     {
+        "{title}",
+        "{title} ({year})",
         "{series} - S{season:00}E{episode:00} - {episodeTitle}",
         "{series} ({year}) - S{season:00}E{episode:00} - {episodeTitle}",
         "S{season:00}E{episode:00} - {episodeTitle}",
@@ -560,6 +567,72 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
     };
 
     private static string NormalizeRenameTemplate(string? template) => (template ?? string.Empty).Trim();
+
+    private void RefreshDisplayedRenameTemplateOptions(string? preferredTemplate = null)
+    {
+        var preferred = NormalizeRenameTemplate(preferredTemplate);
+        var current = NormalizeRenameTemplate(RenameTemplate);
+        var selected = NormalizeRenameTemplate(SelectedRenameTemplateOption);
+        var candidates = IsSelectedMetadataResultMovie()
+            ? BuildMovieRenameTemplateList(RenameTemplateOptions, preferred, current, selected)
+            : BuildSeriesRenameTemplateList(RenameTemplateOptions, preferred, current, selected);
+
+        ReplaceCollection(DisplayedRenameTemplateOptions, candidates);
+        if (DisplayedRenameTemplateOptions.Count == 0) return;
+
+        var isMovie = IsSelectedMetadataResultMovie();
+        var desired = new[] { preferred, current, selected }
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => isMovie ? ToDisplayRenameTemplate(value) : NormalizeRenameTemplate(value))
+            .FirstOrDefault(value => DisplayedRenameTemplateOptions.Any(option => string.Equals(option, value, StringComparison.OrdinalIgnoreCase)));
+
+        var next = desired ?? DisplayedRenameTemplateOptions.First();
+        if (!string.Equals(SelectedRenameTemplateOption, next, StringComparison.OrdinalIgnoreCase))
+        {
+            SelectedRenameTemplateOption = next;
+        }
+    }
+
+    private static IEnumerable<string> BuildMovieRenameTemplateList(IEnumerable<string> templates, params string[] priorityTemplates)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var template in priorityTemplates.Concat(templates ?? Enumerable.Empty<string>()).Concat(DefaultRenameTemplates()))
+        {
+            var display = ToDisplayRenameTemplate(template);
+            if (IsMovieRenameTemplate(display) && seen.Add(display))
+            {
+                yield return display;
+            }
+        }
+    }
+
+    private static IEnumerable<string> BuildSeriesRenameTemplateList(IEnumerable<string> templates, params string[] priorityTemplates)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var template in priorityTemplates.Concat(templates ?? Enumerable.Empty<string>()).Concat(DefaultRenameTemplates()))
+        {
+            var clean = NormalizeRenameTemplate(template);
+            if (!IsMovieRenameTemplate(clean) && seen.Add(clean))
+            {
+                yield return clean;
+            }
+        }
+    }
+
+    private static bool IsMovieRenameTemplate(string? template)
+    {
+        var value = NormalizeRenameTemplate(template);
+        return !string.IsNullOrWhiteSpace(value)
+            && !value.Contains("{season", StringComparison.OrdinalIgnoreCase)
+            && !value.Contains("{episode", StringComparison.OrdinalIgnoreCase)
+            && !value.Contains("{absolute", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ToDisplayRenameTemplate(string? template)
+        => NormalizeRenameTemplate(template).Replace("{series}", "{title}", StringComparison.OrdinalIgnoreCase);
+
+    private static string ToStoredRenameTemplate(string? template)
+        => NormalizeRenameTemplate(template).Replace("{title}", "{series}", StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<string> BuildRenameTemplateList(IEnumerable<string>? templates, string? activeTemplate = null)
     {
@@ -580,11 +653,11 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
             yield return active;
         }
 
-        if (seen.Count == 0)
+        foreach (var template in DefaultRenameTemplates())
         {
-            foreach (var template in DefaultRenameTemplates())
+            if (seen.Add(template))
             {
-                if (seen.Add(template)) yield return template;
+                yield return template;
             }
         }
     }

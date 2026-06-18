@@ -187,14 +187,17 @@ public partial class MainWindowViewModel
         _cts?.Cancel();
         _cts = new CancellationTokenSource();
         IsBusy = true;
-        RenameStatusText = $"Loading {provider} episodes...";
-        RenameLog($"Loading episodes for {SelectedTvdbSeries.DisplayName} using {provider} language {TvdbLanguage}...");
+        var isMovie = IsSelectedMetadataResultMovie();
+        RenameStatusText = isMovie ? $"Loading {provider} movie metadata..." : $"Loading {provider} episodes...";
+        RenameLog($"Loading {(isMovie ? "movie metadata" : "episodes")} for {SelectedTvdbSeries.DisplayName} using {provider} language {TvdbLanguage}...");
 
         try
         {
             var allEpisodes = await LoadAllTvdbEpisodesForSelectedSeriesAsync(_cts.Token);
             var orderedEpisodes = FilterEpisodesByCheckedScopes(allEpisodes);
-            RenameLog($"{provider} episodes selected for preview: {orderedEpisodes.Count} of {allEpisodes.Count}");
+            RenameLog(isMovie
+                ? $"{provider} movie metadata loaded for preview."
+                : $"{provider} episodes selected for preview: {orderedEpisodes.Count} of {allEpisodes.Count}");
 
             var episodeMap = orderedEpisodes
                 .GroupBy(e => (e.SeasonNumber, e.EpisodeNumber))
@@ -210,7 +213,12 @@ public partial class MainWindowViewModel
                 TvdbEpisode? episode = null;
                 var exactMatch = false;
 
-                if (item.Season.HasValue && item.Episode.HasValue && episodeMap.TryGetValue((item.Season.Value, item.Episode.Value), out var mappedEpisode))
+                if (isMovie)
+                {
+                    episode = orderedEpisodes.FirstOrDefault();
+                    exactMatch = episode is not null;
+                }
+                else if (item.Season.HasValue && item.Episode.HasValue && episodeMap.TryGetValue((item.Season.Value, item.Episode.Value), out var mappedEpisode))
                 {
                     episode = mappedEpisode;
                     exactMatch = true;
@@ -239,7 +247,13 @@ public partial class MainWindowViewModel
                 item.MediaFile.ProviderMatch.EpisodeName = episode.Name;
                 item.NewFileName = BuildRenameFileName(item, episode);
 
-                if (exactMatch)
+                if (isMovie)
+                {
+                    item.Confidence = "High";
+                    item.Status = "Movie match";
+                    exactMatched++;
+                }
+                else if (exactMatch)
                 {
                     item.Confidence = "High";
                     item.Status = "Exact S/E match";
@@ -262,7 +276,9 @@ public partial class MainWindowViewModel
                 && !string.Equals(i.CurrentFileName, i.NewFileName, StringComparison.OrdinalIgnoreCase));
             var filesSkipped = filesScanned - filesChanged;
 
-            RenameStatusText = $"Preview ready: {exactMatched} exact, {sequentialMatched} sequential fallback, {RenameItems.Count - exactMatched - sequentialMatched} unmatched";
+            RenameStatusText = isMovie
+                ? $"Preview ready: {exactMatched} movie match, {RenameItems.Count - exactMatched} unmatched"
+                : $"Preview ready: {exactMatched} exact, {sequentialMatched} sequential fallback, {RenameItems.Count - exactMatched - sequentialMatched} unmatched";
             IsRenamePreviewDirty = false;
             BuildRenamePreviewSummary(filesChanged, filesSkipped);
         }
@@ -377,7 +393,19 @@ public partial class MainWindowViewModel
         EpisodeScopeSummary = string.Empty;
         if (episodes.Count == 0) return;
 
-        var provider = NormalizeLookupProvider(RenameLookupProvider);
+        if (IsSelectedMetadataResultMovie())
+        {
+            AddTvdbSeasonScopeOption(new TvdbSeasonScopeOption
+            {
+                DisplayName = "N/A",
+                SeasonNumber = 1,
+                ScopeName = "Movie",
+                IsSelected = true
+            });
+            UpdateEpisodeScopeSummary();
+            return;
+        }
+
         RebuildSeasonNativeScopeOptions(episodes);
     }
 
@@ -886,9 +914,15 @@ public partial class MainWindowViewModel
         var template = string.IsNullOrWhiteSpace(RenameTemplate)
             ? "{series} - S{season:00}E{episode:00} - {episodeTitle}"
             : RenameTemplate.Trim();
+        if (IsSelectedMetadataResultMovie()
+            && string.Equals(template, "{series} - S{season:00}E{episode:00} - {episodeTitle}", StringComparison.OrdinalIgnoreCase))
+        {
+            template = "{title} ({year})";
+        }
 
         var absolute = ((episode.SeasonNumber - 1) * 1000) + episode.EpisodeNumber;
         var value = template
+            .Replace("{title}", item.SeriesTitle, StringComparison.OrdinalIgnoreCase)
             .Replace("{series}", item.SeriesTitle)
             .Replace("{year}", item.SeriesYear?.ToString() ?? string.Empty)
             .Replace("{episodeTitle}", episode.Name)
@@ -900,6 +934,11 @@ public partial class MainWindowViewModel
             .Replace("{absolute}", absolute.ToString());
 
         return SanitizeFileName(value.Trim()) + extension;
+    }
+
+    private bool IsSelectedMetadataResultMovie()
+    {
+        return SelectedTvdbSeries?.Format.Equals("Movie", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private static string SanitizeFileName(string value)

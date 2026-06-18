@@ -39,7 +39,7 @@ public sealed class TvdbRenameMetadataProvider : IRenameMetadataProvider
 
     public async Task<IReadOnlyList<TvdbEpisode>> GetEpisodesAsync(TvdbSeriesSearchResult selectedSeries, string language, AppSettings settings, CancellationToken token)
     {
-        var episodes = await _service.GetEpisodesAsync(settings.TvdbApiKey, settings.TvdbPin, selectedSeries.Id, language, "All seasons + specials", token);
+        var episodes = await _service.GetEpisodesAsync(settings.TvdbApiKey, settings.TvdbPin, selectedSeries, language, "All seasons + specials", token);
         return NormalizeEpisodes(episodes);
     }
 
@@ -71,7 +71,7 @@ public sealed class TmdbRenameMetadataProvider : IRenameMetadataProvider
 
     public async Task<IReadOnlyList<TvdbEpisode>> GetEpisodesAsync(TvdbSeriesSearchResult selectedSeries, string language, AppSettings settings, CancellationToken token)
     {
-        var episodes = await _service.GetEpisodesAsync(settings.TmdbApiKey, selectedSeries.Id, language, token);
+        var episodes = await _service.GetEpisodesAsync(settings.TmdbApiKey, selectedSeries, language, token);
         foreach (var episode in episodes) episode.Provider = Key;
         return episodes;
     }

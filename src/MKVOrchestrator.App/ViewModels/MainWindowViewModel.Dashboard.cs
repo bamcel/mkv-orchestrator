@@ -116,6 +116,7 @@ public partial class MainWindowViewModel
         TvdbSeriesResults.Clear();
         TvdbSeasonScopeOptions.Clear();
         SelectedTvdbSeries = null;
+        RefreshDisplayedRenameTemplateOptions();
         RenameStatusText = $"Lookup provider: {NormalizeLookupProvider(value)}";
         OnPropertyChanged(nameof(IsSelectedRenameProviderConfigured));
         SaveSettingsIfReady();
@@ -128,7 +129,8 @@ public partial class MainWindowViewModel
         }
 
         var clean = NormalizeRenameTemplate(value);
-        var matching = RenameTemplateOptions.FirstOrDefault(x => string.Equals(x, clean, StringComparison.OrdinalIgnoreCase));
+        var matching = DisplayedRenameTemplateOptions.FirstOrDefault(x => string.Equals(x, ToDisplayRenameTemplate(clean), StringComparison.OrdinalIgnoreCase))
+            ?? RenameTemplateOptions.FirstOrDefault(x => string.Equals(x, clean, StringComparison.OrdinalIgnoreCase));
         if (!string.IsNullOrWhiteSpace(matching) && !string.Equals(SelectedRenameTemplateOption, matching, StringComparison.OrdinalIgnoreCase))
         {
             SelectedRenameTemplateOption = matching;
@@ -138,9 +140,10 @@ public partial class MainWindowViewModel
 
     partial void OnSelectedRenameTemplateOptionChanged(string value)
     {
-        if (!string.IsNullOrWhiteSpace(value) && !string.Equals(RenameTemplate, value, StringComparison.OrdinalIgnoreCase))
+        var stored = ToStoredRenameTemplate(value);
+        if (!string.IsNullOrWhiteSpace(stored) && !string.Equals(RenameTemplate, stored, StringComparison.OrdinalIgnoreCase))
         {
-            RenameTemplate = value;
+            RenameTemplate = stored;
         }
     }
     partial void OnMkvMergeDefaultAudioLanguagesChanged(string value) => SaveSettingsIfReady();
@@ -153,6 +156,7 @@ public partial class MainWindowViewModel
     {
         if (value is null) return;
 
+        RefreshDisplayedRenameTemplateOptions();
         RenameStatusText = $"Selected {NormalizeLookupProvider(RenameLookupProvider)} result: {value.DisplayName}";
         RenameLog(RenameStatusText);
         if (!_suppressSelectedSeriesAutoLoad)

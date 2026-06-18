@@ -18,6 +18,8 @@ public sealed class AppSettings
     public string RenameTemplate { get; set; } = "{series} - S{season:00}E{episode:00} - {episodeTitle}";
     public List<string> RenameTemplates { get; set; } = new()
     {
+        "{title}",
+        "{title} ({year})",
         "{series} - S{season:00}E{episode:00} - {episodeTitle}",
         "{series} ({year}) - S{season:00}E{episode:00} - {episodeTitle}",
         "S{season:00}E{episode:00} - {episodeTitle}",

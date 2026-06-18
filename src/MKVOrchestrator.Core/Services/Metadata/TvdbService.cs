@@ -13,9 +13,31 @@ public sealed class TvdbService
 
     public async Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(string apiKey, string pin, string query, string preferredLanguage, CancellationToken token)
     {
+        if (string.IsNullOrWhiteSpace(query)) return Array.Empty<TvdbSeriesSearchResult>();
+
         var language = NormalizeLanguage(preferredLanguage);
         var bearer = await LoginAsync(apiKey, pin, token);
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/search?type=series&query={Uri.EscapeDataString(query)}&language={language}");
+        var results = new List<TvdbSeriesSearchResult>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var type in new[] { "series", "movie" })
+        {
+            var typeResults = await SearchByTypeAsync(bearer, type, query, language, token);
+            foreach (var result in typeResults)
+            {
+                if (seen.Add($"{result.Format}:{result.Id}"))
+                {
+                    results.Add(result);
+                }
+            }
+        }
+
+        return results;
+    }
+
+    private static async Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchByTypeAsync(string bearer, string type, string query, string language, CancellationToken token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/search?type={Uri.EscapeDataString(type)}&query={Uri.EscapeDataString(query.Trim())}&language={language}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
         ApplyPreferredLanguage(request, language);
 
@@ -36,6 +58,7 @@ public sealed class TvdbService
             if (id == 0) id = ReadInt(item, "id");
             var name = ReadLocalizedString(item, "name", language);
             if (string.IsNullOrWhiteSpace(name)) name = ReadLocalizedString(item, "seriesName", language);
+            if (string.IsNullOrWhiteSpace(name)) name = ReadLocalizedString(item, "title", language);
             if (id == 0 || string.IsNullOrWhiteSpace(name)) continue;
 
             results.Add(new TvdbSeriesSearchResult
@@ -43,17 +66,25 @@ public sealed class TvdbService
                 Id = id,
                 Name = name,
                 Year = ReadString(item, "year"),
-                Overview = ReadLocalizedString(item, "overview", language)
+                Overview = ReadLocalizedString(item, "overview", language),
+                Provider = "TVDB",
+                Format = type.Equals("movie", StringComparison.OrdinalIgnoreCase) ? "Movie" : "TV"
             });
         }
 
         return results;
     }
 
-    public async Task<IReadOnlyList<TvdbEpisode>> GetEpisodesAsync(string apiKey, string pin, int seriesId, string preferredLanguage, string seasonFilter, CancellationToken token)
+    public async Task<IReadOnlyList<TvdbEpisode>> GetEpisodesAsync(string apiKey, string pin, TvdbSeriesSearchResult selectedResult, string preferredLanguage, string seasonFilter, CancellationToken token)
     {
         var language = NormalizeLanguage(preferredLanguage);
         var bearer = await LoginAsync(apiKey, pin, token);
+        if (selectedResult.Format.Equals("Movie", StringComparison.OrdinalIgnoreCase))
+        {
+            return await GetMovieAsEpisodeAsync(bearer, selectedResult, language, token);
+        }
+
+        var seriesId = selectedResult.Id;
         var episodes = new List<TvdbEpisode>();
         var seenEpisodeIds = new HashSet<int>();
         var page = 0;
@@ -109,6 +140,51 @@ public sealed class TvdbService
         }
 
         return episodes;
+    }
+
+    private static async Task<IReadOnlyList<TvdbEpisode>> GetMovieAsEpisodeAsync(string bearer, TvdbSeriesSearchResult selectedMovie, string language, CancellationToken token)
+    {
+        var title = selectedMovie.Name;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/movies/{selectedMovie.Id}/extended?meta=translations&short=true");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+            ApplyPreferredLanguage(request, language);
+
+            using var response = await Client.SendAsync(request, token);
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync(token);
+                using var document = JsonDocument.Parse(json);
+                if (document.RootElement.TryGetProperty("data", out var data))
+                {
+                    var detailTitle = ReadLocalizedString(data, "name", language);
+                    if (string.IsNullOrWhiteSpace(detailTitle)) detailTitle = ReadLocalizedString(data, "title", language);
+                    if (!string.IsNullOrWhiteSpace(detailTitle)) title = detailTitle;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // Movie detail lookup is best effort. Search results already contain the title.
+        }
+
+        return new[]
+        {
+            new TvdbEpisode
+            {
+                Id = selectedMovie.Id,
+                SeasonNumber = 1,
+                EpisodeNumber = 1,
+                Name = title,
+                Provider = "TVDB",
+                ScopeName = "Movie"
+            }
+        };
     }
 
     private sealed record SeasonFilter(bool IncludeRegularSeasons, bool IncludeSpecials, int? SpecificSeason);
