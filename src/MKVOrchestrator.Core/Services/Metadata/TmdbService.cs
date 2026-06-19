@@ -53,10 +53,17 @@ public sealed class TmdbService
                 Year = year,
                 Overview = ReadString(item, "overview"),
                 Provider = "TMDB",
-                Format = mediaType.Equals("movie", StringComparison.OrdinalIgnoreCase) ? "Movie" : "TV"
+                Format = mediaType.Equals("movie", StringComparison.OrdinalIgnoreCase) ? "Movie" : "TV",
+                DatabaseUrl = BuildDatabaseUrl(mediaType, id)
             });
         }
         return results;
+    }
+
+    private static string BuildDatabaseUrl(string mediaType, int id)
+    {
+        var path = mediaType.Equals("movie", StringComparison.OrdinalIgnoreCase) ? "movie" : "tv";
+        return $"https://www.themoviedb.org/{path}/{id}";
     }
 
     public async Task<IReadOnlyList<TvdbEpisode>> GetEpisodesAsync(string apiKey, TvdbSeriesSearchResult selectedResult, string language, CancellationToken token)

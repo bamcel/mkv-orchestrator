@@ -5,7 +5,7 @@
              x:DataType="vm:MainWindowViewModel">
         <Grid RowDefinitions="*" ColumnDefinitions="370,*" RowSpacing="12" ColumnSpacing="12" Margin="0,12,0,0">
           <Border Classes="card" Grid.Row="0" Grid.Column="0" Padding="8">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" RowSpacing="4">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" RowSpacing="4">
               <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0" Text="Rename Options" Classes="section-header" Margin="0" />
                 <Button Grid.Column="1"
@@ -59,7 +59,7 @@
                             MinHeight="36" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Spacing="3">
-                  <ComboBox ItemsSource="{Binding TvdbLanguageOptions}"
+                  <ComboBox ItemsSource="{Binding LanguagePresets}"
                             SelectedItem="{Binding TvdbLanguage}"
                             HorizontalAlignment="Stretch"
                             MinHeight="36" />
@@ -96,9 +96,26 @@
                 </ComboBox>
               </StackPanel>
 
-              <TextBlock Grid.Row="10" Text="Episodes" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
+              <StackPanel Grid.Row="10"
+                          IsVisible="{Binding HasSelectedDatabaseUrl}"
+                          Spacing="3"
+                          HorizontalAlignment="Left"
+                          Width="322"
+                          MaxWidth="322"
+                          Margin="8,2,0,0">
+                <TextBlock Text="{Binding SelectedDatabaseUrl}"
+                           Classes="success"
+                           FontSize="12"
+                           Cursor="Hand"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="Left click to open. Right click to copy."
+                           PointerPressed="DatabaseUrlText_PointerPressed" />
+              </StackPanel>
 
-              <StackPanel Grid.Row="11" Spacing="3" HorizontalAlignment="Left" Width="330" MaxWidth="330">
+              <TextBlock Grid.Row="11" Text="Episodes" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
+
+              <StackPanel Grid.Row="12" Spacing="3" HorizontalAlignment="Left" Width="330" MaxWidth="330">
                 <Expander Classes="scope-dropdown"
                           HorizontalAlignment="Stretch"
                           MaxWidth="330"
@@ -144,9 +161,9 @@
                 </Expander>
               </StackPanel>
 
-              <TextBlock Grid.Row="12" Text="Naming Template" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
+              <TextBlock Grid.Row="13" Text="Naming Template" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
 
-              <StackPanel Grid.Row="13" Spacing="3" HorizontalAlignment="Left" Width="330" MaxWidth="330">
+              <StackPanel Grid.Row="14" Spacing="3" HorizontalAlignment="Left" Width="330" MaxWidth="330">
                 <ComboBox ItemsSource="{Binding DisplayedRenameTemplateOptions}"
                           SelectedItem="{Binding SelectedRenameTemplateOption}"
                           HorizontalAlignment="Left"
@@ -179,9 +196,9 @@
                            FontSize="10" />
               </StackPanel>
 
-              <TextBlock Grid.Row="14" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
+              <TextBlock Grid.Row="15" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,5,0,1" />
 
-              <StackPanel Grid.Row="15" Orientation="Horizontal" Spacing="6" Margin="0,6,0,0" HorizontalAlignment="Left">
+              <StackPanel Grid.Row="16" Orientation="Horizontal" Spacing="6" Margin="0,6,0,0" HorizontalAlignment="Left">
                 <Button Width="96"
                         Command="{Binding BuildRenamePreviewCommand}"
                         IsEnabled="{Binding !IsBusy}">
@@ -193,7 +210,7 @@
                 <Button Content="Apply" Width="96" Command="{Binding ApplyRenamePreviewCommand}" />
               </StackPanel>
 
-              <Border Grid.Row="16" Classes="console" Padding="8" MinHeight="58" HorizontalAlignment="Left" Width="330">
+              <Border Grid.Row="17" Classes="console" Padding="8" MinHeight="58" HorizontalAlignment="Left" Width="330">
                 <TextBlock Text="{Binding RenameStatusText}"
                            Classes="success"
                            TextWrapping="Wrap"

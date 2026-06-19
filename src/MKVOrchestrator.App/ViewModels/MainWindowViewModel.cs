@@ -122,11 +122,8 @@ public partial class MainWindowViewModel : ObservableObject
     public bool IsSelectedRenameProviderConfigured => IsRenameProviderConfigured(RenameLookupProvider);
     public IBrush PreviewButtonForeground => IsRenamePreviewDirty ? Brushes.Orange : Brushes.White;
     public string RenamePreviewViewButtonText => IsRenamePreviewCompactView ? "Detailed View" : "Compact View";
-
-    public ObservableCollection<string> TvdbLanguageOptions { get; } = new()
-    {
-        "eng", "en", "jpn", "ja", "spa", "es", "fre", "fr", "ger", "de", "ita", "it", "por", "pt", "kor", "ko", "chi", "zh"
-    };
+    public string SelectedDatabaseUrl => SelectedTvdbSeries?.DatabaseUrl ?? string.Empty;
+    public bool HasSelectedDatabaseUrl => !string.IsNullOrWhiteSpace(SelectedDatabaseUrl);
 
     public ObservableCollection<TvdbSeasonScopeOption> TvdbSeasonScopeOptions { get; } = new();
 

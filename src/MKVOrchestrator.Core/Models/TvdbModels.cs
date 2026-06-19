@@ -8,6 +8,7 @@ public sealed class TvdbSeriesSearchResult
     public string Overview { get; set; } = string.Empty;
     public string Provider { get; set; } = "TVDB";
     public string Format { get; set; } = string.Empty;
+    public string DatabaseUrl { get; set; } = string.Empty;
     public string DisplayName => string.IsNullOrWhiteSpace(Year) ? Name : $"{Name} ({Year})";
     public string ProviderDisplay => string.IsNullOrWhiteSpace(Format) ? Provider : $"{Provider} {Format}";
 

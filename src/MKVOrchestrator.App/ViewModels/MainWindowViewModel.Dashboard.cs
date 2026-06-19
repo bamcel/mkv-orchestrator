@@ -159,6 +159,9 @@ public partial class MainWindowViewModel
 
     partial void OnSelectedTvdbSeriesChanged(TvdbSeriesSearchResult? value)
     {
+        OnPropertyChanged(nameof(SelectedDatabaseUrl));
+        OnPropertyChanged(nameof(HasSelectedDatabaseUrl));
+
         if (value is null) return;
 
         RefreshDisplayedRenameTemplateOptions();

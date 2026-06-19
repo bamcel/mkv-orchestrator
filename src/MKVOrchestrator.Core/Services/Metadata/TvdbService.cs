@@ -68,11 +68,18 @@ public sealed class TvdbService
                 Year = ReadString(item, "year"),
                 Overview = ReadLocalizedString(item, "overview", language),
                 Provider = "TVDB",
-                Format = type.Equals("movie", StringComparison.OrdinalIgnoreCase) ? "Movie" : "TV"
+                Format = type.Equals("movie", StringComparison.OrdinalIgnoreCase) ? "Movie" : "TV",
+                DatabaseUrl = BuildDatabaseUrl(type, id)
             });
         }
 
         return results;
+    }
+
+    private static string BuildDatabaseUrl(string type, int id)
+    {
+        var path = type.Equals("movie", StringComparison.OrdinalIgnoreCase) ? "movie" : "series";
+        return $"https://thetvdb.com/dereferrer/{path}/{id}";
     }
 
     public async Task<IReadOnlyList<TvdbEpisode>> GetEpisodesAsync(string apiKey, string pin, TvdbSeriesSearchResult selectedResult, string preferredLanguage, string seasonFilter, CancellationToken token)

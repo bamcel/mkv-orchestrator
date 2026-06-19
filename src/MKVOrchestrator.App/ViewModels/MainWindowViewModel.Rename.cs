@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.Input;
@@ -291,6 +292,41 @@ public partial class MainWindowViewModel
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task CopySelectedDatabaseUrl(Window window)
+    {
+        var url = SelectedDatabaseUrl;
+        if (string.IsNullOrWhiteSpace(url)) return;
+
+        if (window.Clipboard is not null)
+        {
+            await window.Clipboard.SetTextAsync(url);
+            RenameStatusText = "Database URL copied to clipboard.";
+            RenameLog(RenameStatusText);
+        }
+    }
+
+    [RelayCommand]
+    private void OpenSelectedDatabaseUrl()
+    {
+        var url = SelectedDatabaseUrl;
+        if (string.IsNullOrWhiteSpace(url)) return;
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            RenameStatusText = "Could not open database URL.";
+            RenameLog($"Could not open database URL: {ex.Message}");
         }
     }
 

@@ -263,7 +263,7 @@
                                 <TextBlock Text="Select the preferred provider used for rename lookups and metadata matching." Classes="muted" />
                               </StackPanel>
 
-                              <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="10" ColumnSpacing="10">
+                              <Grid ColumnDefinitions="170,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="10" ColumnSpacing="10">
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Default Lookup DB" VerticalAlignment="Center" />
                                 <ComboBox Grid.Row="0" Grid.Column="1"
                                           ItemsSource="{Binding RenameLookupProviderOptions}"
@@ -273,13 +273,19 @@
 
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Metadata Language" VerticalAlignment="Center" />
                                 <ComboBox Grid.Row="1" Grid.Column="1"
-                                          ItemsSource="{Binding TvdbLanguageOptions}"
+                                          ItemsSource="{Binding LanguagePresets}"
                                           SelectedItem="{Binding TvdbLanguage}"
                                           MaxWidth="260"
                                           HorizontalAlignment="Left" />
 
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Provider Status" VerticalAlignment="Top" />
                                 <TextBlock Grid.Row="2" Grid.Column="1"
+                                           Text="Uses the same language preset list configured in Settings > Properties."
+                                           TextWrapping="Wrap"
+                                           Classes="muted"
+                                           FontSize="11" />
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Provider Status" VerticalAlignment="Top" />
+                                <TextBlock Grid.Row="3" Grid.Column="1"
                                            Text="{Binding ApiProviderStatusText}"
                                            TextWrapping="Wrap"
                                            Classes="muted" />
