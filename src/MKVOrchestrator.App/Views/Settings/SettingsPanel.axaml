@@ -75,14 +75,32 @@
                     </DockPanel>
                   </Border>
 
-                      <TextBlock Text="ffprobe is optional and can remain as a command name when available on PATH." TextWrapping="Wrap" Classes="muted" />
+                      <TextBlock Text="FFmpeg is optional for MKV-only workflows and can remain empty when ffmpeg/ffprobe are available on PATH." TextWrapping="Wrap" Classes="muted" />
                       <Border Classes="panel">
                         <DockPanel LastChildFill="True">
-                      <TextBlock DockPanel.Dock="Top" Text="FFprobe Path" Classes="section-header" />
-                      <Grid ColumnDefinitions="170,*,Auto" RowDefinitions="Auto" RowSpacing="8" ColumnSpacing="8">
-                          <TextBlock Grid.Row="0" Grid.Column="0" Text="ffprobe.exe" VerticalAlignment="Center" />
-                          <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding FfProbePath}" Watermark="full path to ffprobe.exe" />
-                          <Button Grid.Row="0" Grid.Column="2" Content="Browse" Command="{Binding BrowseFfProbeCommand}" CommandParameter="{Binding $parent[Window]}" />
+                      <TextBlock DockPanel.Dock="Top" Text="FFmpeg Directory" Classes="section-header" />
+                      <Grid ColumnDefinitions="170,*,Auto,Auto" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="8">
+                          <TextBlock Grid.Row="0" Grid.Column="0" Text="FFmpeg folder" VerticalAlignment="Center" />
+                          <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding FfmpegDirectory}" Watermark="full path to FFmpeg bin folder" />
+                          <Button Grid.Row="0" Grid.Column="2" Content="Browse" Command="{Binding BrowseFfmpegDirectoryCommand}" CommandParameter="{Binding $parent[Window]}" />
+                          <Button Grid.Row="0" Grid.Column="3" Content="Auto Find" Command="{Binding AutoFindFfmpegDirectoryCommand}" />
+
+                          <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3"
+                                     Text="{Binding FfmpegPath, StringFormat='ffmpeg: {0}'}"
+                                     TextWrapping="NoWrap"
+                                     TextTrimming="CharacterEllipsis"
+                                     Classes="muted" />
+
+                          <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3"
+                                     Text="{Binding FfProbePath, StringFormat='ffprobe: {0}'}"
+                                     TextWrapping="NoWrap"
+                                     TextTrimming="CharacterEllipsis"
+                                     Classes="muted" />
+
+                          <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3"
+                                     Text="{Binding FfmpegAutoFindStatusText}"
+                                     TextWrapping="Wrap"
+                                     Classes="muted" />
                         </Grid>
                     </DockPanel>
                   </Border>

@@ -33,7 +33,9 @@ public partial class MainWindowViewModel
         MkvToolNixDirectory = !string.IsNullOrWhiteSpace(settings.MkvToolNixDirectory)
             ? settings.MkvToolNixDirectory
             : InferMkvToolNixDirectory(settings.MkvMergePath, settings.MkvPropEditPath);
-        FfProbePath = string.IsNullOrWhiteSpace(settings.FfProbePath) ? CrossPlatformRuntime.GetToolDisplayName("ffprobe.exe", "ffprobe") : settings.FfProbePath;
+        FfmpegDirectory = !string.IsNullOrWhiteSpace(settings.FfmpegDirectory)
+            ? settings.FfmpegDirectory
+            : InferToolDirectory(settings.FfProbePath);
         TvdbApiKey = settings.TvdbApiKey ?? string.Empty;
         TvdbPin = settings.TvdbPin ?? string.Empty;
         TmdbApiKey = settings.TmdbApiKey ?? string.Empty;
@@ -105,6 +107,21 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
         return CrossPlatformRuntime.GetToolDisplayName(windowsName, unixName);
     }
 
+    private string ResolveFfmpegToolPath(string windowsName, string unixName)
+    {
+        var directory = CrossPlatformRuntime.NormalizeUserPath(FfmpegDirectory);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            var candidate = Path.Combine(directory, CrossPlatformRuntime.IsWindows ? windowsName : unixName);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return CrossPlatformRuntime.GetToolDisplayName(windowsName, unixName);
+    }
+
     private static bool IsValidMkvToolNixDirectory(string directory)
     {
         directory = CrossPlatformRuntime.NormalizeUserPath(directory);
@@ -113,6 +130,18 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
         var required = CrossPlatformRuntime.IsWindows
             ? new[] { "mkvmerge.exe", "mkvpropedit.exe", "mkvextract.exe", "mkvinfo.exe" }
             : new[] { "mkvmerge", "mkvpropedit", "mkvextract", "mkvinfo" };
+
+        return required.All(tool => File.Exists(Path.Combine(directory, tool)));
+    }
+
+    private static bool IsValidFfmpegDirectory(string directory)
+    {
+        directory = CrossPlatformRuntime.NormalizeUserPath(directory);
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return false;
+
+        var required = CrossPlatformRuntime.IsWindows
+            ? new[] { "ffmpeg.exe", "ffprobe.exe" }
+            : new[] { "ffmpeg", "ffprobe" };
 
         return required.All(tool => File.Exists(Path.Combine(directory, tool)));
     }
@@ -146,6 +175,38 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
         if (!string.IsNullOrWhiteSpace(pathDirectory)) yield return pathDirectory;
     }
 
+    private static IEnumerable<string> GetFfmpegSearchDirectories()
+    {
+        if (CrossPlatformRuntime.IsWindows)
+        {
+            yield return @"C:\ffmpeg\bin";
+            yield return @"C:\Program Files\ffmpeg\bin";
+            yield return @"C:\Program Files (x86)\ffmpeg\bin";
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (!string.IsNullOrWhiteSpace(localAppData)) yield return Path.Combine(localAppData, "Programs", "ffmpeg", "bin");
+        }
+        else if (CrossPlatformRuntime.IsMacOS)
+        {
+            yield return "/opt/homebrew/bin";
+            yield return "/usr/local/bin";
+            yield return "/usr/bin";
+        }
+        else
+        {
+            yield return "/usr/bin";
+            yield return "/usr/local/bin";
+            yield return "/snap/bin";
+            yield return "/app/bin";
+        }
+
+        foreach (var tool in new[] { CrossPlatformRuntime.GetToolDisplayName("ffmpeg.exe", "ffmpeg"), CrossPlatformRuntime.GetToolDisplayName("ffprobe.exe", "ffprobe") })
+        {
+            var pathTool = CrossPlatformRuntime.FindExecutableOnPath(tool);
+            var pathDirectory = string.IsNullOrWhiteSpace(pathTool) ? string.Empty : Path.GetDirectoryName(pathTool);
+            if (!string.IsNullOrWhiteSpace(pathDirectory)) yield return pathDirectory;
+        }
+    }
+
     private static string FormatByteSize(long bytes)
     {
         string[] units = { "B", "KB", "MB", "GB" };
@@ -174,6 +235,9 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
     }
 
     private static string InferMkvToolNixDirectory(params string[] toolPaths)
+        => InferToolDirectory(toolPaths);
+
+    private static string InferToolDirectory(params string[] toolPaths)
     {
         foreach (var toolPath in toolPaths)
         {
@@ -202,7 +266,8 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
         _settingsService.Save(new AppSettings
         {
             MkvToolNixDirectory = CrossPlatformRuntime.NormalizeUserPath(MkvToolNixDirectory),
-            FfProbePath = string.IsNullOrWhiteSpace(FfProbePath) ? CrossPlatformRuntime.GetToolDisplayName("ffprobe.exe", "ffprobe") : CrossPlatformRuntime.NormalizeUserPath(FfProbePath),
+            FfmpegDirectory = CrossPlatformRuntime.NormalizeUserPath(FfmpegDirectory),
+            FfProbePath = string.Empty,
             RootFolderPath = RootFolderPath?.Trim() ?? string.Empty,
             LastFolderPath = _lastBrowseFolderPath?.Trim() ?? string.Empty,
             SourceFolderStartMode = NormalizeSourceFolderStartMode(SourceFolderStartMode),

@@ -73,7 +73,12 @@ public partial class MainWindowViewModel
         OnPropertyChanged(nameof(MkvInfoPath));
     }
 
-    partial void OnFfProbePathChanged(string value) => SaveSettingsIfReady();
+    partial void OnFfmpegDirectoryChanged(string value)
+    {
+        SaveSettingsIfReady();
+        OnPropertyChanged(nameof(FfmpegPath));
+        OnPropertyChanged(nameof(FfProbePath));
+    }
     partial void OnIgnoredScanFolderNameTextChanged(string value)
     {
         // Dashboard ignored-subfolder changes are saved automatically.
@@ -264,14 +269,44 @@ public partial class MainWindowViewModel
     }
 
     [RelayCommand]
-    private async Task BrowseFfProbe(Window window)
+    private async Task BrowseFfmpegDirectory(Window window)
     {
-        var path = await PickExecutableAsync(window, "Select ffprobe");
-        if (!string.IsNullOrWhiteSpace(path))
+        var folders = await window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            FfProbePath = path;
-            Log($"ffprobe path saved: {FfProbePath}");
+            Title = "Select FFmpeg bin folder",
+            AllowMultiple = false
+        });
+
+        if (folders.Count > 0)
+        {
+            FfmpegDirectory = folders[0].Path.LocalPath;
+            SaveSettingsIfReady();
+            Log($"FFmpeg directory saved: {FfmpegDirectory}");
         }
+    }
+
+    [RelayCommand]
+    private void AutoFindFfmpegDirectory()
+    {
+        var candidates = GetFfmpegSearchDirectories()
+            .Select(CrossPlatformRuntime.NormalizeUserPath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(CrossPlatformRuntime.PathComparer)
+            .ToList();
+
+        foreach (var candidate in candidates)
+        {
+            if (!IsValidFfmpegDirectory(candidate)) continue;
+
+            FfmpegDirectory = candidate;
+            FfmpegAutoFindStatusText = $"Found FFmpeg: {candidate}";
+            SaveSettingsIfReady();
+            Log(FfmpegAutoFindStatusText);
+            return;
+        }
+
+        FfmpegAutoFindStatusText = $"FFmpeg not found in {candidates.Count} checked location(s). Install it or use Browse.";
+        Log(FfmpegAutoFindStatusText);
     }
 
     [RelayCommand]

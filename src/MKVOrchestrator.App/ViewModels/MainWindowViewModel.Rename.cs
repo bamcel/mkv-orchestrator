@@ -749,7 +749,8 @@ public partial class MainWindowViewModel
         {
             RootFolderPath = RootFolderPath?.Trim() ?? string.Empty,
             MkvToolNixDirectory = CrossPlatformRuntime.NormalizeUserPath(MkvToolNixDirectory),
-            FfProbePath = string.IsNullOrWhiteSpace(FfProbePath) ? "ffprobe" : FfProbePath.Trim(),
+            FfmpegDirectory = CrossPlatformRuntime.NormalizeUserPath(FfmpegDirectory),
+            FfProbePath = string.Empty,
             TvdbApiKey = TvdbApiKey?.Trim() ?? string.Empty,
             TvdbPin = TvdbPin?.Trim() ?? string.Empty,
             TmdbApiKey = TmdbApiKey?.Trim() ?? string.Empty,

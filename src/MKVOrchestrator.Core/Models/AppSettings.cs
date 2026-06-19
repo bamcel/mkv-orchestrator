@@ -7,7 +7,8 @@ public sealed class AppSettings
     public string MkvToolNixDirectory { get; set; } = string.Empty;
     public string MkvMergePath { get; set; } = string.Empty; // legacy compatibility
     public string MkvPropEditPath { get; set; } = string.Empty; // legacy compatibility
-    public string FfProbePath { get; set; } = string.Empty;
+    public string FfmpegDirectory { get; set; } = string.Empty;
+    public string FfProbePath { get; set; } = string.Empty; // legacy compatibility
     public string RootFolderPath { get; set; } = string.Empty;
     public string TvdbApiKey { get; set; } = string.Empty;
     public string TvdbPin { get; set; } = string.Empty;

@@ -91,6 +91,8 @@ public partial class MainWindowViewModel : ObservableObject
     public string MkvPropEditPath => ResolveMkvToolPath("mkvpropedit.exe", "mkvpropedit");
     public string MkvExtractPath => ResolveMkvToolPath("mkvextract.exe", "mkvextract");
     public string MkvInfoPath => ResolveMkvToolPath("mkvinfo.exe", "mkvinfo");
+    public string FfmpegPath => ResolveFfmpegToolPath("ffmpeg.exe", "ffmpeg");
+    public string FfProbePath => ResolveFfmpegToolPath("ffprobe.exe", "ffprobe");
     public ObservableCollection<string> PlannedActions => AppState.PlannedActions;
     public ObservableCollection<string> ConsoleLines => AppState.ConsoleLines;
     public ObservableCollection<string> DashboardConsoleLines => AppState.DashboardConsoleLines;
@@ -162,7 +164,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string rootFolderPath = string.Empty;
     [ObservableProperty] private string sourceFolderStartMode = "Default root folder";
     [ObservableProperty] private string mkvToolNixDirectory = string.Empty;
-    [ObservableProperty] private string ffProbePath = "ffprobe";
+    [ObservableProperty] private string ffmpegDirectory = string.Empty;
     [ObservableProperty] private MkvFileItem? selectedFile;
     [ObservableProperty] private MkvFileItem? comparisonTemplateFile;
     [ObservableProperty] private bool isBusy;
@@ -200,6 +202,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string themeEditorText = string.Empty;
     [ObservableProperty] private string themeStatusText = "Select a theme, edit its JSON, then reload to apply.";
     [ObservableProperty] private string mkvToolNixAutoFindStatusText = "Auto-find checks common install folders and PATH.";
+    [ObservableProperty] private string ffmpegAutoFindStatusText = "Auto-find checks common install folders and PATH.";
     [ObservableProperty] private bool isCacheBusy;
     [ObservableProperty] private int maxScanWorkers = WorkerSettings.Defaults.MaxScanWorkers;
     [ObservableProperty] private int maxEditWorkers = WorkerSettings.Defaults.MaxEditWorkers;
