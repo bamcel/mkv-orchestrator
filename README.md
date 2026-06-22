@@ -196,7 +196,7 @@ dotnet run --project tests\MKVOrchestrator.Tests\MKVOrchestrator.Tests.csproj
 Publish a Windows test build:
 
 ```powershell
-dotnet publish src\MKVOrchestrator.App\MKVOrchestrator.App.csproj -c Release -r win-x64 --self-contained true -o C:\Users\bamcel\Documents\AppDesign\MKVO-publish
+dotnet publish src\MKVOrchestrator.App\MKVOrchestrator.App.csproj -c Release -r win-x64 --self-contained true -o .\artifacts\publish\MKVO
 ```
 
 Adjust the output folder as needed.
