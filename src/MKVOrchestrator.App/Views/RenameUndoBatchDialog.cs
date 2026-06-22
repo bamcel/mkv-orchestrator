@@ -155,6 +155,7 @@ public sealed class RenameUndoBatchDialog : Window
         body.Children.Add(BuildSelectablePanel("Last 20 Batch Jobs", _batchList, 0));
         body.Children.Add(BuildReadOnlyPanel("Files To Restore", _entryList, 1));
         body.Children.Add(BuildReadOnlyPanel("Summary", _summaryList, 2));
+        _entryList.ItemTemplate = BuildRestoreEntryTemplate();
         Grid.SetRow(body, 1);
         root.Children.Add(body);
 
@@ -342,7 +343,10 @@ public sealed class RenameUndoBatchDialog : Window
         }
 
         _entryList.ItemsSource = batch.Entries
-            .Select(entry => $"{entry.RenamedFileName} -> {entry.OriginalFileName}")
+            .Select((entry, index) => new RestoreEntryDisplay(
+                index + 1,
+                entry.RenamedFileName,
+                entry.OriginalFileName))
             .ToList();
 
         _summaryList.ItemsSource = new[]
@@ -391,6 +395,70 @@ public sealed class RenameUndoBatchDialog : Window
 
     private static string EmptyAsNA(string value)
         => string.IsNullOrWhiteSpace(value) ? "N/A" : value.Trim();
+
+    private static FuncDataTemplate<RestoreEntryDisplay> BuildRestoreEntryTemplate()
+        => new((item, _) =>
+        {
+            if (item is null) return new TextBlock();
+
+            var container = new Border
+            {
+                BorderBrush = ResourceBrush("ThemeBorderBrush", "#343746"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(8, 6),
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+
+            var stack = new StackPanel { Spacing = 3 };
+            stack.Children.Add(new TextBlock
+            {
+                Text = $"{item.Number:00}",
+                Foreground = ResourceBrush("ThemeMutedTextBrush", "#CFCFEA"),
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 11,
+                FontWeight = FontWeight.SemiBold
+            });
+            stack.Children.Add(BuildRestoreLine("Current", item.CurrentFileName));
+            stack.Children.Add(BuildRestoreLine("Restore To", item.RestoreFileName));
+
+            container.Child = stack;
+            return container;
+        }, true);
+
+    private static Grid BuildRestoreLine(string label, string value)
+    {
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("72,*"),
+            ColumnSpacing = 6
+        };
+
+        var labelText = new TextBlock
+        {
+            Text = label,
+            Foreground = ResourceBrush("ThemeMutedTextBrush", "#CFCFEA"),
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 11
+        };
+        Grid.SetColumn(labelText, 0);
+        grid.Children.Add(labelText);
+
+        var valueText = new TextBlock
+        {
+            Text = value,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = ResourceBrush("ThemeTextBrush", "#F8F8F2"),
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 12
+        };
+        Grid.SetColumn(valueText, 1);
+        grid.Children.Add(valueText);
+
+        return grid;
+    }
+
+    private sealed record RestoreEntryDisplay(int Number, string CurrentFileName, string RestoreFileName);
 
     private static IBrush ResourceBrush(string key, string fallback)
     {
