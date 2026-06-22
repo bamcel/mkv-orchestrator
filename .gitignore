@@ -18,6 +18,7 @@ metadata_cache*.db
 logs/
 publish/
 artifacts/publish/
+artifacts/release/
 tmp/
 
 # OS/editor noise
