@@ -56,7 +56,7 @@ MKVToolNix tools are used for MKV remuxing, metadata editing, extraction, and an
 Current attribution text used by the app:
 
 ```text
-FFmpeg/ffprobe is used for media metadata analysis.
+FFmpeg and ffprobe are used for media metadata analysis.
 ```
 
 ## UI rules

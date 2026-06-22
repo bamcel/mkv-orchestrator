@@ -9,17 +9,19 @@ MKVO should not ship shared production API keys.
 Each user is expected to configure their own provider credentials under:
 
 ```text
-Settings → api providers
+Settings > API Providers
 ```
 
-## Current providers
+## Current Providers
 
 ```text
 TVDB
 TMDB
 ```
 
-## Stored settings
+TVDB and TMDB can be used for TV and movie metadata lookup. The selected provider must be configured before rename searches can run.
+
+## Stored Settings
 
 Credentials are stored locally in MKVO settings:
 
@@ -29,7 +31,9 @@ TvdbPin
 TmdbApiKey
 ```
 
-## UX rules
+Credentials are not intended to be committed to source control, bundled with releases, written to logs, or included in support files.
+
+## UX Rules
 
 - Detect missing provider API keys before starting metadata lookup.
 - Show a clear status message when the selected provider is not configured.
@@ -39,7 +43,7 @@ TmdbApiKey
 - Do not include API keys in support/export bundles.
 - Keep provider setup links visible in Settings.
 
-## Missing-key behavior
+## Missing-Key Behavior
 
 If selected provider is TVDB and `TvdbApiKey` is blank:
 
@@ -53,6 +57,6 @@ If selected provider is TMDB and `TmdbApiKey` is blank:
 TMDB API key is required. Add your own TMDB API key in Settings > API Providers.
 ```
 
-## Test connection
+## Test Connection
 
 Settings includes a **Test Selected Provider** button. It performs a lightweight provider search using the selected provider and reports success/failure without exposing credentials.

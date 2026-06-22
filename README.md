@@ -1,38 +1,219 @@
-# MKV Orchestrator v1_14
+# MKV Orchestrator
 
-Built from the v1_13 dashboard scroll/outline baseline.
+MKV Orchestrator, or MKVO, is a desktop media operations console for scanning media folders, reviewing track metadata, matching rename metadata from TVDB or TMDB, previewing safe file renames, planning mux/remux work, and editing MKV track properties.
 
-## Changes
+The app is built with Avalonia and is currently maintained as a desktop application.
 
-- Dashboard panel title changed from **File Queue** to **File Info**.
-- Dashboard Status column now reports template comparison state:
-  - `Ready` = audio/subtitle track structure matches the standard/template file.
-  - `Warning` = audio/subtitle track structure differs from the standard/template file, or media/track info could not be verified.
-- Warning rows retain the established orange mismatch color so discrepancies are visible in the File Info grid.
+## What MKVO Does
 
-## Notes
+- Scans folders for MKV and MP4 files.
+- Displays file, video, audio, and subtitle track details.
+- Compares files against a selected template file.
+- Looks up TV or movie metadata from TVDB or TMDB for rename previews.
+- Supports rename templates for TV episodes and movies.
+- Records rename batches so recent rename operations can be reviewed and undone.
+- Plans MKV mux/remux operations with MKVToolNix.
+- Muxes matching external subtitle sidecars into MKV files.
+- Edits MKV container title, track names, languages, default flags, and forced flags.
+- Builds and manages a local metadata cache for watch folders.
+- Supports user-editable GUI themes.
 
-The first scanned file is still treated as the standard/template for comparison.
+## Requirements
 
+### Required For Running From Source
 
-## v1_15
-- Dashboard/DataGrid selection now uses row highlight only.
-- Removed white focus/selection box outline around selected cells/elements.
+- Windows desktop environment.
+- .NET 10 SDK.
+- Git, if you are cloning from GitHub.
 
+### Required Media Tools
 
-## v1_17
-- File Info grid uses row-only selection with no focused-cell white outline.
-- Use checkbox now toggles with a single click using a template checkbox column.
+Install these separately. MKVO does not bundle them.
 
-## Desktop App
+#### MKVToolNix
 
-MKVO is currently maintained as an Avalonia desktop application.
+MKVToolNix is required for MKV analysis, remuxing, extraction, and metadata editing.
 
-## v80 - Separate ad hoc scan cache
+MKVO expects access to these executables:
 
-This build separates metadata caching into two SQLite databases:
+- `mkvmerge`
+- `mkvpropedit`
+- `mkvextract`
+- `mkvinfo`
 
-- `metadata_cache.db` - watch-folder database used by configured watch folders, live watchers, library audit, and watch-folder cache builds.
-- `metadata_cache_adhoc.db` - ad hoc scan database used when the scanned folder is outside all configured watch folders.
+On Windows, install MKVToolNix from:
 
-Dashboard scans now report whether they are using the watch-folder cache or the ad hoc cache. Settings includes separate cleanup buttons for the watch-folder cache and the ad hoc scan cache so temporary/outside-folder scans can be cleaned without touching the large watch-folder database.
+https://mkvtoolnix.download/
+
+Then configure the install folder in:
+
+```text
+Settings > General > MKVToolNix Paths
+```
+
+Use the folder that contains the tools, for example:
+
+```text
+C:\Program Files\MKVToolNix
+```
+
+You can also use **Auto Find** if MKVToolNix is installed in a common location or available on PATH.
+
+#### FFmpeg And ffprobe
+
+FFmpeg and ffprobe are used for additional media inspection and MP4 readability support.
+
+MKVO expects access to:
+
+- `ffmpeg`
+- `ffprobe`
+
+Install FFmpeg from:
+
+https://ffmpeg.org/
+
+Then configure the FFmpeg `bin` folder in:
+
+```text
+Settings > General > FFmpeg Directory
+```
+
+Example:
+
+```text
+C:\ffmpeg\bin
+```
+
+You can also use **Auto Find** if FFmpeg is installed in a common location or available on PATH.
+
+## Metadata Provider API Keys
+
+MKVO does not ship shared TVDB or TMDB production API keys.
+
+Each user must provide their own API credentials for rename metadata lookup.
+
+Configure provider credentials in:
+
+```text
+Settings > API Providers
+```
+
+Supported providers:
+
+- TVDB
+- TMDB
+
+TVDB is used for TV and movie metadata lookup through TheTVDB.
+
+TMDB is used for TV and movie metadata lookup through The Movie Database.
+
+The app masks key fields, stores keys locally in the user settings file, and does not write API keys to logs.
+
+Provider setup links are shown inside the app under Settings.
+
+## First-Run Setup
+
+1. Install MKVToolNix.
+2. Install FFmpeg.
+3. Open MKVO.
+4. Go to `Settings > General`.
+5. Set the MKVToolNix folder or click **Auto Find**.
+6. Set the FFmpeg folder or click **Auto Find**.
+7. Go to `Settings > API Providers`.
+8. Enter your own TVDB and/or TMDB API key.
+9. Click **Test Selected Provider** to confirm lookup access.
+10. Go to Dashboard and scan one or more folders.
+
+## Rename Workflow
+
+1. Scan files from the Dashboard.
+2. Go to Rename Files.
+3. Search for the show or movie title.
+4. Select the correct TVDB or TMDB result.
+5. Confirm the episode scope or movie mode.
+6. Choose a naming template.
+7. Click **Preview**.
+8. Review the Rename Preview table and Preview Summary.
+9. Click **Apply** only when the preview is correct.
+
+Rename batches are recorded locally. Use **Undo Batch** in Rename Options to review recent rename jobs and restore files when possible.
+
+## Subtitle Mux Filename Format
+
+External subtitle sidecars should be placed in the same folder as the matching MKV file.
+
+Expected format:
+
+```text
+base_name.language.tag.ext
+```
+
+Example:
+
+```text
+Episode 01.mkv
+Episode 01.eng.Dialogue.ass
+Episode 01.eng.Signs & Songs.ass
+Episode 01.jpn.Dialogue.ass
+```
+
+The language token is read from the filename. The tag token becomes the subtitle track name.
+
+## Local Data And Privacy
+
+MKVO stores user settings, local metadata cache files, and rename history locally on the machine.
+
+Do not commit or publish local runtime files such as:
+
+- API keys
+- `settings.json`
+- `metadata_cache*.db`
+- local logs
+- local publish output
+
+The repository `.gitignore` excludes the common local runtime files.
+
+## Build From Source
+
+Restore and build:
+
+```powershell
+dotnet build MKVOrchestrator.sln
+```
+
+Run the desktop app:
+
+```powershell
+dotnet run --project src\MKVOrchestrator.App\MKVOrchestrator.App.csproj
+```
+
+Run the test harness:
+
+```powershell
+dotnet run --project tests\MKVOrchestrator.Tests\MKVOrchestrator.Tests.csproj
+```
+
+Publish a Windows test build:
+
+```powershell
+dotnet publish src\MKVOrchestrator.App\MKVOrchestrator.App.csproj -c Release -r win-x64 --self-contained true -o C:\Users\bamcel\Documents\AppDesign\MKVO-publish
+```
+
+Adjust the output folder as needed.
+
+## Documentation
+
+Additional notes are available in:
+
+- `docs/API_PROVIDER_KEYS.md`
+- `docs/ATTRIBUTION_AND_LOGOS.md`
+- `docs/VERSIONING_AND_MIGRATIONS.md`
+
+## Attribution
+
+MKVO uses external tools and metadata providers selected or configured by the user.
+
+- MKVToolNix is used for MKV analysis, remuxing, extraction, and metadata editing.
+- FFmpeg and ffprobe are used for media metadata inspection.
+- This product uses the TMDB API but is not endorsed or certified by TMDB.
+- Metadata may be provided by TheTVDB.
