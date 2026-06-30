@@ -204,24 +204,38 @@ public partial class MainWindowViewModel
             var episodeMap = orderedEpisodes
                 .GroupBy(e => (e.SeasonNumber, e.EpisodeNumber))
                 .ToDictionary(g => g.Key, g => g.First());
+            var renameItemsInPreviewOrder = RenameItems.ToList();
+            var orderedEpisodeMatches = isMovie
+                ? Array.Empty<OrderedEpisodeMatch>()
+                : RenameEpisodeMatcher.MatchByListOrder(orderedEpisodes, renameItemsInPreviewOrder.Count).ToArray();
 
             var usedEpisodeIds = new HashSet<int>();
             var exactMatched = 0;
             var absoluteMatched = 0;
+            var listOrderMatched = 0;
             var sequentialMatched = 0;
             var selectedYear = int.TryParse(SelectedTvdbSeries.Year, out var year) ? year : (int?)null;
 
-            foreach (var item in RenameItems.OrderBy(i => i.Season ?? int.MaxValue).ThenBy(i => i.Episode ?? int.MaxValue).ThenBy(i => i.CurrentFileName, StringComparer.OrdinalIgnoreCase))
+            for (var itemIndex = 0; itemIndex < renameItemsInPreviewOrder.Count; itemIndex++)
             {
+                var item = renameItemsInPreviewOrder[itemIndex];
                 item.IsMovieMatch = isMovie;
                 TvdbEpisode? episode = null;
                 var exactMatch = false;
                 AbsoluteEpisodeMatch? absoluteMatch = null;
+                OrderedEpisodeMatch? orderedMatch = null;
 
                 if (isMovie)
                 {
                     episode = orderedEpisodes.FirstOrDefault();
                     exactMatch = episode is not null;
+                }
+                else if (orderedEpisodeMatches.Length == renameItemsInPreviewOrder.Count)
+                {
+                    orderedMatch = orderedEpisodeMatches[itemIndex];
+                    episode = orderedMatch.Episode;
+                    item.Season = episode.SeasonNumber;
+                    item.Episode = episode.EpisodeNumber;
                 }
                 else if (item.Season.HasValue && item.Episode.HasValue && episodeMap.TryGetValue((item.Season.Value, item.Episode.Value), out var mappedEpisode))
                 {
@@ -271,6 +285,12 @@ public partial class MainWindowViewModel
                     item.Status = "Exact S/E match";
                     exactMatched++;
                 }
+                else if (orderedMatch is not null)
+                {
+                    item.Confidence = "High";
+                    item.Status = orderedMatch.StatusText;
+                    listOrderMatched++;
+                }
                 else if (absoluteMatch is not null)
                 {
                     item.Confidence = "High";
@@ -296,7 +316,7 @@ public partial class MainWindowViewModel
 
             RenameStatusText = isMovie
                 ? $"Preview ready: {exactMatched} movie match, {RenameItems.Count - exactMatched} unmatched"
-                : $"Preview ready: {exactMatched} exact, {absoluteMatched} absolute, {sequentialMatched} sequential fallback, {RenameItems.Count - exactMatched - absoluteMatched - sequentialMatched} unmatched";
+                : $"Preview ready: {exactMatched} exact, {listOrderMatched} list order, {absoluteMatched} absolute, {sequentialMatched} sequential fallback, {RenameItems.Count - exactMatched - listOrderMatched - absoluteMatched - sequentialMatched} unmatched";
             IsRenamePreviewDirty = false;
             BuildRenamePreviewSummary(filesChanged, filesSkipped);
         }
