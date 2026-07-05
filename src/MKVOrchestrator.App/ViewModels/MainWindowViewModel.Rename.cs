@@ -221,9 +221,18 @@ public partial class MainWindowViewModel
                 var item = renameItemsInPreviewOrder[itemIndex];
                 item.IsMovieMatch = isMovie;
                 TvdbEpisode? episode = null;
+                TvdbEpisode? exactEpisode = null;
                 var exactMatch = false;
                 AbsoluteEpisodeMatch? absoluteMatch = null;
                 OrderedEpisodeMatch? orderedMatch = null;
+
+                if (!isMovie
+                    && item.Season.HasValue
+                    && item.Episode.HasValue
+                    && episodeMap.TryGetValue((item.Season.Value, item.Episode.Value), out var mappedEpisode))
+                {
+                    exactEpisode = mappedEpisode;
+                }
 
                 if (isMovie)
                 {
@@ -236,10 +245,11 @@ public partial class MainWindowViewModel
                     episode = orderedMatch.Episode;
                     item.Season = episode.SeasonNumber;
                     item.Episode = episode.EpisodeNumber;
+                    exactMatch = exactEpisode?.Id == episode.Id;
                 }
-                else if (item.Season.HasValue && item.Episode.HasValue && episodeMap.TryGetValue((item.Season.Value, item.Episode.Value), out var mappedEpisode))
+                else if (exactEpisode is not null)
                 {
-                    episode = mappedEpisode;
+                    episode = exactEpisode;
                     exactMatch = true;
                 }
                 else if (RenameEpisodeMatcher.TryMatchAbsoluteEpisode(orderedEpisodes, item.AbsoluteEpisode, out var mappedAbsoluteEpisode))

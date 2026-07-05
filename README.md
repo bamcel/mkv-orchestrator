@@ -4,6 +4,8 @@ MKV Orchestrator, or MKVO, is a desktop media operations console for scanning me
 
 The app is built with Avalonia and is currently maintained as a desktop application.
 
+A Docker web build is also available for testing. The desktop app remains the primary product, while the web container is being built as a single-container companion that shares MKVO core processing logic.
+
 ## What MKVO Does
 
 - Scans folders for MKV and MP4 files.
@@ -193,6 +195,33 @@ Run the test harness:
 dotnet run --project tests\MKVOrchestrator.Tests\MKVOrchestrator.Tests.csproj
 ```
 
+## Docker Web Container
+
+The Docker build runs as one container. It serves the React web UI and ASP.NET Core API from the same process and installs MKVToolNix plus FFmpeg inside the image.
+
+Build and run:
+
+```powershell
+docker compose up --build
+```
+
+Open:
+
+```text
+http://localhost:8080
+```
+
+Default volume mounts:
+
+```text
+//192.168.1.79/media -> /media
+./tmp/docker-config   -> /config
+```
+
+The web app browses container paths. With the default compose file, `/media` points at the SMB share `\\192.168.1.79\media` through Docker's local CIFS volume driver. Edit `docker-compose.yml` to mount a different media folder to `/media`.
+
+The current web baseline wires Dashboard scan/status through `MKVOrchestrator.Core`. Additional desktop workflows should be ported behind API endpoints in future passes so the web UI and desktop app continue sharing the same processing behavior.
+
 Publish a Windows test build:
 
 ```powershell
@@ -207,6 +236,7 @@ Additional notes are available in:
 
 - `docs/API_PROVIDER_KEYS.md`
 - `docs/ATTRIBUTION_AND_LOGOS.md`
+- `docs/DOCKER_WEB_CONTAINER.md`
 - `docs/VERSIONING_AND_MIGRATIONS.md`
 
 ## Attribution

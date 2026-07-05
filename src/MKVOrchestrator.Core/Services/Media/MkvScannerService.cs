@@ -133,7 +133,7 @@ public sealed class MkvScannerService
             || value.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task<MkvFileItem> ScanFileSafeAsync(string filePath, string mkvMergePath, string ffProbePath, CancellationToken token)
+    public async Task<MkvFileItem> ScanFileSafeAsync(string filePath, string mkvMergePath, string ffProbePath, CancellationToken token)
     {
         try
         {

@@ -20,6 +20,9 @@ publish/
 artifacts/publish/
 artifacts/release/
 tmp/
+node_modules/
+web/node_modules/
+web/dist/
 
 # OS/editor noise
 .DS_Store
