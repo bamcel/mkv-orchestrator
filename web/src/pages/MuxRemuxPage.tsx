@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { RefreshCw, Wand2 } from "lucide-react";
-import { applyMuxPlan, buildMuxPreview, getCurrentScanFiles, MuxPreviewRequest, MuxPreviewResponse } from "../api";
+import { applyMuxPlan, buildMuxPreview, getCurrentScanFiles, getWebSettings, MuxPreviewRequest, MuxPreviewResponse } from "../api";
+import { OutputModal } from "../components/OutputModal";
 import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
 export function MuxRemuxPage() {
   const { files, setFiles } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
+  const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"remux" | "subtitles">("remux");
   const [detailTab, setDetailTab] = useState<"tracks" | "attachments">("tracks");
@@ -31,11 +33,20 @@ export function MuxRemuxPage() {
   const [extractOverwrite, setExtractOverwrite] = useState(false);
   const [previewResult, setPreviewResult] = useState<MuxPreviewResponse | null>(null);
   const [statusText, setStatusText] = useState("Load scanned files from Dashboard, then build a preview.");
+  const [settingsDefaultsApplied, setSettingsDefaultsApplied] = useState(false);
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
 
   useEffect(() => {
     if (files.length > 0 || !currentScan.data?.files.length) return;
     setFiles(currentScan.data.files);
   }, [currentScan.data, files.length, setFiles]);
+
+  useEffect(() => {
+    if (!settings.data || settingsDefaultsApplied) return;
+    setAudioLanguages(settings.data.mkvMergeDefaultAudioLanguages || "eng,jpn");
+    setSubtitleLanguages(settings.data.mkvMergeDefaultSubtitleLanguages || "eng");
+    setSettingsDefaultsApplied(true);
+  }, [settings.data, settingsDefaultsApplied]);
 
   useEffect(() => {
     setSelectedPaths((current) => {
@@ -48,6 +59,11 @@ export function MuxRemuxPage() {
   }, [files]);
 
   const mkvFiles = useMemo(() => files.filter((file) => file.extension.toLowerCase() === ".mkv"), [files]);
+  const selectedMkvPaths = useMemo(
+    () => selectedPaths.filter((path) => files.some((file) => file.path === path && file.extension.toLowerCase() === ".mkv")),
+    [files, selectedPaths]
+  );
+  const selectedNonMkvCount = selectedPaths.length - selectedMkvPaths.length;
   const selectedDetailFile = useMemo(
     () => files.find((file) => file.path === selectedDetailPath) ?? files[0] ?? null,
     [files, selectedDetailPath]
@@ -78,7 +94,7 @@ export function MuxRemuxPage() {
   function buildRequest(): MuxPreviewRequest {
     return {
       files,
-      selectedPaths,
+      selectedPaths: selectedMkvPaths,
       removeUnwantedAudioLanguages: removeAudio,
       keepAudioLanguages: audioLanguages,
       removeUnwantedSubtitleLanguages: removeSubtitles,
@@ -116,10 +132,21 @@ export function MuxRemuxPage() {
   }
 
   function runPreview() {
+    if (selectedMkvPaths.length === 0) {
+      setStatusText("Mux / Remux requires at least one selected MKV file.");
+      return;
+    }
+
     preview.mutate(buildRequest());
   }
 
   function runApply() {
+    if (!previewResult?.actions.length) {
+      setStatusText("Build a preview with planned actions before applying.");
+      return;
+    }
+
+    setStatusText(`Applying ${previewResult.actions.length} mux/remux action(s)...`);
     apply.mutate(buildRequest());
   }
 
@@ -180,16 +207,21 @@ export function MuxRemuxPage() {
 
           <h2 className="mt-4 text-sm font-semibold">Execution</h2>
           <div className="mt-2 flex gap-2">
-            <button onClick={runPreview} disabled={preview.isPending || selectedCount === 0} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
+            <button onClick={runPreview} disabled={preview.isPending || selectedMkvPaths.length === 0} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
               {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
               Preview
             </button>
-            <button onClick={runApply} disabled={apply.isPending || selectedCount === 0 || !previewResult?.actions.length} className="h-10 flex-1 rounded-md bg-accent text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
-              Apply
+            <button onClick={runApply} disabled={apply.isPending || selectedMkvPaths.length === 0 || !previewResult?.actions.length} className="h-10 flex-1 rounded-md bg-accent text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
+              {apply.isPending ? "Applying..." : "Apply"}
             </button>
           </div>
           <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
-          <div className="mt-1 text-xs text-muted">{selectedCount} selected | {mkvFiles.length} MKV file(s) available</div>
+          <div className="mt-1 text-xs text-muted">
+            {selectedCount} selected | {selectedMkvPaths.length} selected MKV | {mkvFiles.length} MKV available
+          </div>
+          {selectedNonMkvCount > 0 ? (
+            <div className="mt-1 text-xs text-warning">{selectedNonMkvCount} selected non-MKV file(s) are visible for context and excluded from mux/remux.</div>
+          ) : null}
         </section>
 
         <div className="grid min-h-0 min-w-0 grid-rows-[1.3fr_1fr_190px] gap-3">
@@ -255,9 +287,32 @@ export function MuxRemuxPage() {
                     ))}
                   </tbody>
                 </table>
+              ) : selectedDetailFile?.attachments?.length ? (
+                <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-sm">
+                  <thead className="sticky top-0 bg-card text-xs text-text">
+                    <tr>
+                      <th className="w-14 border-b border-border px-3 py-2">#</th>
+                      <th className="w-[260px] border-b border-border px-3 py-2">File</th>
+                      <th className="w-52 border-b border-border px-3 py-2">Content Type</th>
+                      <th className="w-28 border-b border-border px-3 py-2">Size</th>
+                      <th className="border-b border-border px-3 py-2">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selectedDetailFile.attachments ?? []).map((attachment) => (
+                      <tr key={`${attachment.id}-${attachment.fileName}`} className="bg-card hover:bg-selected">
+                        <td className="border-b border-border px-3 py-2">{attachment.id}</td>
+                        <td className="truncate border-b border-border px-3 py-2" title={attachment.fileName}>{attachment.fileName || "-"}</td>
+                        <td className="truncate border-b border-border px-3 py-2" title={attachment.contentType}>{attachment.contentType || "-"}</td>
+                        <td className="border-b border-border px-3 py-2">{formatBytes(attachment.sizeBytes)}</td>
+                        <td className="truncate border-b border-border px-3 py-2" title={attachment.description}>{attachment.description || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
                 <div className="flex h-full min-h-[120px] items-center justify-center text-sm text-subtle">
-                  Attachment details are not loaded in the web beta yet.
+                  No attachments or fonts were detected for the selected file.
                 </div>
               )}
             </div>
@@ -266,7 +321,13 @@ export function MuxRemuxPage() {
           <section className="rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Preview Summary</h3>
-              <button className="h-7 rounded-md bg-button px-3 text-xs font-semibold text-muted">Expand</button>
+              <button
+                type="button"
+                onClick={() => setIsSummaryExpanded(true)}
+                className="h-7 rounded-md bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+              >
+                Expand
+              </button>
             </div>
             <pre className="mt-3 h-[125px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-input p-3 font-mono text-xs leading-5 text-muted">
               {previewResult?.summary || "Build a preview to see planned mux/remux operations."}
@@ -274,6 +335,13 @@ export function MuxRemuxPage() {
           </section>
         </div>
       </div>
+      {isSummaryExpanded ? (
+        <OutputModal
+          title="Mux / Remux Preview Summary"
+          content={previewResult?.summary || "Build a preview to see planned mux/remux operations."}
+          onClose={() => setIsSummaryExpanded(false)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -290,4 +358,18 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
       />
     </label>
   );
+}
+
+function formatBytes(value: number | null) {
+  if (!value || value <= 0) return "-";
+
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${size >= 10 || unitIndex === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[unitIndex]}`;
 }

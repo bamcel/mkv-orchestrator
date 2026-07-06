@@ -20,7 +20,7 @@ RUN dotnet publish src/MKVOrchestrator.WebHost/MKVOrchestrator.WebHost.csproj -c
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg mkvtoolnix ca-certificates \
+    && apt-get install -y --no-install-recommends ffmpeg mkvtoolnix ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=dotnet-build /app/publish ./
@@ -31,4 +31,5 @@ ENV ASPNETCORE_URLS=http://+:8080 \
     XDG_DATA_HOME=/config/.local/share
 RUN mkdir -p /media /config
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD curl -fsS http://localhost:8080/api/health || exit 1
 ENTRYPOINT ["dotnet", "MKVOrchestrator.WebHost.dll"]

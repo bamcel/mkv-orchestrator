@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ChevronUp, FileVideo, Folder, FolderOpen, Plus, RefreshCw, Search, X } from "lucide-react";
+import { ChevronUp, Copy, FileCheck, FileVideo, Folder, FolderOpen, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { browseFileSystem, cancelScan, FileSystemEntry, getCurrentScanFiles, getScanJob, getStatus, MediaFileRow, startScan } from "../api";
 import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
@@ -15,6 +15,7 @@ export function DashboardPage() {
   const [sources, setSources] = useState<string[]>([]);
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
   const [browsePath, setBrowsePath] = useState("");
+  const [browsePathInput, setBrowsePathInput] = useState("");
   const [lastBrowsePath, setLastBrowsePath] = useState(() => {
     try {
       return window.localStorage.getItem(lastBrowsePathStorageKey) ?? "";
@@ -26,6 +27,8 @@ export function DashboardPage() {
   const [ignoredFolders, setIgnoredFolders] = useState(defaultIgnored);
   const [skipped, setSkipped] = useState<string[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState<string>("");
+  const [actionStatus, setActionStatus] = useState("");
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; path: string } | null>(null);
   const browser = useQuery({
     queryKey: ["filesystem", browsePath],
     queryFn: () => browseFileSystem(browsePath || status.data?.mediaRoot || "/media"),
@@ -49,6 +52,19 @@ export function DashboardPage() {
   });
 
   const defaultSourcePath = status.data?.mediaRoot || "/media";
+  const browseRootOptions = useMemo(() => {
+    const roots = [
+      { name: "Media", path: defaultSourcePath },
+      ...(status.data?.sourceRoots ?? [])
+    ];
+    const seen = new Set<string>();
+    return roots.filter((root) => {
+      const path = root.path.trim();
+      if (!path || seen.has(path.toLowerCase())) return false;
+      seen.add(path.toLowerCase());
+      return true;
+    });
+  }, [defaultSourcePath, status.data?.sourceRoots]);
   const activeSources = sources;
   const hasSources = sources.length > 0;
   const sourceSummary = sources.length === 0
@@ -75,6 +91,22 @@ export function DashboardPage() {
     if (files.length === 0) return null;
     return files.find((file) => file.path === templateFilePath) ?? files[0];
   }, [files, templateFilePath]);
+  const dashboardStatus = actionStatus
+    || (isScanning ? `scan executing ${progressText}` : files.length > 0 ? `${files.length} file(s) scanned` : hasSources ? "ready" : "choose a source to scan");
+
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [contextMenu]);
 
   useEffect(() => {
     if (!currentScanJob) return;
@@ -92,6 +124,11 @@ export function DashboardPage() {
   }, [currentScanJob]);
 
   useEffect(() => {
+    if (!isBrowseOpen) return;
+    setBrowsePathInput(browser.data?.path ?? browsePath);
+  }, [isBrowseOpen, browser.data?.path, browsePath]);
+
+  useEffect(() => {
     if (files.length > 0 || !currentScan.data?.files.length) return;
     setFiles(currentScan.data.files);
     setSelectedFilePath(currentScan.data.files[0]?.path ?? "");
@@ -103,6 +140,7 @@ export function DashboardPage() {
     setFiles([]);
     setSkipped([]);
     setSelectedFilePath("");
+    setActionStatus("");
     setScanJobId(null);
     scanStart.mutate({
       sources: activeSources,
@@ -140,8 +178,25 @@ export function DashboardPage() {
   }
 
   function openBrowse() {
-    setBrowsePath(lastBrowsePath || sources[0] || defaultSourcePath);
+    const nextPath = lastBrowsePath || sources[0] || defaultSourcePath;
+    setBrowsePath(nextPath);
+    setBrowsePathInput(nextPath);
     setIsBrowseOpen(true);
+  }
+
+  function navigateBrowsePath(path: string, remember = true) {
+    const cleanPath = path.trim();
+    if (!cleanPath) return;
+
+    setBrowsePath(cleanPath);
+    setBrowsePathInput(cleanPath);
+    if (remember) rememberBrowsePath(cleanPath);
+  }
+
+  function goBrowseParent() {
+    const parent = browser.data?.parentPath || getParentPath(browsePath);
+    if (!parent) return;
+    navigateBrowsePath(parent);
   }
 
   function addBrowsePath(path: string, kind: FileSystemEntry["kind"] = "folder") {
@@ -163,6 +218,37 @@ export function DashboardPage() {
   function useSelectedAsTemplate() {
     if (!selectedFile) return;
     setTemplateFilePath(selectedFile.path);
+    setActionStatus(`Template file set: ${selectedFile.fileName}`);
+  }
+
+  function openFileContextMenu(event: MouseEvent<HTMLTableRowElement>, file: MediaFileRow) {
+    event.preventDefault();
+    setSelectedFilePath(file.path);
+    setContextMenu({ x: event.clientX, y: event.clientY, path: file.path });
+  }
+
+  function setContextFileAsTemplate(file: MediaFileRow) {
+    setTemplateFilePath(file.path);
+    setActionStatus(`Template file set: ${file.fileName}`);
+    setContextMenu(null);
+  }
+
+  async function copyContextFileText(file: MediaFileRow, value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setActionStatus(`${label} copied: ${file.fileName}`);
+    } catch {
+      setActionStatus(`Unable to copy ${label.toLowerCase()}.`);
+    }
+    setContextMenu(null);
+  }
+
+  function removeContextFile(file: MediaFileRow) {
+    const remaining = files.filter((item) => item.path !== file.path);
+    setFiles(remaining);
+    setSelectedFilePath((current) => current === file.path ? remaining[0]?.path ?? "" : current);
+    setActionStatus(`Removed from list: ${file.fileName}`);
+    setContextMenu(null);
   }
 
   function isTemplate(file: MediaFileRow) {
@@ -286,9 +372,7 @@ export function DashboardPage() {
             </button>
           </div>
 
-          <div className="mt-4 text-sm text-success">
-            {isScanning ? `scan executing ${progressText}` : files.length > 0 ? `${files.length} file(s) scanned` : hasSources ? "ready" : "choose a source to scan"}
-          </div>
+          <div className="mt-4 text-sm text-success">{dashboardStatus}</div>
           {currentScanJob?.currentSource && isScanning ? (
             <div className="mt-2 truncate text-xs text-subtle" title={currentScanJob.currentSource}>
               {currentScanJob.currentSource}
@@ -345,6 +429,7 @@ export function DashboardPage() {
                       <tr
                         key={file.path}
                         onClick={() => setSelectedFilePath(file.path)}
+                        onContextMenu={(event) => openFileContextMenu(event, file)}
                         className={[
                           "cursor-pointer bg-card hover:bg-selected",
                           selectedFile?.path === file.path ? "bg-selected" : ""
@@ -469,36 +554,64 @@ export function DashboardPage() {
               </button>
             </div>
 
-            <div className="flex h-[58px] shrink-0 items-center gap-2 border-b border-border px-5 py-3">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!browser.data?.parentPath) return;
-                  setBrowsePath(browser.data.parentPath);
-                  rememberBrowsePath(browser.data.parentPath);
-                }}
-                disabled={!browser.data?.parentPath}
-                className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
-              >
-                <ChevronUp size={15} />
-                Up
-              </button>
-              <button
-                type="button"
-                onClick={() => addBrowsePath(browser.data?.path ?? browsePath, "folder")}
-                className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-window transition hover:bg-accent-hover"
-              >
-                <Plus size={15} />
-                Add This Folder
-              </button>
-              <button
-                type="button"
-                onClick={() => browser.refetch()}
-                className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-              >
-                <RefreshCw size={15} />
-                Refresh
-              </button>
+            <div className="shrink-0 space-y-2 border-b border-border px-5 py-3">
+              <div className="flex items-center gap-2">
+                <input
+                  value={browsePathInput}
+                  onChange={(event) => setBrowsePathInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") navigateBrowsePath(browsePathInput);
+                  }}
+                  className="h-9 min-w-0 flex-1 rounded-md border border-border bg-input px-3 font-mono text-xs text-text outline-none transition focus:border-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => navigateBrowsePath(browsePathInput)}
+                  className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                >
+                  Go
+                </button>
+                <button
+                  type="button"
+                  onClick={goBrowseParent}
+                  disabled={!browser.data?.parentPath && !getParentPath(browsePath)}
+                  className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+                >
+                  <ChevronUp size={15} />
+                  Up
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 overflow-x-auto">
+                {browseRootOptions.map((root) => (
+                  <button
+                    key={root.path}
+                    type="button"
+                    onClick={() => navigateBrowsePath(root.path)}
+                    className="h-8 shrink-0 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                    title={root.path}
+                  >
+                    {root.name}
+                  </button>
+                ))}
+                <div className="min-w-2 flex-1" />
+                <button
+                  type="button"
+                  onClick={() => addBrowsePath(browser.data?.path ?? browsePath, "folder")}
+                  className="inline-flex h-8 shrink-0 items-center gap-2 rounded-md bg-accent px-3 text-xs font-semibold text-window transition hover:bg-accent-hover"
+                >
+                  <Plus size={14} />
+                  Add This Folder
+                </button>
+                <button
+                  type="button"
+                  onClick={() => browser.refetch()}
+                  className="inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                >
+                  <RefreshCw size={14} />
+                  Refresh
+                </button>
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-auto p-4">
@@ -548,8 +661,68 @@ export function DashboardPage() {
           </section>
         </div>
       ) : null}
+      {contextMenu ? (
+        <FileContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          file={files.find((file) => file.path === contextMenu.path) ?? null}
+          onSetTemplate={setContextFileAsTemplate}
+          onCopyName={(file) => copyContextFileText(file, file.fileName, "File name")}
+          onCopyPath={(file) => copyContextFileText(file, file.path, "Full path")}
+          onRemove={removeContextFile}
+        />
+      ) : null}
     </div>
   );
+}
+
+function FileContextMenu({ x, y, file, onSetTemplate, onCopyName, onCopyPath, onRemove }: {
+  x: number;
+  y: number;
+  file: MediaFileRow | null;
+  onSetTemplate: (file: MediaFileRow) => void;
+  onCopyName: (file: MediaFileRow) => void;
+  onCopyPath: (file: MediaFileRow) => void;
+  onRemove: (file: MediaFileRow) => void;
+}) {
+  if (!file) return null;
+
+  return (
+    <div
+      className="fixed z-[60] w-56 overflow-hidden rounded-lg border border-border-strong bg-card py-1 shadow-[0_18px_55px_rgba(0,0,0,0.45)]"
+      style={{ left: Math.min(x, window.innerWidth - 240), top: Math.min(y, window.innerHeight - 180) }}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <ContextMenuButton icon={<FileCheck size={15} />} label="Set as Template" onClick={() => onSetTemplate(file)} />
+      <ContextMenuButton icon={<Copy size={15} />} label="Copy File Name" onClick={() => onCopyName(file)} />
+      <ContextMenuButton icon={<Copy size={15} />} label="Copy Full Path" onClick={() => onCopyPath(file)} />
+      <div className="my-1 border-t border-border" />
+      <ContextMenuButton icon={<Trash2 size={15} />} label="Remove from List" onClick={() => onRemove(file)} warning />
+    </div>
+  );
+}
+
+function ContextMenuButton({ icon, label, onClick, warning = false }: { icon: ReactNode; label: string; onClick: () => void; warning?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={["flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition hover:bg-selected", warning ? "text-warning" : "text-muted hover:text-text"].join(" ")}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function getParentPath(path: string) {
+  const clean = path.trim().replace(/[\\/]+$/, "");
+  if (!clean || clean === "/") return "";
+
+  const slash = Math.max(clean.lastIndexOf("/"), clean.lastIndexOf("\\"));
+  if (slash < 0) return "";
+  if (slash === 0) return clean.startsWith("/") ? "/" : "";
+  return clean.slice(0, slash);
 }
 
 function normalizeCompareValue(value: string | null | undefined) {

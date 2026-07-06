@@ -13,6 +13,7 @@ builder.Services.AddSingleton<MkvMergeService>();
 builder.Services.AddSingleton<MkvPropEditCommandBuilder>();
 builder.Services.AddSingleton<MkvPropEditService>();
 builder.Services.AddSingleton<AppSettingsService>();
+builder.Services.AddSingleton<RenameBatchHistoryService>();
 builder.Services.AddSingleton<ScanJobStore>();
 builder.Services.AddSingleton<CurrentScanStore>();
 builder.Services.AddSingleton<OperationLogStore>();
@@ -173,6 +174,13 @@ app.MapPost("/api/scans/{id}/cancel", (string id, ScanJobStore jobs) =>
 
 app.MapGet("/api/files/current", (CurrentScanStore currentScan) => Results.Ok(currentScan.ToResponse()));
 
+app.MapDelete("/api/files/current", (CurrentScanStore currentScan, OperationLogStore logs) =>
+{
+    currentScan.Clear();
+    logs.Add("Library", "Library scan cache cleared", "The current web scan cache was cleared.");
+    return Results.Ok(currentScan.ToResponse());
+});
+
 app.MapGet("/api/settings", (AppSettingsService settingsService) =>
 {
     var settings = BuildSettingsSnapshot(settingsService);
@@ -190,6 +198,47 @@ app.MapPut("/api/settings", (WebSettingsRequest request, AppSettingsService sett
     settings.RenameTemplate = string.IsNullOrWhiteSpace(request.RenameTemplate)
         ? settings.RenameTemplate
         : request.RenameTemplate.Trim();
+    if (request.RenameTemplates is not null)
+    {
+        settings.RenameTemplates = request.RenameTemplates
+            .Select(template => template?.Trim() ?? string.Empty)
+            .Where(template => !string.IsNullOrWhiteSpace(template))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .DefaultIfEmpty(settings.RenameTemplate)
+            .ToList();
+    }
+    if (request.AudioNamePresets is not null)
+    {
+        settings.AudioNamePresets = NormalizeStringList(request.AudioNamePresets, settings.AudioNamePresets);
+    }
+    if (request.SubtitleNamePresets is not null)
+    {
+        settings.SubtitleNamePresets = NormalizeStringList(request.SubtitleNamePresets, settings.SubtitleNamePresets);
+    }
+    if (request.LanguagePresets is not null)
+    {
+        settings.LanguagePresets = NormalizeStringList(request.LanguagePresets, settings.LanguagePresets);
+    }
+    if (request.MkvMergeDefaultAudioLanguages is not null)
+    {
+        settings.MkvMergeDefaultAudioLanguages = string.IsNullOrWhiteSpace(request.MkvMergeDefaultAudioLanguages)
+            ? "eng,jpn"
+            : request.MkvMergeDefaultAudioLanguages.Trim();
+    }
+    if (request.MkvMergeDefaultSubtitleLanguages is not null)
+    {
+        settings.MkvMergeDefaultSubtitleLanguages = string.IsNullOrWhiteSpace(request.MkvMergeDefaultSubtitleLanguages)
+            ? "eng"
+            : request.MkvMergeDefaultSubtitleLanguages.Trim();
+    }
+    if (request.WatchFolders is not null)
+    {
+        settings.WatchFolders = NormalizeStringList(request.WatchFolders, Array.Empty<string>());
+    }
+    if (request.EnableLiveWatchFolderMonitoring is not null)
+    {
+        settings.EnableLiveWatchFolderMonitoring = request.EnableLiveWatchFolderMonitoring.Value;
+    }
 
     settingsService.Save(settings);
     return Results.Ok(WebSettingsResponse.From(BuildSettingsSnapshot(settingsService)));
@@ -255,14 +304,74 @@ app.MapPost("/api/rename/preview", async (RenamePreviewRequest request, AppSetti
         Status: preview.Status));
 });
 
-app.MapPost("/api/rename/apply", (RenameApplyRequest request, OperationLogStore logs) =>
+app.MapPost("/api/rename/apply", (RenameApplyRequest request, OperationLogStore logs, RenameBatchHistoryService renameBatches) =>
 {
-    var rows = ApplyRenameRows(request.Items ?? Array.Empty<RenamePreviewRow>());
+    var requestedRows = request.Items ?? Array.Empty<RenamePreviewRow>();
+    var rows = ApplyRenameRows(requestedRows);
     var renamed = rows.Count(row => row.Status.Equals("Renamed", StringComparison.OrdinalIgnoreCase));
     var skipped = rows.Count - renamed;
+    var batchEntries = rows
+        .Select((row, index) => new { Row = row, Original = index < requestedRows.Count ? requestedRows[index] : null })
+        .Where(item => item.Original is not null && item.Row.Status.Equals("Renamed", StringComparison.OrdinalIgnoreCase))
+        .Select(item => new RenameBatchEntry
+        {
+            OriginalPath = item.Original!.SourcePath,
+            RenamedPath = item.Row.SourcePath
+        })
+        .ToList();
+
+    if (batchEntries.Count > 0)
+    {
+        renameBatches.RecordBatch(new RenameBatchRecord
+        {
+            CreatedAt = DateTime.Now,
+            Provider = NormalizeLookupProvider(request.Provider),
+            Template = request.Template?.Trim() ?? string.Empty,
+            TotalFiles = batchEntries.Count,
+            Entries = batchEntries
+        });
+    }
+
     var summary = BuildRenameSummary(rows, renamed, skipped, dryRun: false);
     logs.Add("Rename", $"Rename complete: {renamed} renamed, {skipped} skipped", summary);
     return Results.Ok(new RenameApplyResponse(rows, summary, $"Rename complete: {renamed} renamed, {skipped} skipped"));
+});
+
+app.MapGet("/api/rename/batches", (RenameBatchHistoryService renameBatches) =>
+{
+    return Results.Ok(new RenameBatchListResponse(renameBatches.Load()));
+});
+
+app.MapGet("/api/rename/batches/{id}/preview", (string id, RenameBatchHistoryService renameBatches) =>
+{
+    var batch = FindRenameBatch(renameBatches, id);
+    if (batch is null)
+    {
+        return Results.NotFound(new ApiError($"Rename batch not found: {id}"));
+    }
+
+    return Results.Ok(RenameBatchUndoPreviewResponse.From(renameBatches.PreviewUndoBatch(batch)));
+});
+
+app.MapPost("/api/rename/batches/{id}/undo", (string id, RenameBatchHistoryService renameBatches, OperationLogStore logs) =>
+{
+    var batch = FindRenameBatch(renameBatches, id);
+    if (batch is null)
+    {
+        return Results.NotFound(new ApiError($"Rename batch not found: {id}"));
+    }
+
+    var result = renameBatches.UndoBatch(batch);
+    var restored = BuildRestoredMoves(batch);
+    var detail = string.Join(Environment.NewLine, result.Lines);
+    logs.Add("Rename", $"Undo batch complete: {result.Renamed} restored, {result.Skipped} skipped", detail);
+    return Results.Ok(new RenameBatchUndoResponse(result.Renamed, result.Skipped, result.Lines, restored));
+});
+
+app.MapDelete("/api/rename/batches", (RenameBatchHistoryService renameBatches) =>
+{
+    renameBatches.Clear();
+    return Results.Ok(new RenameBatchListResponse(Array.Empty<RenameBatchRecord>()));
 });
 
 app.MapPost("/api/mux/preview", (MuxPreviewRequest request, MkvMergeService muxService) =>
@@ -482,6 +591,7 @@ static MkvFileItem ToMkvFileItem(MediaFileRow row, bool selected = true)
         VideoSummary = row.VideoSummary,
         AudioSummary = row.AudioSummary,
         SubtitleSummary = row.SubtitleSummary,
+        AttachmentSummary = row.AttachmentSummary,
         Selected = selected
     };
 
@@ -497,6 +607,18 @@ static MkvFileItem ToMkvFileItem(MediaFileRow row, bool selected = true)
             Name = track.Name,
             Default = track.Default,
             Forced = track.Forced
+        });
+    }
+
+    foreach (var attachment in row.Attachments ?? Array.Empty<AttachmentRow>())
+    {
+        item.Attachments.Add(new MkvAttachmentItem
+        {
+            Id = attachment.Id,
+            FileName = attachment.FileName,
+            ContentType = attachment.ContentType,
+            Description = attachment.Description,
+            SizeBytes = attachment.SizeBytes
         });
     }
 
@@ -903,7 +1025,8 @@ static LibraryAuditResponse BuildLibraryAuditResponse(IReadOnlyList<MediaFileRow
             HasIssues: issues.Count > 0,
             IssueSummary: issues.Count == 0 ? "no issues found" : string.Join(" | ", issues.Take(3)),
             Issues: issues,
-            IssueFilePaths: issuePaths.Distinct(CrossPlatformRuntime.PathComparer).ToArray()));
+            IssueFilePaths: issuePaths.Distinct(CrossPlatformRuntime.PathComparer).ToArray(),
+            AllFilePaths: files.Select(file => file.Path).Distinct(CrossPlatformRuntime.PathComparer).ToArray()));
     }
 
     var summary = new LibraryAuditSummary(
@@ -932,6 +1055,17 @@ static string Dominant(IEnumerable<string> values)
         .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
         .Select(group => group.Key)
         .FirstOrDefault() ?? "unknown";
+}
+
+static List<string> NormalizeStringList(IReadOnlyList<string> values, IReadOnlyList<string> fallback)
+{
+    var normalized = values
+        .Select(value => value?.Trim() ?? string.Empty)
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    return normalized.Count > 0 ? normalized : fallback.ToList();
 }
 
 static string CleanAuditValue(string? value, string fallback)
@@ -1370,6 +1504,23 @@ static IReadOnlyList<RenamePreviewRow> ApplyRenameRows(IReadOnlyList<RenamePrevi
     return applied;
 }
 
+static RenameBatchRecord? FindRenameBatch(RenameBatchHistoryService renameBatches, string id)
+{
+    return renameBatches.Load()
+        .FirstOrDefault(batch => string.Equals(batch.Id, id, StringComparison.OrdinalIgnoreCase));
+}
+
+static IReadOnlyList<RenameBatchRestoreMove> BuildRestoredMoves(RenameBatchRecord batch)
+{
+    return batch.Entries
+        .Where(entry => File.Exists(entry.OriginalPath) && !File.Exists(entry.RenamedPath))
+        .Select(entry => new RenameBatchRestoreMove(
+            OriginalPath: entry.OriginalPath,
+            RenamedPath: entry.RenamedPath,
+            OriginalFileName: entry.OriginalFileName))
+        .ToArray();
+}
+
 static string BuildRenameFileName(
     string sourcePath,
     string title,
@@ -1641,7 +1792,15 @@ public sealed record WebSettingsRequest(
     string? TmdbApiKey,
     string? TvdbLanguage,
     string? RenameLookupProvider,
-    string? RenameTemplate);
+    string? RenameTemplate,
+    IReadOnlyList<string>? RenameTemplates,
+    IReadOnlyList<string>? AudioNamePresets,
+    IReadOnlyList<string>? SubtitleNamePresets,
+    IReadOnlyList<string>? LanguagePresets,
+    string? MkvMergeDefaultAudioLanguages,
+    string? MkvMergeDefaultSubtitleLanguages,
+    IReadOnlyList<string>? WatchFolders,
+    bool? EnableLiveWatchFolderMonitoring);
 
 public sealed record WebSettingsResponse(
     bool HasTvdbApiKey,
@@ -1650,7 +1809,14 @@ public sealed record WebSettingsResponse(
     string TvdbLanguage,
     string RenameLookupProvider,
     string RenameTemplate,
-    IReadOnlyList<string> RenameTemplates)
+    IReadOnlyList<string> RenameTemplates,
+    IReadOnlyList<string> AudioNamePresets,
+    IReadOnlyList<string> SubtitleNamePresets,
+    IReadOnlyList<string> LanguagePresets,
+    string MkvMergeDefaultAudioLanguages,
+    string MkvMergeDefaultSubtitleLanguages,
+    IReadOnlyList<string> WatchFolders,
+    bool EnableLiveWatchFolderMonitoring)
 {
     public static WebSettingsResponse From(AppSettings settings)
         => new(
@@ -1660,7 +1826,14 @@ public sealed record WebSettingsResponse(
             TvdbLanguage: string.IsNullOrWhiteSpace(settings.TvdbLanguage) ? "eng" : settings.TvdbLanguage,
             RenameLookupProvider: string.IsNullOrWhiteSpace(settings.RenameLookupProvider) ? "TVDB" : settings.RenameLookupProvider,
             RenameTemplate: string.IsNullOrWhiteSpace(settings.RenameTemplate) ? "{series} - S{season:00}E{episode:00} - {episodeTitle}" : settings.RenameTemplate,
-            RenameTemplates: settings.RenameTemplates);
+            RenameTemplates: settings.RenameTemplates,
+            AudioNamePresets: settings.AudioNamePresets,
+            SubtitleNamePresets: settings.SubtitleNamePresets,
+            LanguagePresets: settings.LanguagePresets,
+            MkvMergeDefaultAudioLanguages: string.IsNullOrWhiteSpace(settings.MkvMergeDefaultAudioLanguages) ? "eng,jpn" : settings.MkvMergeDefaultAudioLanguages,
+            MkvMergeDefaultSubtitleLanguages: string.IsNullOrWhiteSpace(settings.MkvMergeDefaultSubtitleLanguages) ? "eng" : settings.MkvMergeDefaultSubtitleLanguages,
+            WatchFolders: settings.WatchFolders,
+            EnableLiveWatchFolderMonitoring: settings.EnableLiveWatchFolderMonitoring);
 }
 
 public sealed record MuxPreviewRequest(
@@ -1777,7 +1950,8 @@ public sealed record LibraryAuditRow(
     bool HasIssues,
     string IssueSummary,
     IReadOnlyList<string> Issues,
-    IReadOnlyList<string> IssueFilePaths);
+    IReadOnlyList<string> IssueFilePaths,
+    IReadOnlyList<string> AllFilePaths);
 
 public sealed record LibraryAuditResponse(LibraryAuditSummary Summary, IReadOnlyList<LibraryAuditRow> Items);
 
@@ -1809,9 +1983,25 @@ public sealed record RenamePreviewResponse(
     IReadOnlyList<RenameScopeRow> Scopes,
     string Status);
 
-public sealed record RenameApplyRequest(IReadOnlyList<RenamePreviewRow>? Items);
+public sealed record RenameApplyRequest(IReadOnlyList<RenamePreviewRow>? Items, string? Provider, string? Template);
 
 public sealed record RenameApplyResponse(IReadOnlyList<RenamePreviewRow> Items, string Summary, string Status);
+
+public sealed record RenameBatchListResponse(IReadOnlyList<RenameBatchRecord> Batches);
+
+public sealed record RenameBatchUndoPreviewResponse(int Restorable, int Skipped, IReadOnlyList<string> Lines, bool HasSkippedFiles)
+{
+    public static RenameBatchUndoPreviewResponse From(RenameBatchUndoPreview preview)
+        => new(preview.Restorable, preview.Skipped, preview.Lines, preview.HasSkippedFiles);
+}
+
+public sealed record RenameBatchUndoResponse(
+    int Renamed,
+    int Skipped,
+    IReadOnlyList<string> Lines,
+    IReadOnlyList<RenameBatchRestoreMove> Restored);
+
+public sealed record RenameBatchRestoreMove(string OriginalPath, string RenamedPath, string OriginalFileName);
 
 public sealed record RenamePreviewRow(
     bool Selected,
@@ -1849,6 +2039,13 @@ public sealed record TrackRow(
     bool Default,
     bool Forced);
 
+public sealed record AttachmentRow(
+    int Id,
+    string FileName,
+    string ContentType,
+    string Description,
+    long? SizeBytes);
+
 public sealed record MediaFileRow(
     string Path,
     string FileName,
@@ -1862,7 +2059,9 @@ public sealed record MediaFileRow(
     string VideoSummary,
     string AudioSummary,
     string SubtitleSummary,
-    IReadOnlyList<TrackRow> Tracks)
+    string AttachmentSummary,
+    IReadOnlyList<TrackRow> Tracks,
+    IReadOnlyList<AttachmentRow> Attachments)
 {
     public static MediaFileRow From(MkvFileItem item)
     {
@@ -1879,6 +2078,7 @@ public sealed record MediaFileRow(
             VideoSummary: item.VideoSummary,
             AudioSummary: item.AudioSummary,
             SubtitleSummary: item.SubtitleSummary,
+            AttachmentSummary: item.AttachmentSummary,
             Tracks: item.Tracks.Select(track => new TrackRow(
                 Id: track.MkvMergeId,
                 TrackNumber: track.PropEditTrackNumber,
@@ -1887,7 +2087,13 @@ public sealed record MediaFileRow(
                 Language: track.Language,
                 Name: track.Name,
                 Default: track.Default,
-                Forced: track.Forced)).ToArray());
+                Forced: track.Forced)).ToArray(),
+            Attachments: item.Attachments.Select(attachment => new AttachmentRow(
+                Id: attachment.Id,
+                FileName: attachment.FileName,
+                ContentType: attachment.ContentType,
+                Description: attachment.Description,
+                SizeBytes: attachment.SizeBytes)).ToArray());
     }
 }
 
@@ -1947,6 +2153,16 @@ public sealed class CurrentScanStore
                 .ToArray();
             _files = next;
             _summary = BuildSummary(next);
+            _updatedUtc = DateTimeOffset.UtcNow;
+        }
+    }
+
+    public void Clear()
+    {
+        lock (_sync)
+        {
+            _files = Array.Empty<MediaFileRow>();
+            _summary = new ScanSummary(0, 0, 0, 0);
             _updatedUtc = DateTimeOffset.UtcNow;
         }
     }

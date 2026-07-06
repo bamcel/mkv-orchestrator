@@ -6,6 +6,8 @@ obj/
 *.user
 *.suo
 .vs/
+.env
+.env.local
 
 # MKVO local runtime data
 settings.json

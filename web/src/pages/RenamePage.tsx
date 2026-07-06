@@ -1,19 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Copy, ExternalLink, RefreshCw, Search, Wand2 } from "lucide-react";
+import { Copy, ExternalLink, RefreshCw, RotateCcw, Search, Trash2, Wand2, X } from "lucide-react";
 import {
   applyRenamePreview,
   buildRenamePreview,
+  clearRenameBatches,
   getCurrentScanFiles,
+  getRenameBatches,
   getWebSettings,
   loadRenameScopes,
   MediaFileRow,
+  previewRenameBatchUndo,
+  RenameBatchRecord,
+  RenameBatchUndoPreviewResponse,
   RenamePreviewRow,
   RenameScopeRow,
   RenameSearchResult,
   saveWebSettings,
-  searchRenameMetadata
+  searchRenameMetadata,
+  undoRenameBatch
 } from "../api";
+import { OutputModal } from "../components/OutputModal";
 import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
@@ -63,6 +70,13 @@ export function RenamePage() {
   const [searchResults, setSearchResults] = useState<RenameSearchResult[]>(storedRenameState.searchResults ?? []);
   const [scopeRows, setScopeRows] = useState<RenameScopeRow[]>(storedRenameState.scopeRows ?? []);
   const [settingsDefaultsApplied, setSettingsDefaultsApplied] = useState(false);
+  const [isUndoOpen, setIsUndoOpen] = useState(false);
+  const [isApplyConfirmOpen, setIsApplyConfirmOpen] = useState(false);
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+  const [applyWarnings, setApplyWarnings] = useState<string[]>([]);
+  const [selectedUndoBatchId, setSelectedUndoBatchId] = useState("");
+  const [pendingProceedBatchId, setPendingProceedBatchId] = useState("");
+  const [undoSummaryLines, setUndoSummaryLines] = useState<string[]>([]);
   const [compactPreview, setCompactPreview] = useState(() => {
     try {
       return window.localStorage.getItem(renamePreviewCompactStorageKey) === "true";
@@ -71,6 +85,19 @@ export function RenamePage() {
     }
   });
   const selectedFiles = files;
+  const renameBatches = useQuery({
+    queryKey: ["rename-batches"],
+    queryFn: getRenameBatches,
+    enabled: isUndoOpen
+  });
+  const selectedUndoBatch = useMemo(() => {
+    return (renameBatches.data?.batches ?? []).find((batch) => batch.id === selectedUndoBatchId) ?? null;
+  }, [renameBatches.data, selectedUndoBatchId]);
+  const undoPreview = useQuery({
+    queryKey: ["rename-batch-preview", selectedUndoBatchId],
+    queryFn: () => previewRenameBatchUndo(selectedUndoBatchId),
+    enabled: isUndoOpen && selectedUndoBatchId.length > 0
+  });
 
   useEffect(() => {
     try {
@@ -121,6 +148,29 @@ export function RenamePage() {
     const guessed = guessSearchTitle(files.map((file) => file.fileName));
     if (guessed) setSearchTitle(guessed);
   }, [files, searchTitle]);
+
+  useEffect(() => {
+    if (!isUndoOpen) return;
+
+    const batches = renameBatches.data?.batches ?? [];
+    if (batches.length === 0) {
+      setSelectedUndoBatchId("");
+      setPendingProceedBatchId("");
+      setUndoSummaryLines(["No rename batches have been recorded yet."]);
+      return;
+    }
+
+    if (!selectedUndoBatchId || !batches.some((batch) => batch.id === selectedUndoBatchId)) {
+      setSelectedUndoBatchId(batches[0].id);
+      setPendingProceedBatchId("");
+    }
+  }, [isUndoOpen, renameBatches.data, selectedUndoBatchId]);
+
+  useEffect(() => {
+    if (!isUndoOpen || !selectedUndoBatch || !undoPreview.data) return;
+
+    setUndoSummaryLines(buildUndoSummaryLines(selectedUndoBatch, undoPreview.data));
+  }, [isUndoOpen, selectedUndoBatch, undoPreview.data]);
 
   useEffect(() => {
     if (files.length === 0 || previewRowsMatchFiles(previewRows, files)) return;
@@ -205,6 +255,50 @@ export function RenamePage() {
     onError: (error) => setStatusText(error instanceof Error ? error.message : "Rename apply failed.")
   });
 
+  const undoBatch = useMutation({
+    mutationFn: undoRenameBatch,
+    onSuccess: (response) => {
+      const restoreMoves = response.restored.map((item) => ({
+        oldPath: item.renamedPath,
+        newPath: item.originalPath,
+        newFileName: item.originalFileName,
+        status: "Rename undone"
+      }));
+
+      updateFilesAfterRename(restoreMoves);
+      setPreviewRows((current) => current.map((row) => {
+        const move = restoreMoves.find((item) => item.oldPath.toLowerCase() === row.sourcePath.toLowerCase());
+        return move
+          ? {
+              ...row,
+              sourcePath: move.newPath,
+              currentFileName: move.newFileName,
+              newFileName: "",
+              status: "Rename undone",
+              selected: false,
+              canApply: false
+            }
+          : row;
+      }));
+      setUndoSummaryLines(response.lines);
+      setPendingProceedBatchId("");
+      setStatusText(`Undo batch complete: ${response.renamed} restored, ${response.skipped} skipped`);
+      renameBatches.refetch();
+    },
+    onError: (error) => setUndoSummaryLines([error instanceof Error ? error.message : "Undo batch failed."])
+  });
+
+  const clearBatches = useMutation({
+    mutationFn: clearRenameBatches,
+    onSuccess: () => {
+      setSelectedUndoBatchId("");
+      setPendingProceedBatchId("");
+      setUndoSummaryLines(["Rename undo batch history cleared."]);
+      renameBatches.refetch();
+    },
+    onError: (error) => setUndoSummaryLines([error instanceof Error ? error.message : "Clear batch list failed."])
+  });
+
   const selectedCount = useMemo(() => previewRows.filter((row) => row.selected).length, [previewRows]);
   const renameTemplates = settings.data?.renameTemplates ?? [
     "{title}",
@@ -215,6 +309,10 @@ export function RenamePage() {
     "{series} - {absolute:000} - {episodeTitle}"
   ];
   const providerConfigured = provider === "TMDB" ? settings.data?.hasTmdbApiKey : settings.data?.hasTvdbApiKey;
+  const languageOptions = useMemo(
+    () => buildOptionList(settings.data?.languagePresets ?? ["eng", "jpn", "spa", "fre", "ger", "und"], language),
+    [settings.data?.languagePresets, language]
+  );
 
   function runSearch() {
     if (!searchTitle.trim()) {
@@ -263,7 +361,19 @@ export function RenamePage() {
       return;
     }
 
-    apply.mutate(previewRows);
+    const warnings = buildRenameApplyWarnings(previewRows);
+    if (warnings.length > 0) {
+      setApplyWarnings(warnings);
+      setIsApplyConfirmOpen(true);
+      return;
+    }
+
+    executeApply();
+  }
+
+  function executeApply() {
+    setIsApplyConfirmOpen(false);
+    apply.mutate({ items: previewRows, provider, template });
   }
 
   function toggleRow(row: RenamePreviewRow) {
@@ -282,8 +392,31 @@ export function RenamePage() {
     setStatusText("Database URL copied.");
   }
 
-  function showUndoPending() {
-    setStatusText("Undo Batch is not available in the web beta yet.");
+  function openUndoBatch() {
+    setIsUndoOpen(true);
+    renameBatches.refetch();
+  }
+
+  function selectUndoBatch(id: string) {
+    setSelectedUndoBatchId(id);
+    setPendingProceedBatchId("");
+    setUndoSummaryLines(["Loading restore plan..."]);
+  }
+
+  function runUndoSelected() {
+    if (!selectedUndoBatch) return;
+
+    if (undoPreview.data?.hasSkippedFiles && pendingProceedBatchId !== selectedUndoBatch.id) {
+      setPendingProceedBatchId(selectedUndoBatch.id);
+      setUndoSummaryLines([
+        ...buildUndoSummaryLines(selectedUndoBatch, undoPreview.data),
+        "",
+        "Some files will be skipped. Click Proceed Anyway to restore the remaining files, or Close to cancel."
+      ]);
+      return;
+    }
+
+    undoBatch.mutate(selectedUndoBatch.id);
   }
 
   return (
@@ -295,7 +428,7 @@ export function RenamePage() {
             <h2 className="text-base font-semibold">Rename Options</h2>
             <button
               type="button"
-              onClick={showUndoPending}
+              onClick={openUndoBatch}
               className="h-8 rounded-md border border-border bg-button px-4 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
             >
               Undo Batch
@@ -342,7 +475,7 @@ export function RenamePage() {
               </select>
             </label>
             <label className="block">
-              <input
+              <select
                 value={language}
                 onChange={(event) => {
                   setLanguage(event.target.value);
@@ -352,7 +485,9 @@ export function RenamePage() {
                   setPreviewSummary("");
                 }}
                 className="h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
-              />
+              >
+                {languageOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
             </label>
           </div>
 
@@ -533,7 +668,13 @@ export function RenamePage() {
         <section className="rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Preview Summary</h3>
-            <button className="h-7 rounded-md bg-button px-3 text-xs font-semibold text-muted">Expand</button>
+            <button
+              type="button"
+              onClick={() => setIsSummaryExpanded(true)}
+              className="h-7 rounded-md bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+            >
+              Expand
+            </button>
           </div>
           <pre className="mt-3 h-[125px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-input p-3 font-mono text-xs leading-5 text-muted">
             {previewSummary || "Build a preview to see planned filename changes."}
@@ -541,8 +682,258 @@ export function RenamePage() {
         </section>
         </div>
       </div>
+      {isUndoOpen ? (
+        <RenameUndoBatchModal
+          batches={renameBatches.data?.batches ?? []}
+          selectedBatch={selectedUndoBatch}
+          selectedBatchId={selectedUndoBatchId}
+          summaryLines={undoSummaryLines}
+          preview={undoPreview.data}
+          isLoadingBatches={renameBatches.isLoading}
+          isLoadingPreview={undoPreview.isLoading}
+          isUndoing={undoBatch.isPending}
+          isClearing={clearBatches.isPending}
+          isProceedPending={selectedUndoBatch !== null && pendingProceedBatchId === selectedUndoBatch.id}
+          onSelectBatch={selectUndoBatch}
+          onUndo={runUndoSelected}
+          onClear={() => clearBatches.mutate()}
+          onClose={() => setIsUndoOpen(false)}
+        />
+      ) : null}
+      {isApplyConfirmOpen ? (
+        <RenameApplyConfirmModal
+          warnings={applyWarnings}
+          selectedCount={selectedCount}
+          isApplying={apply.isPending}
+          onConfirm={executeApply}
+          onClose={() => setIsApplyConfirmOpen(false)}
+        />
+      ) : null}
+      {isSummaryExpanded ? (
+        <OutputModal
+          title="Rename Preview Summary"
+          content={previewSummary || "Build a preview to see planned filename changes."}
+          onClose={() => setIsSummaryExpanded(false)}
+        />
+      ) : null}
     </div>
   );
+}
+
+function RenameApplyConfirmModal({ warnings, selectedCount, isApplying, onConfirm, onClose }: {
+  warnings: string[];
+  selectedCount: number;
+  isApplying: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-6">
+      <section className="w-[min(640px,calc(100vw-48px))] rounded-lg border-2 border-window bg-card shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
+        <div className="flex h-10 items-center justify-between border-b border-border bg-window px-4">
+          <div className="text-sm font-semibold text-muted">Confirm Rename Apply</div>
+          <button type="button" onClick={onClose} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition hover:bg-button-hover hover:text-text" title="Close">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="p-5">
+          <h2 className="text-lg font-semibold">Review skipped or conflicting rows</h2>
+          <p className="mt-2 text-sm leading-5 text-muted">
+            {selectedCount} row(s) are selected. Some rows may be skipped or need review before applying the rename batch.
+          </p>
+          <div className="mt-4 max-h-72 overflow-auto rounded-md border border-border bg-input p-3 font-mono text-xs leading-6 text-muted">
+            {warnings.map((warning, index) => (
+              <div key={`${index}-${warning}`} className="break-words">{warning}</div>
+            ))}
+          </div>
+          <div className="mt-5 flex justify-end gap-2">
+            <button type="button" onClick={onClose} className="h-9 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text">
+              Cancel
+            </button>
+            <button type="button" onClick={onConfirm} disabled={isApplying} className="h-9 rounded-md bg-accent px-4 text-sm font-semibold text-window transition hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
+              {isApplying ? "Applying..." : "Apply Anyway"}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+type RenameUndoBatchModalProps = {
+  batches: RenameBatchRecord[];
+  selectedBatch: RenameBatchRecord | null;
+  selectedBatchId: string;
+  summaryLines: string[];
+  preview?: RenameBatchUndoPreviewResponse;
+  isLoadingBatches: boolean;
+  isLoadingPreview: boolean;
+  isUndoing: boolean;
+  isClearing: boolean;
+  isProceedPending: boolean;
+  onSelectBatch: (id: string) => void;
+  onUndo: () => void;
+  onClear: () => void;
+  onClose: () => void;
+};
+
+function RenameUndoBatchModal({
+  batches,
+  selectedBatch,
+  selectedBatchId,
+  summaryLines,
+  preview,
+  isLoadingBatches,
+  isLoadingPreview,
+  isUndoing,
+  isClearing,
+  isProceedPending,
+  onSelectBatch,
+  onUndo,
+  onClear,
+  onClose
+}: RenameUndoBatchModalProps) {
+  const canUndo = Boolean(selectedBatch && !selectedBatch.isUndone && !isUndoing && (!isProceedPending || (preview?.restorable ?? 0) > 0));
+  const undoLabel = isUndoing ? "Undoing..." : isProceedPending ? "Proceed Anyway" : "Undo Selected";
+  const visibleSummary = summaryLines.length > 0
+    ? summaryLines
+    : isLoadingPreview
+      ? ["Loading restore plan..."]
+      : ["Select a batch to review its restore plan."];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-6">
+      <section className="flex max-h-[min(760px,calc(100vh-48px))] w-[min(1120px,calc(100vw-48px))] flex-col overflow-hidden rounded-lg border-2 border-window bg-card shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
+        <div className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-window px-4">
+          <div className="text-sm font-semibold text-muted">Undo Rename Batch</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition hover:bg-button-hover hover:text-text"
+            title="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-4 p-5">
+          <div>
+            <h2 className="text-xl font-semibold">Undo Rename Batch</h2>
+            <p className="mt-1 text-sm leading-5 text-muted">
+              Select a previous rename batch, review the planned reverse moves, then undo. Files are skipped if the current renamed file is missing, locked, or the original path already exists.
+            </p>
+          </div>
+
+          <div className="grid min-h-0 flex-1 grid-cols-[310px_minmax(0,1fr)_330px] gap-3">
+            <div className="flex min-h-0 flex-col rounded-lg border border-border-strong bg-panel p-3">
+              <h3 className="text-sm font-semibold">Last 20 Batch Jobs</h3>
+              <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-md border border-border bg-input p-1">
+                {isLoadingBatches ? (
+                  <div className="p-3 text-sm text-muted">Loading batches...</div>
+                ) : batches.length === 0 ? (
+                  <div className="p-3 text-sm text-muted">No rename batches have been recorded yet.</div>
+                ) : batches.map((batch) => (
+                  <button
+                    key={batch.id}
+                    type="button"
+                    onClick={() => onSelectBatch(batch.id)}
+                    className={[
+                      "block w-full rounded-md px-3 py-2 text-left font-mono text-xs leading-5 transition",
+                      batch.id === selectedBatchId ? "bg-selected text-text" : "text-muted hover:bg-card hover:text-text"
+                    ].join(" ")}
+                  >
+                    {batch.displayName}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex min-h-0 flex-col rounded-lg border border-border-strong bg-panel p-3">
+              <h3 className="text-sm font-semibold">Files To Restore</h3>
+              <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-md border border-border bg-input p-2">
+                {!selectedBatch ? (
+                  <div className="p-2 text-sm text-muted">Select a batch to review its files.</div>
+                ) : selectedBatch.entries.map((entry, index) => (
+                  <div key={`${entry.renamedPath}-${entry.originalPath}`} className="mb-2 rounded-md border border-border bg-card p-3 font-mono text-xs leading-5">
+                    <div className="font-semibold text-muted">{String(index + 1).padStart(2, "0")}</div>
+                    <div className="mt-2 grid grid-cols-[78px_minmax(0,1fr)] gap-2">
+                      <div className="text-subtle">Current</div>
+                      <div className="break-words text-text">{entry.renamedFileName}</div>
+                      <div className="text-subtle">Restore To</div>
+                      <div className="break-words text-text">{entry.originalFileName}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex min-h-0 flex-col rounded-lg border border-border-strong bg-panel p-3">
+              <h3 className="text-sm font-semibold">Summary</h3>
+              <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-md border border-border bg-input p-3 font-mono text-xs leading-6 text-muted">
+                {visibleSummary.map((line, index) => (
+                  <div key={`${index}-${line}`} className="break-words whitespace-pre-wrap">
+                    {line || "\u00A0"}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid shrink-0 grid-cols-[Auto_1fr_Auto] items-center gap-3">
+            <button
+              type="button"
+              onClick={onClear}
+              disabled={isClearing || batches.length === 0}
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+            >
+              <Trash2 size={15} />
+              Clear Batch List
+            </button>
+
+            <div />
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onUndo}
+                disabled={!canUndo}
+                className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-window transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled"
+              >
+                <RotateCcw size={15} />
+                {undoLabel}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-9 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function buildUndoSummaryLines(batch: RenameBatchRecord, preview: RenameBatchUndoPreviewResponse) {
+  return [
+    `Created: ${formatBatchDate(batch.createdAt)}`,
+    `Provider: ${batch.provider || "N/A"}`,
+    `Files: ${batch.totalFiles}`,
+    `Status: ${batch.isUndone ? "Already undone" : preview.hasSkippedFiles ? `${preview.restorable} restorable, ${preview.skipped} skipped` : "Ready to undo"}`,
+    "",
+    ...preview.lines
+  ];
+}
+
+function formatBatchDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 function guessSearchTitle(fileNames: string[]) {
@@ -594,6 +985,52 @@ function cleanSearchTitle(value: string) {
     .trim();
 }
 
+function buildRenameApplyWarnings(rows: RenamePreviewRow[]) {
+  const selectedRows = rows.filter((row) => row.selected);
+  const warnings: string[] = [];
+  const targetCounts = new Map<string, number>();
+
+  for (const row of selectedRows) {
+    const targetKey = buildRenameTargetKey(row);
+    if (!targetKey) continue;
+    targetCounts.set(targetKey, (targetCounts.get(targetKey) ?? 0) + 1);
+  }
+
+  for (const row of selectedRows) {
+    const label = row.currentFileName || row.sourcePath;
+    const targetKey = buildRenameTargetKey(row);
+
+    if (!row.canApply) {
+      warnings.push(`${label}: ${row.status || "row is marked as not applicable"}`);
+      continue;
+    }
+
+    if (!row.newFileName.trim()) {
+      warnings.push(`${label}: no destination filename was generated`);
+      continue;
+    }
+
+    if (!hasFilenameChange(row)) {
+      warnings.push(`${label}: destination matches the current filename`);
+    }
+
+    if (targetKey && (targetCounts.get(targetKey) ?? 0) > 1) {
+      warnings.push(`${label}: duplicate destination in selected rows (${row.newFileName})`);
+    }
+  }
+
+  return warnings;
+}
+
+function buildRenameTargetKey(row: RenamePreviewRow) {
+  const newFileName = row.newFileName.trim();
+  if (!newFileName) return "";
+
+  const slash = Math.max(row.sourcePath.lastIndexOf("/"), row.sourcePath.lastIndexOf("\\"));
+  const directory = slash >= 0 ? row.sourcePath.slice(0, slash) : "";
+  return `${directory}/${newFileName}`.toLowerCase();
+}
+
 function buildScannedFilePreviewRows(files: MediaFileRow[]): RenamePreviewRow[] {
   return files.map((file) => ({
     selected: false,
@@ -622,4 +1059,15 @@ function getRenameStatusDisplay(status: string) {
 
 function hasFilenameChange(row: RenamePreviewRow) {
   return row.newFileName.trim().length > 0 && row.currentFileName.trim() !== row.newFileName.trim();
+}
+
+function buildOptionList(values: string[], current: string) {
+  const seen = new Set<string>();
+  return [current, ...values]
+    .map((value) => value.trim())
+    .filter((value) => {
+      if (!value || seen.has(value.toLowerCase())) return false;
+      seen.add(value.toLowerCase());
+      return true;
+    });
 }

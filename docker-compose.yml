@@ -10,26 +10,12 @@ services:
     environment:
       ASPNETCORE_URLS: "http://+:8080"
       MKVO_MEDIA_ROOT: "/media"
-      MKVO_SOURCE_ROOTS: "downloads=/downloads"
+      MKVO_SOURCE_ROOTS: "${MKVO_SOURCE_ROOTS:-downloads=/downloads}"
       HOME: "/config"
       XDG_CONFIG_HOME: "/config"
       XDG_DATA_HOME: "/config/.local/share"
     volumes:
-      - mkvo-media:/media
-      - mkvo-downloads:/downloads
-      - ./tmp/docker-config:/config
+      - ${MKVO_MEDIA_PATH:-./tmp/docker-media}:/media
+      - ${MKVO_DOWNLOADS_PATH:-./tmp/docker-downloads}:/downloads
+      - ${MKVO_CONFIG_PATH:-./tmp/docker-config}:/config
     restart: unless-stopped
-
-volumes:
-  mkvo-media:
-    driver: local
-    driver_opts:
-      type: cifs
-      device: //192.168.1.79/media
-      o: guest,vers=3.0
-  mkvo-downloads:
-    driver: local
-    driver_opts:
-      type: cifs
-      device: //192.168.1.79/downloads/media
-      o: guest,vers=3.0

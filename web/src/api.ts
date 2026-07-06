@@ -31,6 +31,14 @@ export type TrackRow = {
   forced: boolean;
 };
 
+export type AttachmentRow = {
+  id: number;
+  fileName: string;
+  contentType: string;
+  description: string;
+  sizeBytes: number | null;
+};
+
 export type MediaFileRow = {
   path: string;
   fileName: string;
@@ -44,7 +52,9 @@ export type MediaFileRow = {
   videoSummary: string;
   audioSummary: string;
   subtitleSummary: string;
+  attachmentSummary: string;
   tracks: TrackRow[];
+  attachments: AttachmentRow[];
 };
 
 export type ScanSummary = {
@@ -113,6 +123,13 @@ export type WebSettings = {
   renameLookupProvider: string;
   renameTemplate: string;
   renameTemplates: string[];
+  audioNamePresets: string[];
+  subtitleNamePresets: string[];
+  languagePresets: string[];
+  mkvMergeDefaultAudioLanguages: string;
+  mkvMergeDefaultSubtitleLanguages: string;
+  watchFolders: string[];
+  enableLiveWatchFolderMonitoring: boolean;
 };
 
 export type WebSettingsRequest = {
@@ -122,6 +139,14 @@ export type WebSettingsRequest = {
   tvdbLanguage?: string;
   renameLookupProvider?: string;
   renameTemplate?: string;
+  renameTemplates?: string[];
+  audioNamePresets?: string[];
+  subtitleNamePresets?: string[];
+  languagePresets?: string[];
+  mkvMergeDefaultAudioLanguages?: string;
+  mkvMergeDefaultSubtitleLanguages?: string;
+  watchFolders?: string[];
+  enableLiveWatchFolderMonitoring?: boolean;
 };
 
 export type RenameSearchResult = {
@@ -165,6 +190,49 @@ export type RenameApplyResponse = {
   items: RenamePreviewRow[];
   summary: string;
   status: string;
+};
+
+export type RenameBatchEntry = {
+  originalPath: string;
+  renamedPath: string;
+  originalFileName: string;
+  renamedFileName: string;
+};
+
+export type RenameBatchRecord = {
+  id: string;
+  createdAt: string;
+  undoneAt: string | null;
+  provider: string;
+  template: string;
+  totalFiles: number;
+  entries: RenameBatchEntry[];
+  isUndone: boolean;
+  displayName: string;
+};
+
+export type RenameBatchListResponse = {
+  batches: RenameBatchRecord[];
+};
+
+export type RenameBatchUndoPreviewResponse = {
+  restorable: number;
+  skipped: number;
+  lines: string[];
+  hasSkippedFiles: boolean;
+};
+
+export type RenameBatchRestoreMove = {
+  originalPath: string;
+  renamedPath: string;
+  originalFileName: string;
+};
+
+export type RenameBatchUndoResponse = {
+  renamed: number;
+  skipped: number;
+  lines: string[];
+  restored: RenameBatchRestoreMove[];
 };
 
 export type MuxPreviewRequest = {
@@ -292,6 +360,7 @@ export type LibraryAuditRow = {
   issueSummary: string;
   issues: string[];
   issueFilePaths: string[];
+  allFilePaths: string[];
 };
 
 export type LibraryAuditResponse = {
@@ -359,6 +428,12 @@ export function getCurrentScanFiles(): Promise<CurrentScanResponse> {
   return fetchJson<CurrentScanResponse>("/api/files/current");
 }
 
+export function clearCurrentScanFiles(): Promise<CurrentScanResponse> {
+  return fetchJson<CurrentScanResponse>("/api/files/current", {
+    method: "DELETE"
+  });
+}
+
 export function getWebSettings(): Promise<WebSettings> {
   return fetchJson<WebSettings>("/api/settings");
 }
@@ -418,13 +493,37 @@ export function buildRenamePreview(request: {
   });
 }
 
-export function applyRenamePreview(items: RenamePreviewRow[]): Promise<RenameApplyResponse> {
+export function applyRenamePreview(request: {
+  items: RenamePreviewRow[];
+  provider?: string;
+  template?: string;
+}): Promise<RenameApplyResponse> {
   return fetchJson<RenameApplyResponse>("/api/rename/apply", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ items })
+    body: JSON.stringify(request)
+  });
+}
+
+export function getRenameBatches(): Promise<RenameBatchListResponse> {
+  return fetchJson<RenameBatchListResponse>("/api/rename/batches");
+}
+
+export function previewRenameBatchUndo(id: string): Promise<RenameBatchUndoPreviewResponse> {
+  return fetchJson<RenameBatchUndoPreviewResponse>(`/api/rename/batches/${encodeURIComponent(id)}/preview`);
+}
+
+export function undoRenameBatch(id: string): Promise<RenameBatchUndoResponse> {
+  return fetchJson<RenameBatchUndoResponse>(`/api/rename/batches/${encodeURIComponent(id)}/undo`, {
+    method: "POST"
+  });
+}
+
+export function clearRenameBatches(): Promise<RenameBatchListResponse> {
+  return fetchJson<RenameBatchListResponse>("/api/rename/batches", {
+    method: "DELETE"
   });
 }
 

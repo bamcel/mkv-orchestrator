@@ -20,18 +20,34 @@ http://localhost:8080
 
 ## Volumes
 
-The default compose file mounts:
+The default compose file uses local bind mounts:
 
 ```text
-//192.168.1.79/media -> /media
-./tmp/docker-config   -> /config
+./tmp/docker-media     -> /media
+./tmp/docker-downloads -> /downloads
+./tmp/docker-config    -> /config
 ```
 
-The web app browses container paths. With the default compose file, `/media` points at the SMB share `\\192.168.1.79\media`.
+The web app browses container paths. With the default compose file, `/media` and `/downloads` point at local folders under `./tmp`.
 
-Change the `device` value if you want to test with a different SMB share, or replace the volume with a normal bind mount for a local folder.
+Set these values in a local `.env` file to customize bind mounts:
 
-The default NAS mount uses Docker's local CIFS volume driver:
+```text
+MKVO_MEDIA_PATH=D:/Media
+MKVO_DOWNLOADS_PATH=D:/Downloads/Media
+MKVO_CONFIG_PATH=./tmp/docker-config
+MKVO_SOURCE_ROOTS=downloads=/downloads
+```
+
+## NAS / SMB Shares
+
+For a NAS share, copy `.env.example` to `.env`, edit the share paths, then run Docker Compose with the NAS example override:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.nas.example.yml up --build
+```
+
+The NAS example uses Docker's local CIFS volume driver:
 
 ```yaml
 volumes:
@@ -39,19 +55,21 @@ volumes:
     driver: local
     driver_opts:
       type: cifs
-      device: //192.168.1.79/media
-      o: guest,vers=3.0
+      device: ${MKVO_MEDIA_SHARE}
+      o: ${MKVO_CIFS_OPTIONS}
 ```
 
-If your share requires credentials, add them through your own local override file rather than committing them.
+If your share requires credentials, put them only in your local `.env`.
 
 Example:
 
-```yaml
-volumes:
-  - D:/Media:/media
-  - ./tmp/docker-config:/config
+```text
+MKVO_MEDIA_SHARE=//server/media
+MKVO_DOWNLOADS_SHARE=//server/downloads/media
+MKVO_CIFS_OPTIONS=username=myuser,password=mypassword,vers=3.0
 ```
+
+Do not commit `.env`, SMB usernames, SMB passwords, API keys, or server-specific paths.
 
 ## Included Tools
 
@@ -68,4 +86,4 @@ The Settings page reports the resolved tool paths and version strings from insid
 
 ## Current Scope
 
-This is the first single-container web baseline. Dashboard scanning is wired to the same `MKVOrchestrator.Core` scanner used by the desktop app. Additional desktop workflows should be ported behind API endpoints in later passes so the processing logic remains shared instead of duplicated in the React UI.
+This is a single-container web release. Dashboard scanning, rename preview/apply/undo, mux/remux planning, track property edits, library overview, settings, and logs are exposed through the same ASP.NET Core host. The processing logic should continue moving through shared core services instead of being duplicated in the React UI.

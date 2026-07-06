@@ -4,7 +4,7 @@ MKV Orchestrator, or MKVO, is a desktop media operations console for scanning me
 
 The app is built with Avalonia and is currently maintained as a desktop application.
 
-A Docker web build is also available for testing. The desktop app remains the primary product, while the web container is being built as a single-container companion that shares MKVO core processing logic.
+A Docker web build is also available for server or NAS-style access. The desktop app remains the primary product, while the web container is maintained as a single-container companion that shares MKVO core processing logic.
 
 ## What MKVO Does
 
@@ -211,16 +211,25 @@ Open:
 http://localhost:8080
 ```
 
-Default volume mounts:
+Default local volume mounts:
 
 ```text
-//192.168.1.79/media -> /media
-./tmp/docker-config   -> /config
+./tmp/docker-media     -> /media
+./tmp/docker-downloads -> /downloads
+./tmp/docker-config    -> /config
 ```
 
-The web app browses container paths. With the default compose file, `/media` points at the SMB share `\\192.168.1.79\media` through Docker's local CIFS volume driver. Edit `docker-compose.yml` to mount a different media folder to `/media`.
+The web app browses container paths. With the default compose file, `/media` and `/downloads` are local bind mounts under `./tmp`.
 
-The current web baseline wires Dashboard scan/status through `MKVOrchestrator.Core`. Additional desktop workflows should be ported behind API endpoints in future passes so the web UI and desktop app continue sharing the same processing behavior.
+For a NAS or SMB share, copy `.env.example` to `.env`, edit the share paths and CIFS options, then run:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.nas.example.yml up --build
+```
+
+Keep `.env` local. Do not commit API keys, SMB usernames, SMB passwords, or server-specific paths.
+
+The web container wires Dashboard, Rename, Mux / Remux, Track Properties, Library, Settings, and Logs through the single ASP.NET Core host. The web UI and desktop app should continue sharing processing behavior through `MKVOrchestrator.Core`.
 
 Publish a Windows test build:
 

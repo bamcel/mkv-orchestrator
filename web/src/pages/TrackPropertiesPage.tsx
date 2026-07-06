@@ -5,12 +5,14 @@ import {
   applyPropEditPlan,
   buildPropEditPreview,
   getCurrentScanFiles,
+  getWebSettings,
   loadPropEditTemplate,
   PropEditPreviewRequest,
   PropEditPreviewResponse,
   PropEditTemplateResponse,
   PropEditTrackConfigRow
 } from "../api";
+import { OutputModal } from "../components/OutputModal";
 import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
@@ -24,6 +26,7 @@ const languagePresets = ["eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "
 export function TrackPropertiesPage() {
   const { files, setFiles, templateFilePath, setTemplateFilePath } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
+  const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [templatePath, setTemplatePath] = useState("");
   const [containerMode, setContainerMode] = useState<TitleMode>("keep");
@@ -40,6 +43,7 @@ export function TrackPropertiesPage() {
   const [customTrackKeys, setCustomTrackKeys] = useState<Set<string>>(new Set());
   const [previewResult, setPreviewResult] = useState<PropEditPreviewResponse | null>(null);
   const [statusText, setStatusText] = useState("Load scanned files from Dashboard, then select a template.");
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
 
   useEffect(() => {
     if (files.length > 0 || !currentScan.data?.files.length) return;
@@ -61,6 +65,7 @@ export function TrackPropertiesPage() {
   }, [files, templateFilePath, templatePath]);
 
   const mkvFiles = useMemo(() => files.filter((file) => file.extension.toLowerCase() === ".mkv"), [files]);
+  const nonMkvCount = files.length - mkvFiles.length;
 
   const templateLoad = useMutation({
     mutationFn: loadPropEditTemplate,
@@ -126,6 +131,30 @@ export function TrackPropertiesPage() {
     };
   }
 
+  function runPreview() {
+    if (mkvFiles.length === 0) {
+      setStatusText("Track Properties requires scanned MKV files. MP4 files can be inspected and renamed, but cannot be edited with mkvpropedit.");
+      return;
+    }
+
+    if (!template) {
+      setStatusText("Select and load a scanned MKV template file first.");
+      return;
+    }
+
+    preview.mutate(buildRequest());
+  }
+
+  function runApply() {
+    if (!previewResult?.actions.length) {
+      setStatusText("Build a preview with planned property edits before applying.");
+      return;
+    }
+
+    setStatusText(`Applying ${previewResult.actions.length} track property edit(s)...`);
+    apply.mutate(buildRequest());
+  }
+
   async function refreshFiles() {
     const result = await currentScan.refetch();
     if (result.data?.files.length) {
@@ -153,6 +182,9 @@ export function TrackPropertiesPage() {
 
   const audioFlagOptions = ["Keep existing", ...audioTracks.map((track) => track.trackLabel), "None"];
   const subtitleFlagOptions = ["Keep existing", ...subtitleTracks.map((track) => track.trackLabel), "None"];
+  const audioPresetOptions = settings.data?.audioNamePresets?.length ? settings.data.audioNamePresets : audioNamePresets;
+  const subtitlePresetOptions = settings.data?.subtitleNamePresets?.length ? settings.data.subtitleNamePresets : subtitleNamePresets;
+  const languagePresetOptions = settings.data?.languagePresets?.length ? settings.data.languagePresets : languagePresets;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -170,6 +202,11 @@ export function TrackPropertiesPage() {
               {mkvFiles.length === 0 ? <option value="">No MKV files scanned</option> : mkvFiles.map((file) => <option key={file.path} value={file.path}>{file.fileName}</option>)}
             </select>
             <div className="mt-1 text-[11px] text-muted">Uses template track order; validates before editing.</div>
+            {nonMkvCount > 0 ? (
+              <div className="mt-2 rounded-md border border-warning bg-input p-2 text-xs leading-5 text-warning">
+                {nonMkvCount} non-MKV file(s) are excluded. Track Properties uses mkvpropedit and supports MKV files only.
+              </div>
+            ) : null}
 
             <TitleModeGroup
               title="Container Title"
@@ -190,12 +227,12 @@ export function TrackPropertiesPage() {
 
             <div className="mt-3 text-xs font-semibold text-muted">Execution</div>
             <div className="mt-2 flex gap-2">
-              <button onClick={() => preview.mutate(buildRequest())} disabled={preview.isPending || selectedPaths.length === 0 || !template} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
+              <button onClick={runPreview} disabled={preview.isPending || selectedPaths.length === 0 || !template} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
                 {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
                 Preview
               </button>
-              <button onClick={() => apply.mutate(buildRequest())} disabled={apply.isPending || selectedPaths.length === 0 || !previewResult?.actions.length} className="h-10 flex-1 rounded-md bg-accent text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
-                Apply
+              <button onClick={runApply} disabled={apply.isPending || selectedPaths.length === 0 || !previewResult?.actions.length} className="h-10 flex-1 rounded-md bg-accent text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
+                {apply.isPending ? "Applying..." : "Apply"}
               </button>
             </div>
             <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
@@ -211,7 +248,11 @@ export function TrackPropertiesPage() {
                   type="audio"
                   defaultValue={defaultAudio}
                   onDefaultChange={setDefaultAudio}
+                  forcedValue={forcedAudio}
+                  onForcedChange={setForcedAudio}
                   flagOptions={audioFlagOptions}
+                  namePresets={audioPresetOptions}
+                  languagePresets={languagePresetOptions}
                   customTrackKeys={customTrackKeys}
                   onCustomChange={setTrackCustom}
                   onChange={updateTrack}
@@ -222,7 +263,11 @@ export function TrackPropertiesPage() {
                   type="subtitle"
                   defaultValue={defaultSubtitle}
                   onDefaultChange={setDefaultSubtitle}
+                  forcedValue={forcedSubtitle}
+                  onForcedChange={setForcedSubtitle}
                   flagOptions={subtitleFlagOptions}
+                  namePresets={subtitlePresetOptions}
+                  languagePresets={languagePresetOptions}
                   customTrackKeys={customTrackKeys}
                   onCustomChange={setTrackCustom}
                   onChange={updateTrack}
@@ -233,7 +278,13 @@ export function TrackPropertiesPage() {
           <section className="rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Preview Summary</h3>
-              <button className="h-7 rounded-md bg-button px-3 text-xs font-semibold text-muted">Expand</button>
+              <button
+                type="button"
+                onClick={() => setIsSummaryExpanded(true)}
+                className="h-7 rounded-md bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+              >
+                Expand
+              </button>
             </div>
             <pre className="mt-3 h-[125px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-input p-3 font-mono text-xs leading-5 text-muted">
               {previewResult?.summary || "Build a preview to see planned property edits."}
@@ -241,6 +292,13 @@ export function TrackPropertiesPage() {
           </section>
         </div>
       </div>
+      {isSummaryExpanded ? (
+        <OutputModal
+          title="Track Properties Preview Summary"
+          content={previewResult?.summary || "Build a preview to see planned property edits."}
+          onClose={() => setIsSummaryExpanded(false)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -284,13 +342,17 @@ function FlagSelect({ label, value, onChange, options }: { label: string; value:
   );
 }
 
-function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, flagOptions, customTrackKeys, onCustomChange, onChange }: {
+function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedValue, onForcedChange, flagOptions, namePresets, languagePresets, customTrackKeys, onCustomChange, onChange }: {
   title: string;
   rows: PropEditTrackConfigRow[];
   type: TrackType;
   defaultValue: string;
   onDefaultChange: (value: string) => void;
+  forcedValue: string;
+  onForcedChange: (value: string) => void;
   flagOptions: string[];
+  namePresets: string[];
+  languagePresets: string[];
   customTrackKeys: Set<string>;
   onCustomChange: (type: TrackType, trackNumber: number, value: boolean) => void;
   onChange: (type: TrackType, trackNumber: number, patch: Partial<PropEditTrackConfigRow>) => void;
@@ -298,8 +360,9 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, flagOpt
   return (
     <section className="flex min-h-0 flex-col rounded-lg border border-border bg-panel p-3">
       <h3 className="text-base font-semibold">{title}</h3>
-      <div className="mt-2 shrink-0">
+      <div className="mt-2 flex shrink-0 flex-wrap gap-3">
         <FlagSelect label="Set default track" value={defaultValue} onChange={onDefaultChange} options={flagOptions} />
+        <FlagSelect label="Set forced track" value={forcedValue} onChange={onForcedChange} options={flagOptions} />
       </div>
 
       <div className="mt-2 min-h-0 flex-1 overflow-auto bg-card">
@@ -319,7 +382,7 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, flagOpt
             <tbody>
               {rows.map((track) => {
                 const isCustom = customTrackKeys.has(getTrackKey(type, track.trackNumber));
-                const nameOptions = buildTrackOptions(type === "audio" ? audioNamePresets : subtitleNamePresets, track.editedName, track.currentName);
+                const nameOptions = buildTrackOptions(namePresets, track.editedName, track.currentName);
                 const languageOptions = buildTrackOptions(languagePresets, track.editedLanguage, track.currentLanguage);
 
                 return (

@@ -6,7 +6,7 @@ type MediaLibraryContextValue = {
   setFiles: (files: MediaFileRow[]) => void;
   templateFilePath: string;
   setTemplateFilePath: (path: string) => void;
-  updateFilesAfterRename: (renames: Array<{ oldPath: string; newPath: string; newFileName: string }>) => void;
+  updateFilesAfterRename: (renames: Array<{ oldPath: string; newPath: string; newFileName: string; status?: string }>) => void;
 };
 
 const MediaLibraryContext = createContext<MediaLibraryContextValue | null>(null);
@@ -67,7 +67,7 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
           ...file,
           path: rename.newPath,
           fileName: rename.newFileName,
-          status: "Renamed"
+          status: rename.status ?? "Renamed"
         };
       }));
       setTemplateFilePath((current) => {

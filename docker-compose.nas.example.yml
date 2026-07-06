@@ -1,0 +1,20 @@
+services:
+  mkvo:
+    volumes:
+      - mkvo-media:/media
+      - mkvo-downloads:/downloads
+      - ${MKVO_CONFIG_PATH:-./tmp/docker-config}:/config
+
+volumes:
+  mkvo-media:
+    driver: local
+    driver_opts:
+      type: cifs
+      device: ${MKVO_MEDIA_SHARE:?Set MKVO_MEDIA_SHARE in .env}
+      o: ${MKVO_CIFS_OPTIONS:-guest,vers=3.0}
+  mkvo-downloads:
+    driver: local
+    driver_opts:
+      type: cifs
+      device: ${MKVO_DOWNLOADS_SHARE:?Set MKVO_DOWNLOADS_SHARE in .env}
+      o: ${MKVO_CIFS_OPTIONS:-guest,vers=3.0}

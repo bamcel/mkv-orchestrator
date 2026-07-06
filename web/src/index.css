@@ -32,16 +32,16 @@ body,
 }
 
 html {
-  background: #090B0F;
+  background: var(--color-window);
 }
 
 body {
   margin: 0;
   min-width: 1180px;
   overflow: hidden;
-  background: #090B0F;
+  background: var(--color-window);
   font-family: var(--font-sans);
-  color: #F5F7FB;
+  color: var(--color-text);
 }
 
 button,
@@ -51,9 +51,9 @@ textarea {
 }
 
 * {
-  scrollbar-color: #3A4350 #111318;
+  scrollbar-color: var(--color-border-strong) var(--color-sidebar);
 }
 
 ::selection {
-  background: rgba(36, 209, 132, 0.28);
+  background: color-mix(in srgb, var(--color-accent) 28%, transparent);
 }
