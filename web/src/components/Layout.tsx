@@ -2,7 +2,7 @@ import { Activity, Database, FileCog, FolderOpen, ListVideo, Logs, Settings, Shu
 import { NavLink, Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getStatus } from "../api";
-import mkvoIcon from "../assets/mkvo-icon-green.png";
+import mkvoIcon from "../assets/mkvo-icon-purple.png";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: Activity },
@@ -27,7 +27,7 @@ export function Layout() {
               <img
                 src={mkvoIcon}
                 alt=""
-                className="h-9 w-9 object-contain drop-shadow-[0_0_14px_rgba(36,209,132,0.28)]"
+                className="h-9 w-9 object-contain drop-shadow-[0_0_14px_rgba(139,92,246,0.32)]"
                 aria-hidden="true"
               />
             </div>

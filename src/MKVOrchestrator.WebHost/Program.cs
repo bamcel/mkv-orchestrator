@@ -1,6 +1,10 @@
 using System.Diagnostics;
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using MKVOrchestrator.Core.Models;
 using MKVOrchestrator.Core.Services;
 using MKVOrchestrator.Core.Services.Cache;
@@ -32,7 +36,7 @@ if (!Directory.Exists(mediaRoot))
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/api/status", () =>
+app.MapGet("/api/status", (AppSettingsService settingsService) =>
 {
     var tools = new[]
     {
@@ -49,7 +53,7 @@ app.MapGet("/api/status", () =>
         Version: typeof(MkvScannerService).Assembly.GetName().Version?.ToString() ?? "dev",
         MediaRoot: mediaRoot,
         ConfigRoot: CrossPlatformRuntime.AppDataDirectory,
-        SourceRoots: sourceRoots,
+        SourceRoots: BuildStatusSourceRoots(sourceRoots, BuildSettingsSnapshot(settingsService)),
         Tools: tools));
 });
 
@@ -239,9 +243,69 @@ app.MapPut("/api/settings", (WebSettingsRequest request, AppSettingsService sett
     {
         settings.EnableLiveWatchFolderMonitoring = request.EnableLiveWatchFolderMonitoring.Value;
     }
+    if (request.MediaServers is not null)
+    {
+        settings.MediaServers = NormalizeMediaServers(request.MediaServers, settings.MediaServers);
+    }
+    if (request.MediaServerPathMappings is not null)
+    {
+        settings.MediaServerPathMappings = NormalizeMediaServerPathMappings(request.MediaServerPathMappings);
+    }
 
     settingsService.Save(settings);
     return Results.Ok(WebSettingsResponse.From(BuildSettingsSnapshot(settingsService)));
+});
+
+app.MapPost("/api/media-servers/test", async (MediaServerConnectionRequest request, AppSettingsService settingsService, CancellationToken token) =>
+{
+    var settings = settingsService.Load();
+    var server = ResolveMediaServerRequest(request, settings);
+
+    if (string.IsNullOrWhiteSpace(server.ServerUrl))
+    {
+        return Results.BadRequest(new ApiError("Enter a server URL."));
+    }
+
+    try
+    {
+        var libraries = await DiscoverMediaServerLibrariesAsync(server, settings.MediaServerPathMappings, token);
+        var status = libraries.Count == 0
+            ? "Connection succeeded, but no library paths were returned."
+            : $"Connection succeeded. Found {libraries.Count} library path(s).";
+        return Results.Ok(new MediaServerTestResponse(true, status, libraries.Count));
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new MediaServerTestResponse(false, ex.Message, 0));
+    }
+});
+
+app.MapPost("/api/media-servers/{id}/sync", async (string id, AppSettingsService settingsService, OperationLogStore logs, CancellationToken token) =>
+{
+    var settings = settingsService.Load();
+    var server = settings.MediaServers.FirstOrDefault(item => item.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+    if (server is null)
+    {
+        return Results.NotFound(new ApiError($"Media server not found: {id}"));
+    }
+
+    try
+    {
+        server.Libraries = (await DiscoverMediaServerLibrariesAsync(server, settings.MediaServerPathMappings, token)).ToList();
+        server.LastSyncedUtc = DateTimeOffset.UtcNow;
+        settingsService.Save(settings);
+
+        var responseServer = WebMediaServerResponse.From(server);
+        var status = server.Libraries.Count == 0
+            ? $"Sync complete for {server.Name}. No library paths were returned."
+            : $"Sync complete for {server.Name}: {server.Libraries.Count} library path(s).";
+        logs.Add("Library", $"Media server synced: {server.Name}", status);
+        return Results.Ok(new MediaServerSyncResponse(responseServer, responseServer.Libraries, status));
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new ApiError(ex.Message));
+    }
 });
 
 app.MapPost("/api/rename/search", async (RenameSearchRequest request, AppSettingsService settingsService, CancellationToken token) =>
@@ -545,6 +609,425 @@ static IReadOnlyList<SourceRoot> ResolveSourceRoots(string mediaRoot)
     }
 
     return roots;
+}
+
+static IReadOnlyList<SourceRoot> BuildStatusSourceRoots(IReadOnlyList<SourceRoot> baseRoots, AppSettings settings)
+{
+    var roots = new List<SourceRoot>();
+    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    void Add(string name, string path)
+    {
+        var normalized = CrossPlatformRuntime.NormalizeUserPath(path);
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(normalized)) return;
+        if (!seen.Add(normalized)) return;
+        roots.Add(new SourceRoot(name, normalized));
+    }
+
+    foreach (var root in baseRoots)
+    {
+        Add(root.Name, root.Path);
+    }
+
+    foreach (var folder in settings.WatchFolders)
+    {
+        Add($"Watch: {GetDisplayPathName(folder)}", folder);
+    }
+
+    foreach (var server in settings.MediaServers)
+    {
+        var serverName = string.IsNullOrWhiteSpace(server.Name) ? NormalizeMediaServerType(server.Type) : server.Name.Trim();
+        foreach (var library in server.Libraries.Where(library => library.IsEnabled))
+        {
+            Add($"{serverName}: {library.Name}", library.ContainerPath);
+        }
+    }
+
+    return roots;
+}
+
+static async Task<IReadOnlyList<MediaServerLibraryPath>> DiscoverMediaServerLibrariesAsync(
+    MediaServerSettings server,
+    IReadOnlyList<MediaServerPathMapping> mappings,
+    CancellationToken token)
+{
+    var type = NormalizeMediaServerType(server.Type);
+    if (type == "Plex")
+    {
+        return await DiscoverPlexLibrariesAsync(server, mappings, token);
+    }
+
+    return await DiscoverEmbyLikeLibrariesAsync(server, mappings, token);
+}
+
+static async Task<IReadOnlyList<MediaServerLibraryPath>> DiscoverEmbyLikeLibrariesAsync(
+    MediaServerSettings server,
+    IReadOnlyList<MediaServerPathMapping> mappings,
+    CancellationToken token)
+{
+    var endpoints = new[]
+    {
+        "Library/VirtualFolders",
+        "emby/Library/VirtualFolders"
+    };
+
+    foreach (var endpoint in endpoints)
+    {
+        var json = await TryGetMediaServerTextAsync(server, endpoint, usePlexToken: false, token);
+        if (string.IsNullOrWhiteSpace(json)) continue;
+
+        using var document = JsonDocument.Parse(json);
+        var libraries = ParseEmbyVirtualFolders(document.RootElement, server, mappings);
+        if (libraries.Count > 0)
+        {
+            return libraries;
+        }
+    }
+
+    var pathEndpoints = new[]
+    {
+        "Library/PhysicalPaths",
+        "emby/Library/PhysicalPaths"
+    };
+
+    foreach (var endpoint in pathEndpoints)
+    {
+        var json = await TryGetMediaServerTextAsync(server, endpoint, usePlexToken: false, token);
+        if (string.IsNullOrWhiteSpace(json)) continue;
+
+        using var document = JsonDocument.Parse(json);
+        var libraries = ParsePhysicalPaths(document.RootElement, server, mappings);
+        if (libraries.Count > 0)
+        {
+            return libraries;
+        }
+    }
+
+    throw new InvalidOperationException("Connected to the server, but no library paths were returned. Check the API key permissions and server type.");
+}
+
+static async Task<IReadOnlyList<MediaServerLibraryPath>> DiscoverPlexLibrariesAsync(
+    MediaServerSettings server,
+    IReadOnlyList<MediaServerPathMapping> mappings,
+    CancellationToken token)
+{
+    var xml = await TryGetMediaServerTextAsync(server, "library/sections", usePlexToken: true, token);
+    if (string.IsNullOrWhiteSpace(xml))
+    {
+        throw new InvalidOperationException("Plex did not return library sections. Check the server URL and token.");
+    }
+
+    var document = XDocument.Parse(xml);
+    var rows = new List<MediaServerLibraryPath>();
+    foreach (var directory in document.Descendants("Directory"))
+    {
+        var name = directory.Attribute("title")?.Value ?? "Library";
+        var type = directory.Attribute("type")?.Value ?? "library";
+        foreach (var location in directory.Elements("Location"))
+        {
+            var serverPath = location.Attribute("path")?.Value ?? string.Empty;
+            AddDiscoveredLibrary(rows, server, mappings, name, type, serverPath);
+        }
+    }
+
+    return DistinctLibraries(rows);
+}
+
+static async Task<string?> TryGetMediaServerTextAsync(MediaServerSettings server, string relativePath, bool usePlexToken, CancellationToken token)
+{
+    var url = BuildMediaServerUrl(server.ServerUrl, relativePath, server.ApiKey, usePlexToken);
+    using var client = new HttpClient
+    {
+        Timeout = TimeSpan.FromSeconds(15)
+    };
+    using var request = new HttpRequestMessage(HttpMethod.Get, url);
+    if (!string.IsNullOrWhiteSpace(server.ApiKey) && !usePlexToken)
+    {
+        request.Headers.TryAddWithoutValidation("X-Emby-Token", server.ApiKey.Trim());
+        request.Headers.TryAddWithoutValidation("X-MediaBrowser-Token", server.ApiKey.Trim());
+    }
+
+    using var response = await client.SendAsync(request, token);
+    if (!response.IsSuccessStatusCode)
+    {
+        return null;
+    }
+
+    return await response.Content.ReadAsStringAsync(token);
+}
+
+static string BuildMediaServerUrl(string serverUrl, string relativePath, string apiKey, bool usePlexToken)
+{
+    var trimmedServer = (serverUrl ?? string.Empty).Trim().TrimEnd('/');
+    if (string.IsNullOrWhiteSpace(trimmedServer))
+    {
+        throw new InvalidOperationException("Enter a server URL.");
+    }
+
+    var relative = relativePath.TrimStart('/');
+    var separator = relative.Contains('?') ? '&' : '?';
+    var tokenParameter = usePlexToken ? "X-Plex-Token" : "api_key";
+    var url = $"{trimmedServer}/{relative}";
+    if (!string.IsNullOrWhiteSpace(apiKey))
+    {
+        url += $"{separator}{tokenParameter}={Uri.EscapeDataString(apiKey.Trim())}";
+    }
+
+    return url;
+}
+
+static IReadOnlyList<MediaServerLibraryPath> ParseEmbyVirtualFolders(
+    JsonElement root,
+    MediaServerSettings server,
+    IReadOnlyList<MediaServerPathMapping> mappings)
+{
+    var rows = new List<MediaServerLibraryPath>();
+    if (root.ValueKind != JsonValueKind.Array) return rows;
+
+    foreach (var item in root.EnumerateArray())
+    {
+        var name = GetJsonString(item, "Name") ?? GetJsonString(item, "name") ?? "Library";
+        var type = GetJsonString(item, "CollectionType") ?? GetJsonString(item, "collectionType") ?? string.Empty;
+        var locations = GetJsonStringArray(item, "Locations")
+            .Concat(GetJsonStringArray(item, "locations"))
+            .DefaultIfEmpty(GetJsonString(item, "Path") ?? GetJsonString(item, "path") ?? string.Empty);
+
+        foreach (var serverPath in locations)
+        {
+            AddDiscoveredLibrary(rows, server, mappings, name, type, serverPath);
+        }
+    }
+
+    return DistinctLibraries(rows);
+}
+
+static IReadOnlyList<MediaServerLibraryPath> ParsePhysicalPaths(
+    JsonElement root,
+    MediaServerSettings server,
+    IReadOnlyList<MediaServerPathMapping> mappings)
+{
+    var rows = new List<MediaServerLibraryPath>();
+    if (root.ValueKind != JsonValueKind.Array) return rows;
+
+    foreach (var item in root.EnumerateArray())
+    {
+        var serverPath = item.ValueKind == JsonValueKind.String
+            ? item.GetString() ?? string.Empty
+            : GetJsonString(item, "Path") ?? GetJsonString(item, "path") ?? string.Empty;
+        AddDiscoveredLibrary(rows, server, mappings, GetDisplayPathName(serverPath), string.Empty, serverPath);
+    }
+
+    return DistinctLibraries(rows);
+}
+
+static IEnumerable<string> GetJsonStringArray(JsonElement item, string propertyName)
+{
+    if (!item.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Array)
+    {
+        return Array.Empty<string>();
+    }
+
+    return property.EnumerateArray()
+        .Where(value => value.ValueKind == JsonValueKind.String)
+        .Select(value => value.GetString() ?? string.Empty)
+        .Where(value => !string.IsNullOrWhiteSpace(value));
+}
+
+static string? GetJsonString(JsonElement item, string propertyName)
+{
+    if (!item.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.String)
+    {
+        return null;
+    }
+
+    return property.GetString();
+}
+
+static void AddDiscoveredLibrary(
+    List<MediaServerLibraryPath> rows,
+    MediaServerSettings server,
+    IReadOnlyList<MediaServerPathMapping> mappings,
+    string name,
+    string type,
+    string serverPath)
+{
+    if (string.IsNullOrWhiteSpace(serverPath)) return;
+
+    var containerPath = MapMediaServerPath(serverPath, mappings);
+    rows.Add(new MediaServerLibraryPath
+    {
+        Id = CreateStableLibraryId(server.Id, serverPath),
+        Name = string.IsNullOrWhiteSpace(name) ? GetDisplayPathName(serverPath) : name.Trim(),
+        Type = type.Trim(),
+        ServerPath = serverPath.Trim(),
+        ContainerPath = containerPath,
+        IsEnabled = true
+    });
+}
+
+static IReadOnlyList<MediaServerLibraryPath> DistinctLibraries(IEnumerable<MediaServerLibraryPath> libraries)
+{
+    return libraries
+        .Where(library => !string.IsNullOrWhiteSpace(library.ContainerPath))
+        .GroupBy(library => library.ContainerPath, StringComparer.OrdinalIgnoreCase)
+        .Select(group => group.First())
+        .OrderBy(library => library.Name, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(library => library.ContainerPath, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+}
+
+static string MapMediaServerPath(string serverPath, IReadOnlyList<MediaServerPathMapping> mappings)
+{
+    var source = serverPath.Trim();
+    foreach (var mapping in mappings.OrderByDescending(mapping => mapping.ServerPathPrefix?.Length ?? 0))
+    {
+        var serverPrefix = TrimPathEnd(mapping.ServerPathPrefix);
+        var containerPrefix = TrimPathEnd(mapping.ContainerPathPrefix);
+        if (string.IsNullOrWhiteSpace(serverPrefix) || string.IsNullOrWhiteSpace(containerPrefix)) continue;
+
+        if (!TrimPathEnd(source).StartsWith(serverPrefix, StringComparison.OrdinalIgnoreCase)) continue;
+
+        var suffix = source.Length > serverPrefix.Length
+            ? source[serverPrefix.Length..].TrimStart('\\', '/')
+            : string.Empty;
+        var mapped = string.IsNullOrWhiteSpace(suffix)
+            ? containerPrefix
+            : $"{containerPrefix.TrimEnd('\\', '/')}/{suffix.Replace('\\', '/')}";
+        return CrossPlatformRuntime.NormalizeUserPath(mapped);
+    }
+
+    return CrossPlatformRuntime.NormalizeUserPath(source);
+}
+
+static string TrimPathEnd(string? path)
+    => (path ?? string.Empty).Trim().TrimEnd('\\', '/');
+
+static string GetDisplayPathName(string path)
+{
+    var clean = TrimPathEnd(path);
+    if (string.IsNullOrWhiteSpace(clean)) return "Library";
+    var slash = Math.Max(clean.LastIndexOf('/'), clean.LastIndexOf('\\'));
+    return slash >= 0 && slash < clean.Length - 1 ? clean[(slash + 1)..] : clean;
+}
+
+static string CreateStableLibraryId(string serverId, string path)
+{
+    var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{serverId}:{path}".ToLowerInvariant()));
+    return Convert.ToHexString(bytes)[..16].ToLowerInvariant();
+}
+
+static string NormalizeMediaServerType(string? type)
+{
+    return (type ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "jellyfin" => "Jellyfin",
+        "plex" => "Plex",
+        _ => "Emby"
+    };
+}
+
+static MediaServerSettings ResolveMediaServerRequest(MediaServerConnectionRequest request, AppSettings settings)
+{
+    var existing = !string.IsNullOrWhiteSpace(request.Id)
+        ? settings.MediaServers.FirstOrDefault(server => server.Id.Equals(request.Id, StringComparison.OrdinalIgnoreCase))
+        : null;
+
+    return new MediaServerSettings
+    {
+        Id = existing?.Id ?? request.Id?.Trim() ?? Guid.NewGuid().ToString("N"),
+        Name = FirstNonBlank(request.Name, existing?.Name, "Media Server"),
+        Type = NormalizeMediaServerType(FirstNonBlank(request.Type, existing?.Type, "Emby")),
+        ServerUrl = FirstNonBlank(request.ServerUrl, existing?.ServerUrl, string.Empty),
+        ApiKey = FirstNonBlank(request.ApiKey, existing?.ApiKey, string.Empty),
+        IsDefault = existing?.IsDefault ?? false,
+        Libraries = existing?.Libraries ?? new List<MediaServerLibraryPath>(),
+        LastSyncedUtc = existing?.LastSyncedUtc
+    };
+}
+
+static List<MediaServerSettings> NormalizeMediaServers(
+    IReadOnlyList<WebMediaServerRequest> requestServers,
+    IReadOnlyList<MediaServerSettings> existingServers)
+{
+    var existingById = existingServers.ToDictionary(server => server.Id, StringComparer.OrdinalIgnoreCase);
+    var servers = new List<MediaServerSettings>();
+
+    foreach (var request in requestServers)
+    {
+        var id = string.IsNullOrWhiteSpace(request.Id) ? Guid.NewGuid().ToString("N") : request.Id.Trim();
+        existingById.TryGetValue(id, out var existing);
+
+        var server = new MediaServerSettings
+        {
+            Id = id,
+            Name = FirstNonBlank(request.Name, existing?.Name, "Media Server"),
+            Type = NormalizeMediaServerType(FirstNonBlank(request.Type, existing?.Type, "Emby")),
+            ServerUrl = FirstNonBlank(request.ServerUrl, existing?.ServerUrl, string.Empty),
+            ApiKey = FirstNonBlank(request.ApiKey, existing?.ApiKey, string.Empty),
+            IsDefault = request.IsDefault,
+            Libraries = NormalizeMediaServerLibraries(request.Libraries, existing?.Libraries ?? new List<MediaServerLibraryPath>()),
+            LastSyncedUtc = existing?.LastSyncedUtc
+        };
+
+        if (string.IsNullOrWhiteSpace(server.ServerUrl)) continue;
+        servers.Add(server);
+    }
+
+    if (servers.Count > 0 && servers.All(server => !server.IsDefault))
+    {
+        servers[0].IsDefault = true;
+    }
+
+    var defaultSet = false;
+    foreach (var server in servers)
+    {
+        if (!server.IsDefault) continue;
+        if (!defaultSet)
+        {
+            defaultSet = true;
+            continue;
+        }
+
+        server.IsDefault = false;
+    }
+
+    return servers;
+}
+
+static List<MediaServerLibraryPath> NormalizeMediaServerLibraries(
+    IReadOnlyList<WebMediaServerLibraryPath>? requestLibraries,
+    IReadOnlyList<MediaServerLibraryPath> existingLibraries)
+{
+    if (requestLibraries is null)
+    {
+        return existingLibraries.ToList();
+    }
+
+    return requestLibraries
+        .Where(library => !string.IsNullOrWhiteSpace(library.ContainerPath) || !string.IsNullOrWhiteSpace(library.ServerPath))
+        .Select(library => new MediaServerLibraryPath
+        {
+            Id = string.IsNullOrWhiteSpace(library.Id) ? CreateStableLibraryId(string.Empty, library.ServerPath) : library.Id.Trim(),
+            Name = FirstNonBlank(library.Name, GetDisplayPathName(library.ContainerPath), "Library"),
+            Type = library.Type?.Trim() ?? string.Empty,
+            ServerPath = library.ServerPath?.Trim() ?? string.Empty,
+            ContainerPath = CrossPlatformRuntime.NormalizeUserPath(FirstNonBlank(library.ContainerPath, library.ServerPath, string.Empty)),
+            IsEnabled = library.IsEnabled
+        })
+        .ToList();
+}
+
+static List<MediaServerPathMapping> NormalizeMediaServerPathMappings(IReadOnlyList<WebMediaServerPathMapping> mappings)
+{
+    return mappings
+        .Select(mapping => new MediaServerPathMapping
+        {
+            ServerPathPrefix = TrimPathEnd(mapping.ServerPathPrefix),
+            ContainerPathPrefix = TrimPathEnd(mapping.ContainerPathPrefix)
+        })
+        .Where(mapping => !string.IsNullOrWhiteSpace(mapping.ServerPathPrefix) && !string.IsNullOrWhiteSpace(mapping.ContainerPathPrefix))
+        .DistinctBy(mapping => mapping.ServerPathPrefix, StringComparer.OrdinalIgnoreCase)
+        .ToList();
 }
 
 static IReadOnlyList<string> NormalizeSources(ScanRequest request, string fallback)
@@ -1800,7 +2283,9 @@ public sealed record WebSettingsRequest(
     string? MkvMergeDefaultAudioLanguages,
     string? MkvMergeDefaultSubtitleLanguages,
     IReadOnlyList<string>? WatchFolders,
-    bool? EnableLiveWatchFolderMonitoring);
+    bool? EnableLiveWatchFolderMonitoring,
+    IReadOnlyList<WebMediaServerRequest>? MediaServers,
+    IReadOnlyList<WebMediaServerPathMapping>? MediaServerPathMappings);
 
 public sealed record WebSettingsResponse(
     bool HasTvdbApiKey,
@@ -1816,7 +2301,9 @@ public sealed record WebSettingsResponse(
     string MkvMergeDefaultAudioLanguages,
     string MkvMergeDefaultSubtitleLanguages,
     IReadOnlyList<string> WatchFolders,
-    bool EnableLiveWatchFolderMonitoring)
+    bool EnableLiveWatchFolderMonitoring,
+    IReadOnlyList<WebMediaServerResponse> MediaServers,
+    IReadOnlyList<WebMediaServerPathMapping> MediaServerPathMappings)
 {
     public static WebSettingsResponse From(AppSettings settings)
         => new(
@@ -1833,8 +2320,68 @@ public sealed record WebSettingsResponse(
             MkvMergeDefaultAudioLanguages: string.IsNullOrWhiteSpace(settings.MkvMergeDefaultAudioLanguages) ? "eng,jpn" : settings.MkvMergeDefaultAudioLanguages,
             MkvMergeDefaultSubtitleLanguages: string.IsNullOrWhiteSpace(settings.MkvMergeDefaultSubtitleLanguages) ? "eng" : settings.MkvMergeDefaultSubtitleLanguages,
             WatchFolders: settings.WatchFolders,
-            EnableLiveWatchFolderMonitoring: settings.EnableLiveWatchFolderMonitoring);
+            EnableLiveWatchFolderMonitoring: settings.EnableLiveWatchFolderMonitoring,
+            MediaServers: settings.MediaServers.Select(WebMediaServerResponse.From).ToArray(),
+            MediaServerPathMappings: settings.MediaServerPathMappings
+                .Select(mapping => new WebMediaServerPathMapping(mapping.ServerPathPrefix, mapping.ContainerPathPrefix))
+                .ToArray());
 }
+
+public sealed record WebMediaServerRequest(
+    string? Id,
+    string? Name,
+    string? Type,
+    string? ServerUrl,
+    string? ApiKey,
+    bool IsDefault,
+    IReadOnlyList<WebMediaServerLibraryPath>? Libraries);
+
+public sealed record WebMediaServerResponse(
+    string Id,
+    string Name,
+    string Type,
+    string ServerUrl,
+    bool HasApiKey,
+    bool IsDefault,
+    DateTimeOffset? LastSyncedUtc,
+    IReadOnlyList<WebMediaServerLibraryPath> Libraries)
+{
+    public static WebMediaServerResponse From(MediaServerSettings server)
+        => new(
+            Id: server.Id,
+            Name: server.Name,
+            Type: string.IsNullOrWhiteSpace(server.Type) ? "Emby" : server.Type.Trim(),
+            ServerUrl: server.ServerUrl,
+            HasApiKey: !string.IsNullOrWhiteSpace(server.ApiKey),
+            IsDefault: server.IsDefault,
+            LastSyncedUtc: server.LastSyncedUtc,
+            Libraries: server.Libraries.Select(library => new WebMediaServerLibraryPath(
+                library.Id,
+                library.Name,
+                library.Type,
+                library.ServerPath,
+                library.ContainerPath,
+                library.IsEnabled)).ToArray());
+}
+
+public sealed record WebMediaServerLibraryPath(
+    string Id,
+    string Name,
+    string Type,
+    string ServerPath,
+    string ContainerPath,
+    bool IsEnabled);
+
+public sealed record WebMediaServerPathMapping(string ServerPathPrefix, string ContainerPathPrefix);
+
+public sealed record MediaServerConnectionRequest(string? Id, string? Name, string? Type, string? ServerUrl, string? ApiKey);
+
+public sealed record MediaServerTestResponse(bool Success, string Status, int LibraryCount);
+
+public sealed record MediaServerSyncResponse(
+    WebMediaServerResponse Server,
+    IReadOnlyList<WebMediaServerLibraryPath> Libraries,
+    string Status);
 
 public sealed record MuxPreviewRequest(
     IReadOnlyList<MediaFileRow>? Files,

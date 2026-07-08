@@ -48,9 +48,39 @@ public sealed class AppSettings
     public string MkvMergeDefaultSubtitleLanguages { get; set; } = "eng";
     public List<string> WatchFolders { get; set; } = new();
     public bool EnableLiveWatchFolderMonitoring { get; set; }
+    public List<MediaServerSettings> MediaServers { get; set; } = new();
+    public List<MediaServerPathMapping> MediaServerPathMappings { get; set; } = new();
     public WorkerSettings Workers { get; set; } = WorkerSettings.Defaults;
     public string SelectedThemeName { get; set; } = "Midnight";
     public List<ThemeDefinition> CustomThemes { get; set; } = new();
+}
+
+public sealed class MediaServerSettings
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = string.Empty;
+    public string Type { get; set; } = "Emby";
+    public string ServerUrl { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
+    public bool IsDefault { get; set; }
+    public List<MediaServerLibraryPath> Libraries { get; set; } = new();
+    public DateTimeOffset? LastSyncedUtc { get; set; }
+}
+
+public sealed class MediaServerLibraryPath
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string ServerPath { get; set; } = string.Empty;
+    public string ContainerPath { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; } = true;
+}
+
+public sealed class MediaServerPathMapping
+{
+    public string ServerPathPrefix { get; set; } = string.Empty;
+    public string ContainerPathPrefix { get; set; } = string.Empty;
 }
 
 public sealed class ThemeDefinition

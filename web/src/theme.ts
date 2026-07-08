@@ -5,32 +5,34 @@ export type WebTheme = {
 
 const themeStorageKey = "mkvo.web.theme";
 const customThemeStorageKey = "mkvo.web.customThemes";
+const defaultThemeName = "Dark";
+const legacyModernThemeName = "Modern";
 
 export const webThemes: WebTheme[] = [
   {
-    name: "Modern",
+    name: "Dark",
     colors: {
-      Window: "#090B0F",
-      Card: "#15181E",
-      Panel: "#1D222A",
-      Sidebar: "#111318",
-      Input: "#090B0F",
-      InputHover: "#20252D",
-      Button: "#20242C",
-      ButtonHover: "#2B313C",
-      Selected: "#252A33",
-      Border: "#2B313C",
-      BorderStrong: "#3A4350",
-      Text: "#F5F7FB",
-      Muted: "#A9B6CC",
-      Subtle: "#728198",
-      Accent: "#24D184",
-      AccentHover: "#39E695",
-      AppTitle: "#F5F7FB",
-      Success: "#24D184",
-      Warning: "#F4A261",
-      Disabled: "#5E6878",
-      Brand: "#8B5CF6"
+      Window: "#15171C",
+      Card: "#20232A",
+      Panel: "#252932",
+      Sidebar: "#1B1E25",
+      Input: "#1D2028",
+      InputHover: "#292E38",
+      Button: "#3B4252",
+      ButtonHover: "#2E3440",
+      Selected: "#2E3440",
+      Border: "#3B4252",
+      BorderStrong: "#4C566A",
+      Text: "#ECEFF4",
+      Muted: "#D8DEE9",
+      Subtle: "#A7B0C0",
+      Accent: "#BD93F9",
+      AccentHover: "#2E3440",
+      AppTitle: "#BD93F9",
+      Success: "#50FA7B",
+      Warning: "#EBCB8B",
+      Disabled: "#7D8797",
+      Brand: "#BD93F9"
     }
   },
   {
@@ -43,7 +45,7 @@ export const webThemes: WebTheme[] = [
       Input: "#282A36",
       InputHover: "#2F3140",
       Button: "#44475A",
-      ButtonHover: "#BD93F9",
+      ButtonHover: "#3A3D4F",
       Selected: "#3A3D4F",
       Border: "#343746",
       BorderStrong: "#44475A",
@@ -51,7 +53,7 @@ export const webThemes: WebTheme[] = [
       Muted: "#CFCFEA",
       Subtle: "#8B93A7",
       Accent: "#BD93F9",
-      AccentHover: "#C9A7FA",
+      AccentHover: "#3A3D4F",
       AppTitle: "#BD93F9",
       Success: "#50FA7B",
       Warning: "#FFA500",
@@ -66,19 +68,19 @@ export const webThemes: WebTheme[] = [
       Card: "#E8ECF4",
       Panel: "#EEF1F7",
       Sidebar: "#E8ECF4",
-      Input: "#F8FAFD",
+      Input: "#E8ECF4",
       InputHover: "#F1F4FA",
       Button: "#DCE3EF",
-      ButtonHover: "#C8D1E1",
+      ButtonHover: "#6D5BD0",
       Selected: "#D9DDF0",
       Border: "#CAD2E0",
       BorderStrong: "#9DA8BA",
       Text: "#1C2430",
       Muted: "#46556A",
       Subtle: "#66758A",
-      Accent: "#24A46D",
-      AccentHover: "#1E8D5E",
-      AppTitle: "#1C2430",
+      Accent: "#6D5BD0",
+      AccentHover: "#6D5BD0",
+      AppTitle: "#6D5BD0",
       Success: "#17803D",
       Warning: "#A15C00",
       Disabled: "#8792A3",
@@ -134,6 +136,7 @@ export function loadCustomWebThemes(): WebTheme[] {
 
 export function getAllWebThemes(): WebTheme[] {
   const defaultNames = new Set(webThemes.map((theme) => theme.name.toLowerCase()));
+  defaultNames.add(legacyModernThemeName.toLowerCase());
   const customThemes = loadCustomWebThemes().filter((theme) => !defaultNames.has(theme.name.toLowerCase()));
   return [...webThemes, ...customThemes];
 }
@@ -146,6 +149,7 @@ export function saveCustomWebTheme(theme: WebTheme) {
   if (!cleanTheme.name) return getAllWebThemes();
 
   const defaultNames = new Set(webThemes.map((item) => item.name.toLowerCase()));
+  defaultNames.add(legacyModernThemeName.toLowerCase());
   if (defaultNames.has(cleanTheme.name.toLowerCase())) return getAllWebThemes();
 
   const nextThemes = [
@@ -161,7 +165,7 @@ export function removeCustomWebTheme(name: string) {
   const nextThemes = loadCustomWebThemes().filter((theme) => theme.name.toLowerCase() !== name.toLowerCase());
   window.localStorage.setItem(customThemeStorageKey, JSON.stringify(nextThemes));
   if (getStoredWebThemeName().toLowerCase() === name.toLowerCase()) {
-    window.localStorage.setItem(themeStorageKey, "Modern");
+    window.localStorage.setItem(themeStorageKey, defaultThemeName);
   }
 
   return getAllWebThemes();
@@ -170,14 +174,21 @@ export function removeCustomWebTheme(name: string) {
 export function getStoredWebThemeName(): string {
   try {
     const saved = window.localStorage.getItem(themeStorageKey);
-    return getAllWebThemes().some((theme) => theme.name === saved) ? saved! : "Modern";
+    const normalized = normalizeThemeName(saved);
+    return getAllWebThemes().some((theme) => theme.name === normalized) ? normalized : defaultThemeName;
   } catch {
-    return "Modern";
+    return defaultThemeName;
   }
 }
 
 export function getWebTheme(name: string | null | undefined): WebTheme {
-  return getAllWebThemes().find((theme) => theme.name === name) ?? webThemes[0];
+  const normalized = normalizeThemeName(name);
+  return getAllWebThemes().find((theme) => theme.name === normalized) ?? webThemes[0];
+}
+
+function normalizeThemeName(name: string | null | undefined) {
+  if (!name) return defaultThemeName;
+  return name === legacyModernThemeName ? defaultThemeName : name;
 }
 
 export function applyWebTheme(name: string) {

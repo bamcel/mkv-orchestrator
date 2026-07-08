@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Database, RefreshCw, SearchCheck, Send, Square, Trash2 } from "lucide-react";
 import {
   buildLibraryAudit,
   cancelScan,
-  clearCurrentScanFiles,
   getCurrentScanFiles,
   getScanJob,
   getStatus,
@@ -12,6 +10,7 @@ import {
   LibraryAuditRow,
   startScan
 } from "../api";
+import { OutputModal } from "../components/OutputModal";
 import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
@@ -21,9 +20,30 @@ export function LibraryPage() {
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const [auditResult, setAuditResult] = useState<LibraryAuditResponse | null>(null);
   const [selectedFolder, setSelectedFolder] = useState("");
+  const [selectedSource, setSelectedSource] = useState("");
   const [scanJobId, setScanJobId] = useState<string | null>(null);
   const [showWarningsOnly, setShowWarningsOnly] = useState(false);
-  const [statusText, setStatusText] = useState("Load scanned files from Dashboard, then build the library overview.");
+  const [pendingOverviewScan, setPendingOverviewScan] = useState(false);
+  const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
+  const [statusText, setStatusText] = useState("Select a watch folder, then build the library overview.");
+
+  const sourceOptions = useMemo(() => {
+    const roots = status.data?.sourceRoots?.length
+      ? status.data.sourceRoots
+      : [{ name: "media", path: status.data?.mediaRoot ?? "/media" }];
+    const seen = new Set<string>();
+    return roots.filter((root) => {
+      const path = root.path.trim();
+      if (!path || seen.has(path.toLowerCase())) return false;
+      seen.add(path.toLowerCase());
+      return true;
+    });
+  }, [status.data]);
+
+  useEffect(() => {
+    if (selectedSource || sourceOptions.length === 0) return;
+    setSelectedSource(sourceOptions[0].path);
+  }, [selectedSource, sourceOptions]);
 
   useEffect(() => {
     if (files.length > 0 || !currentScan.data?.files.length) return;
@@ -35,35 +55,35 @@ export function LibraryPage() {
     onSuccess: (response) => {
       setAuditResult(response);
       setSelectedFolder((current) => current || response.items[0]?.folderPath || "");
-      setStatusText(`Build Overview: ${response.summary.groups} group(s), ${response.summary.issueGroups} warning group(s), ${response.summary.files} file(s).`);
+      setStatusText(`Library overview ready: ${response.summary.groups} folders, ${response.summary.files} files, ${response.summary.issueGroups} warning groups.`);
     },
-    onError: (error) => setStatusText(error instanceof Error ? error.message : "Library audit failed.")
+    onError: (error) => {
+      setPendingOverviewScan(false);
+      setStatusText(error instanceof Error ? error.message : "Library audit failed.");
+    }
   });
+
   const scanStart = useMutation({
     mutationFn: startScan,
     onSuccess: (job) => {
       setScanJobId(job.id);
-      setStatusText("Library cache build queued.");
+      setStatusText("Building library overview...");
     },
-    onError: (error) => setStatusText(error instanceof Error ? error.message : "Library cache build failed to start.")
+    onError: (error) => {
+      setPendingOverviewScan(false);
+      setStatusText(error instanceof Error ? error.message : "Library overview failed to start.");
+    }
   });
+
   const scanCancel = useMutation({
     mutationFn: cancelScan,
-    onSuccess: () => setStatusText("Cancel requested for the library cache build."),
-    onError: (error) => setStatusText(error instanceof Error ? error.message : "Cancel build failed.")
-  });
-  const clearScan = useMutation({
-    mutationFn: clearCurrentScanFiles,
     onSuccess: () => {
-      setFiles([]);
-      setAuditResult(null);
-      setSelectedFolder("");
-      setScanJobId(null);
-      setStatusText("Library scan cache cleared.");
-      currentScan.refetch();
+      setPendingOverviewScan(false);
+      setStatusText("Cancel requested for the library overview build.");
     },
-    onError: (error) => setStatusText(error instanceof Error ? error.message : "Clear library cache failed.")
+    onError: (error) => setStatusText(error instanceof Error ? error.message : "Cancel failed.")
   });
+
   const scanJob = useQuery({
     queryKey: ["library-cache-job", scanJobId],
     queryFn: () => getScanJob(scanJobId!),
@@ -74,69 +94,84 @@ export function LibraryPage() {
     }
   });
 
-  const selected = useMemo(() => {
-    return auditResult?.items.find((item) => item.folderPath === selectedFolder) ?? auditResult?.items[0] ?? null;
-  }, [auditResult, selectedFolder]);
-  const displayedItems = useMemo(() => {
-    const items = auditResult?.items ?? [];
-    return showWarningsOnly ? items.filter((item) => item.hasIssues) : items;
-  }, [auditResult, showWarningsOnly]);
-  const configuredSources = useMemo(() => {
-    const roots = status.data?.sourceRoots.map((root) => root.path).filter(Boolean) ?? [];
-    return roots.length > 0 ? roots : [status.data?.mediaRoot ?? "/media"];
-  }, [status.data]);
   const currentScanJob = scanJob.data;
-  const isCacheBuilding = scanStart.isPending || currentScanJob?.status === "Queued" || currentScanJob?.status === "Running" || currentScanJob?.status === "Canceling";
+  const isBusy = scanStart.isPending
+    || audit.isPending
+    || currentScanJob?.status === "Queued"
+    || currentScanJob?.status === "Running"
+    || currentScanJob?.status === "Canceling";
   const cacheProgressText = currentScanJob?.total
     ? `${currentScanJob.completed}/${currentScanJob.total} files`
-    : isCacheBuilding ? "preparing cache build" : "";
+    : isBusy ? "preparing" : "";
 
   useEffect(() => {
     if (!currentScanJob) return;
 
-    setFiles(currentScanJob.files);
+    if (currentScanJob.status === "Running") {
+      setFiles(currentScanJob.files);
+      setStatusText(`Building library overview: ${cacheProgressText}`);
+      return;
+    }
+
     if (currentScanJob.status === "Completed") {
-      setAuditResult(null);
-      setSelectedFolder("");
-      setStatusText(`Library cache build complete: ${currentScanJob.summary.total} file(s), ${currentScanJob.summary.mkv} MKV, ${currentScanJob.summary.mp4} MP4.`);
+      setFiles(currentScanJob.files);
+      if (pendingOverviewScan) {
+        setPendingOverviewScan(false);
+        audit.mutate(currentScanJob.files);
+      } else {
+        setStatusText(`Loaded ${currentScanJob.summary.total} file(s) from ${selectedSource || "selected source"}.`);
+      }
       currentScan.refetch();
     } else if (currentScanJob.status === "Failed") {
-      setStatusText(currentScanJob.error || "Library cache build failed.");
+      setPendingOverviewScan(false);
+      setStatusText(currentScanJob.error || "Library overview build failed.");
     } else if (currentScanJob.status === "Canceled") {
-      setStatusText("Library cache build canceled.");
-    } else if (currentScanJob.status === "Running") {
-      setStatusText(`Building library cache: ${cacheProgressText}`);
+      setPendingOverviewScan(false);
+      setStatusText("Library overview build canceled.");
     }
-  }, [currentScanJob, setFiles, currentScan, cacheProgressText]);
+  }, [audit, cacheProgressText, currentScan, currentScanJob, pendingOverviewScan, selectedSource, setFiles]);
 
-  async function refreshFiles() {
+  const selected = useMemo(() => {
+    return auditResult?.items.find((item) => item.folderPath === selectedFolder) ?? auditResult?.items[0] ?? null;
+  }, [auditResult, selectedFolder]);
+
+  const displayedItems = useMemo(() => {
+    const items = auditResult?.items ?? [];
+    return showWarningsOnly ? items.filter((item) => item.hasIssues) : items;
+  }, [auditResult, showWarningsOnly]);
+
+  const detailSummary = selected
+    ? selected.hasIssues
+      ? `Will send ${selected.issueFilePaths.length} mismatched file(s) plus template: ${selected.templateFileName}`
+      : `No warnings found. Template: ${selected.templateFileName}`
+    : "Select a folder to review standards and warnings.";
+
+  async function refreshLibrarySource() {
+    status.refetch();
     const result = await currentScan.refetch();
     if (result.data?.files.length) {
       setFiles(result.data.files);
-      setStatusText(`Loaded ${result.data.files.length} scanned file(s).`);
+      setStatusText(`Loaded ${result.data.files.length} scanned file(s) from Dashboard.`);
     } else {
-      setStatusText("No Dashboard scan is available yet.");
+      setStatusText("No Dashboard scan is available yet. Build Overview can scan the selected watch folder.");
     }
   }
 
-  function runAudit() {
-    audit.mutate(files);
-  }
+  function runBuildOverview() {
+    if (!selectedSource.trim()) {
+      setStatusText("Select a watch folder first.");
+      return;
+    }
 
-  function buildLibraryCache() {
     setAuditResult(null);
     setSelectedFolder("");
-    scanStart.mutate({ sources: configuredSources });
+    setPendingOverviewScan(true);
+    scanStart.mutate({ sources: [selectedSource] });
   }
 
-  function cancelLibraryCacheBuild() {
+  function cancelLibraryBuild() {
     if (!scanJobId) return;
     scanCancel.mutate(scanJobId);
-  }
-
-  function useTemplate(row: LibraryAuditRow) {
-    setTemplateFilePath(row.templateFilePath);
-    setStatusText(`Template file set: ${row.templateFileName}`);
   }
 
   function sendSelectionToDashboard(row: LibraryAuditRow | null) {
@@ -174,146 +209,179 @@ export function LibraryPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <SectionHeader title="Library" description="Build an overview of scanned folders and highlight metadata mismatches." />
-      <div className="grid min-h-0 flex-1 grid-cols-[370px_1fr] gap-5">
-        <section className="min-h-0 overflow-auto rounded-xl border border-border bg-card p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
-          <h2 className="text-base font-semibold">Library Build Overview</h2>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <button onClick={buildLibraryCache} disabled={isCacheBuilding || configuredSources.length === 0} className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-accent text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
-              {isCacheBuilding ? <RefreshCw size={15} className="animate-spin" /> : <Database size={15} />}
-              Build Cache
+      <SectionHeader title="Library" description="Browse cached watch-folder coverage, season groups, and items that may need attention." />
+
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_190px] gap-3">
+        <section className="rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+          <h2 className="text-base font-semibold">Library Source</h2>
+          <div className="mt-3 grid grid-cols-[120px_minmax(260px,420px)_1fr] items-center gap-3">
+            <label className="text-sm text-muted" htmlFor="library-source">Source</label>
+            <select
+              id="library-source"
+              value={selectedSource}
+              onChange={(event) => setSelectedSource(event.target.value)}
+              className="h-9 min-w-0 rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
+            >
+              {sourceOptions.map((source) => (
+                <option key={source.path} value={source.path}>{source.name}: {source.path}</option>
+              ))}
+            </select>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button type="button" onClick={refreshLibrarySource} className="h-9 whitespace-nowrap rounded-md border border-border bg-button px-5 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text">
+              Refresh
             </button>
-            <button onClick={cancelLibraryCacheBuild} disabled={!isCacheBuilding || scanCancel.isPending} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-button text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
-              <Square size={13} />
-              Cancel Build
+            <button type="button" onClick={runBuildOverview} disabled={isBusy || !selectedSource} className="h-9 whitespace-nowrap rounded-md bg-accent px-5 text-sm font-semibold text-window transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled">
+              {isBusy ? "Building..." : "Build Overview"}
             </button>
-            <button onClick={refreshFiles} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-button text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">
-              <RefreshCw size={15} />
-              Refresh Files
-            </button>
-            <button onClick={() => clearScan.mutate()} disabled={clearScan.isPending || files.length === 0} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-button text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
-              <Trash2 size={15} />
-              Clear Cache
-            </button>
-            <button onClick={runAudit} disabled={audit.isPending || files.length === 0} className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-accent text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
-              {audit.isPending ? <RefreshCw size={15} className="animate-spin" /> : <SearchCheck size={15} />}
-              Build Overview
-            </button>
-            <button onClick={() => setShowWarningsOnly((current) => !current)} disabled={!auditResult?.items.length} className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-button text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
-              {showWarningsOnly ? "Show All" : "Show Warnings"}
-            </button>
-            <button onClick={() => sendSelectionToDashboard(selected)} disabled={!selected} className="col-span-2 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-button text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
-              <Send size={15} />
+            <button type="button" onClick={() => sendSelectionToDashboard(selected)} disabled={!selected || isBusy} className="h-9 whitespace-nowrap rounded-md border border-border bg-button px-5 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled">
               Send Selection to Dashboard
             </button>
+            <button type="button" onClick={cancelLibraryBuild} disabled={!isBusy || scanCancel.isPending} className="h-9 whitespace-nowrap rounded-md border border-border bg-button px-5 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled">
+              Cancel
+            </button>
           </div>
-
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <Metric label="Files" value={auditResult?.summary.files ?? files.length} />
-            <Metric label="Groups" value={auditResult?.summary.groups ?? 0} />
-            <Metric label="Standard" value={auditResult?.summary.standardGroups ?? 0} />
-            <Metric label="Warnings" value={auditResult?.summary.issueGroups ?? 0} warning />
-          </div>
-
-          <div className="mt-5 text-sm text-success">{statusText}</div>
-          {currentScanJob?.currentSource && isCacheBuilding ? (
-            <div className="mt-2 truncate text-xs text-subtle" title={currentScanJob.currentSource}>
+          <p className="mt-3 text-sm leading-5 text-muted">
+            Builds a cached overview from the selected manual, container, or synced media-server source. Select a season or folder group to review its media profile, warnings, and files that can be sent into Dashboard for rename, merge, or track-property work.
+          </p>
+          {currentScanJob?.currentSource && isBusy ? (
+            <div className="mt-2 truncate font-mono text-xs text-subtle" title={currentScanJob.currentSource}>
               {currentScanJob.currentSource}
             </div>
           ) : null}
-          <div className="mt-3 rounded-lg border border-border bg-panel p-3 text-xs leading-5 text-muted">
-            Build Cache scans configured container roots ({configuredSources.join(", ")}). Build Overview groups the current scan and highlights track-layout differences.
+        </section>
+
+        <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+          <div className="flex shrink-0 items-center justify-between">
+            <h2 className="text-base font-semibold">Library Overview</h2>
+            <button
+              type="button"
+              onClick={() => setShowWarningsOnly((current) => !current)}
+              disabled={!auditResult?.items.length}
+              className="h-8 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+            >
+              {showWarningsOnly ? "Show All" : "Show Warnings"}
+            </button>
+          </div>
+
+          <div className="mt-3 min-h-0 flex-1 overflow-auto">
+            {displayedItems.length ? (
+              <table className="w-full min-w-[1220px] table-fixed border-collapse text-left text-sm">
+                <thead className="sticky top-0 bg-card text-xs text-text">
+                  <tr>
+                    <th className="w-24 border-b border-border px-1 py-2 font-semibold">status</th>
+                    <th className="w-[220px] border-b border-border px-1 py-2 font-semibold">title</th>
+                    <th className="w-[150px] border-b border-border px-1 py-2 font-semibold">season/folder</th>
+                    <th className="w-16 border-b border-border px-1 py-2 font-semibold">files</th>
+                    <th className="w-[220px] border-b border-border px-1 py-2 font-semibold">standard video</th>
+                    <th className="w-[260px] border-b border-border px-1 py-2 font-semibold">standard audio</th>
+                    <th className="w-[260px] border-b border-border px-1 py-2 font-semibold">standard subtitles</th>
+                    <th className="border-b border-border px-1 py-2 font-semibold">warnings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedItems.map((item) => {
+                    const visualClass = item.hasIssues ? "text-warning" : "text-text";
+                    const rowClass = selected?.folderPath === item.folderPath ? "bg-selected" : "bg-card";
+                    return (
+                      <tr key={item.folderPath} onClick={() => setSelectedFolder(item.folderPath)} className={`${rowClass} cursor-pointer hover:bg-selected`}>
+                        <TableCell className={visualClass} title={item.issueSummary}>{item.hasIssues ? "warning" : "standard"}</TableCell>
+                        <TableCell className={visualClass} title={getAuditTitle(item)}>{getAuditTitle(item)}</TableCell>
+                        <TableCell className={visualClass} title={getSeasonFolder(item)}>{getSeasonFolder(item)}</TableCell>
+                        <TableCell className={visualClass}>{item.fileCount}</TableCell>
+                        <TableCell className={visualClass} title={item.standardVideo}>{item.standardVideo}</TableCell>
+                        <TableCell className={visualClass} title={item.standardAudio}>{item.standardAudio}</TableCell>
+                        <TableCell className={visualClass} title={item.standardSubtitles}>{item.standardSubtitles}</TableCell>
+                        <TableCell className={visualClass} title={item.issueSummary}>{item.hasIssues ? item.issueSummary : ""}</TableCell>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <div className="flex h-full min-h-[320px] items-center justify-center text-sm text-subtle">
+                {auditResult ? "No folders match the current filter." : "Build an overview to inspect scanned folders."}
+              </div>
+            )}
           </div>
         </section>
 
-        <section className="flex min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
-          <h2 className="text-base font-semibold">Folder Audit</h2>
-          <div className="mt-4 grid min-h-0 flex-1 grid-cols-[minmax(430px,1fr)_minmax(360px,0.8fr)] gap-4">
-            <div className="min-h-0 overflow-auto rounded-lg border border-border bg-panel">
-              {displayedItems.length ? (
-                <table className="w-full min-w-[900px] border-collapse text-left text-sm">
-                  <thead className="sticky top-0 bg-panel text-xs uppercase tracking-wide text-subtle">
-                    <tr>
-                      <th className="border-b border-border px-3 py-2">Folder</th>
-                      <th className="border-b border-border px-3 py-2">Files</th>
-                      <th className="border-b border-border px-3 py-2">Video Standard</th>
-                      <th className="border-b border-border px-3 py-2">Audio Standard</th>
-                      <th className="border-b border-border px-3 py-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayedItems.map((item) => (
-                      <tr key={item.folderPath} onClick={() => setSelectedFolder(item.folderPath)} className={["cursor-pointer bg-card hover:bg-selected", selected?.folderPath === item.folderPath ? "bg-selected" : ""].join(" ")}>
-                        <td className="max-w-[300px] truncate border-b border-border px-3 py-2" title={item.folderPath}>{item.folderName}</td>
-                        <td className="border-b border-border px-3 py-2">{item.fileCount}</td>
-                        <td className="max-w-[220px] truncate border-b border-border px-3 py-2 text-muted" title={item.standardVideo}>{item.standardVideo}</td>
-                        <td className="max-w-[260px] truncate border-b border-border px-3 py-2 text-muted" title={item.standardAudio}>{item.standardAudio}</td>
-                        <td className={["border-b border-border px-3 py-2", item.hasIssues ? "text-warning" : "text-success"].join(" ")}>{item.hasIssues ? "Warning" : "Standard"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="flex h-full min-h-[320px] items-center justify-center text-sm text-subtle">
-                  {auditResult ? "No folders match the current filter." : "Build an overview to inspect scanned folders."}
-                </div>
-              )}
+        <section className="flex min-h-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+          <div className="flex shrink-0 items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold">Selection Details</h2>
+              <div className="mt-1 truncate text-sm text-muted" title={detailSummary}>{detailSummary}</div>
             </div>
-
-            <div className="min-h-0 overflow-auto rounded-lg border border-border bg-panel p-4">
-              <h3 className="text-sm font-semibold">Selection Details</h3>
-              {selected ? (
-                <div className="mt-4 space-y-4 text-sm">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-subtle">Folder</div>
-                    <div className="mt-1 break-all text-text">{selected.folderPath}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-subtle">Template File</div>
-                    <div className="mt-1 text-accent">{selected.templateFileName}</div>
-                    <button onClick={() => useTemplate(selected)} className="mt-2 rounded-md border border-border bg-button px-3 py-1.5 text-xs font-semibold text-muted hover:bg-button-hover hover:text-text">
-                      Use Template
-                    </button>
-                  </div>
-                  <Detail label="Video" value={selected.standardVideo} />
-                  <Detail label="Audio" value={selected.standardAudio} />
-                  <Detail label="Subtitles" value={selected.standardSubtitles} />
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-subtle">Issues</div>
-                    <div className="mt-2 space-y-2">
-                      {selected.issues.length === 0 ? (
-                        <div className="text-success">No issues found.</div>
-                      ) : selected.issues.map((issue) => (
-                        <div key={issue} className="rounded-md border border-border bg-input p-2 text-warning">{issue}</div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-4 text-sm text-subtle">Select a folder to review standards and warnings.</div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsDetailsExpanded(true)}
+              disabled={!selected}
+              className="h-8 rounded-md border border-border bg-button px-4 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+            >
+              Expand
+            </button>
           </div>
+
+          <pre className="mt-3 min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-md bg-input p-3 font-mono text-xs leading-5 text-muted">
+            {selected ? buildIssueText(selected) : "Select a folder to review standards and warnings."}
+          </pre>
+          <div className="mt-2 shrink-0 text-sm text-success">{statusText}</div>
         </section>
       </div>
+
+      {isDetailsExpanded && selected ? (
+        <OutputModal
+          title="Library Selection Details"
+          content={`${detailSummary}\n\n${buildIssueText(selected)}\n\n${statusText}`}
+          onClose={() => setIsDetailsExpanded(false)}
+        />
+      ) : null}
     </div>
   );
 }
 
-function Metric({ label, value, warning = false }: { label: string; value: number; warning?: boolean }) {
+function TableCell({ children, className, title }: { children: React.ReactNode; className?: string; title?: string }) {
   return (
-    <div className="rounded-lg border border-border bg-panel p-3">
-      <div className="text-xs font-semibold uppercase tracking-wide text-subtle">{label}</div>
-      <div className={["mt-1 text-2xl font-semibold", warning ? "text-warning" : "text-text"].join(" ")}>{value}</div>
-    </div>
+    <td className={`truncate border-b border-border px-1 py-2 ${className ?? ""}`} title={title}>
+      {children}
+    </td>
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-xs font-semibold uppercase tracking-wide text-subtle">{label}</div>
-      <div className="mt-1 break-words text-muted">{value || "unknown"}</div>
-    </div>
-  );
+function buildIssueText(row: LibraryAuditRow) {
+  if (row.issues.length === 0) return "No issues found.";
+  return row.issues.join("\n\n");
+}
+
+function getAuditTitle(row: LibraryAuditRow) {
+  const folderName = row.folderName || getBaseName(row.folderPath);
+  if (isSeasonFolder(folderName)) {
+    return getBaseName(getParentPath(row.folderPath)) || folderName;
+  }
+
+  return folderName || "root";
+}
+
+function getSeasonFolder(row: LibraryAuditRow) {
+  const folderName = row.folderName || getBaseName(row.folderPath);
+  if (isSeasonFolder(folderName)) return folderName;
+  return row.fileCount === 1 ? "movie/single folder" : folderName || "root";
+}
+
+function isSeasonFolder(value: string) {
+  return /^season\s*\d+/i.test(value.trim());
+}
+
+function getParentPath(path: string) {
+  const clean = path.trim().replace(/[\\/]+$/, "");
+  const slash = Math.max(clean.lastIndexOf("/"), clean.lastIndexOf("\\"));
+  if (slash <= 0) return "";
+  return clean.slice(0, slash);
+}
+
+function getBaseName(path: string) {
+  const clean = path.trim().replace(/[\\/]+$/, "");
+  if (!clean) return "";
+  const slash = Math.max(clean.lastIndexOf("/"), clean.lastIndexOf("\\"));
+  return slash >= 0 ? clean.slice(slash + 1) : clean;
 }

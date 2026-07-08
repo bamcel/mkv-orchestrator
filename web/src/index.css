@@ -1,27 +1,27 @@
 @import "tailwindcss";
 
 @theme {
-  --color-window: #090B0F;
-  --color-card: #15181E;
-  --color-panel: #1D222A;
-  --color-sidebar: #111318;
-  --color-input: #090B0F;
-  --color-input-hover: #20252D;
-  --color-button: #20242C;
-  --color-button-hover: #2B313C;
-  --color-selected: #252A33;
-  --color-border: #2B313C;
-  --color-border-strong: #3A4350;
-  --color-text: #F5F7FB;
-  --color-muted: #A9B6CC;
-  --color-subtle: #728198;
-  --color-accent: #24D184;
-  --color-accent-hover: #39E695;
-  --color-app-title: #F5F7FB;
-  --color-success: #24D184;
-  --color-warning: #F4A261;
-  --color-disabled: #5E6878;
-  --color-brand: #8B5CF6;
+  --color-window: #15171C;
+  --color-card: #20232A;
+  --color-panel: #252932;
+  --color-sidebar: #1B1E25;
+  --color-input: #1D2028;
+  --color-input-hover: #292E38;
+  --color-button: #3B4252;
+  --color-button-hover: #2E3440;
+  --color-selected: #2E3440;
+  --color-border: #3B4252;
+  --color-border-strong: #4C566A;
+  --color-text: #ECEFF4;
+  --color-muted: #D8DEE9;
+  --color-subtle: #A7B0C0;
+  --color-accent: #BD93F9;
+  --color-accent-hover: #2E3440;
+  --color-app-title: #BD93F9;
+  --color-success: #50FA7B;
+  --color-warning: #EBCB8B;
+  --color-disabled: #7D8797;
+  --color-brand: #BD93F9;
   --font-sans: "Segoe UI", Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -48,6 +48,27 @@ button,
 input,
 textarea {
   font: inherit;
+}
+
+button[class*="bg-button"]:not(:disabled),
+button[class*="bg-accent"]:not(:disabled) {
+  color: var(--color-text) !important;
+}
+
+button[class*="bg-accent"] {
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: var(--color-border) !important;
+}
+
+button[class*="bg-accent"]:not(:disabled) {
+  background-color: var(--color-button) !important;
+}
+
+button[class*="bg-button"]:not(:disabled):hover,
+button[class*="bg-accent"]:not(:disabled):hover {
+  background-color: var(--color-button-hover) !important;
+  color: var(--color-text) !important;
 }
 
 * {

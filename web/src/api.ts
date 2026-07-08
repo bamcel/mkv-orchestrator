@@ -130,6 +130,8 @@ export type WebSettings = {
   mkvMergeDefaultSubtitleLanguages: string;
   watchFolders: string[];
   enableLiveWatchFolderMonitoring: boolean;
+  mediaServers: WebMediaServer[];
+  mediaServerPathMappings: WebMediaServerPathMapping[];
 };
 
 export type WebSettingsRequest = {
@@ -147,6 +149,55 @@ export type WebSettingsRequest = {
   mkvMergeDefaultSubtitleLanguages?: string;
   watchFolders?: string[];
   enableLiveWatchFolderMonitoring?: boolean;
+  mediaServers?: WebMediaServerRequest[];
+  mediaServerPathMappings?: WebMediaServerPathMapping[];
+};
+
+export type WebMediaServerLibraryPath = {
+  id: string;
+  name: string;
+  type: string;
+  serverPath: string;
+  containerPath: string;
+  isEnabled: boolean;
+};
+
+export type WebMediaServer = {
+  id: string;
+  name: string;
+  type: string;
+  serverUrl: string;
+  hasApiKey: boolean;
+  isDefault: boolean;
+  lastSyncedUtc: string | null;
+  libraries: WebMediaServerLibraryPath[];
+};
+
+export type WebMediaServerRequest = {
+  id?: string;
+  name?: string;
+  type?: string;
+  serverUrl?: string;
+  apiKey?: string;
+  isDefault: boolean;
+  libraries?: WebMediaServerLibraryPath[];
+};
+
+export type WebMediaServerPathMapping = {
+  serverPathPrefix: string;
+  containerPathPrefix: string;
+};
+
+export type MediaServerTestResponse = {
+  success: boolean;
+  status: string;
+  libraryCount: number;
+};
+
+export type MediaServerSyncResponse = {
+  server: WebMediaServer;
+  libraries: WebMediaServerLibraryPath[];
+  status: string;
 };
 
 export type RenameSearchResult = {
@@ -445,6 +496,28 @@ export function saveWebSettings(request: WebSettingsRequest): Promise<WebSetting
       "Content-Type": "application/json"
     },
     body: JSON.stringify(request)
+  });
+}
+
+export function testMediaServerConnection(request: {
+  id?: string;
+  name?: string;
+  type?: string;
+  serverUrl?: string;
+  apiKey?: string;
+}): Promise<MediaServerTestResponse> {
+  return fetchJson<MediaServerTestResponse>("/api/media-servers/test", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(request)
+  });
+}
+
+export function syncMediaServerLibraries(id: string): Promise<MediaServerSyncResponse> {
+  return fetchJson<MediaServerSyncResponse>(`/api/media-servers/${encodeURIComponent(id)}/sync`, {
+    method: "POST"
   });
 }
 
