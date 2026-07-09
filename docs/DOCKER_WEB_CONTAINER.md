@@ -71,6 +71,24 @@ MKVO_CIFS_OPTIONS=username=myuser,password=mypassword,vers=3.0
 
 Do not commit `.env`, SMB usernames, SMB passwords, API keys, or server-specific paths.
 
+## Unraid Template
+
+An Unraid Docker template is available at:
+
+```text
+unraid/mkvo.xml
+```
+
+The template uses generic defaults:
+
+```text
+/mnt/user/media           -> /media
+/mnt/user/downloads/media -> /downloads
+/mnt/user/appdata/mkvo    -> /config
+```
+
+Adjust those host paths in Unraid before starting the container. The template does not include API keys, SMB credentials, or server-specific paths. TVDB/TMDB keys can be entered in the MKVO Settings page after first launch, or by using the masked optional environment variables in the Unraid template.
+
 ## Included Tools
 
 The image installs:
