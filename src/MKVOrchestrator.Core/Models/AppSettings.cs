@@ -51,7 +51,7 @@ public sealed class AppSettings
     public List<MediaServerSettings> MediaServers { get; set; } = new();
     public List<MediaServerPathMapping> MediaServerPathMappings { get; set; } = new();
     public WorkerSettings Workers { get; set; } = WorkerSettings.Defaults;
-    public string SelectedThemeName { get; set; } = "Midnight";
+    public string SelectedThemeName { get; set; } = "Dark";
     public List<ThemeDefinition> CustomThemes { get; set; } = new();
 }
 

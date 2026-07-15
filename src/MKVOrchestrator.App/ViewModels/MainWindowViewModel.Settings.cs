@@ -1,10 +1,13 @@
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System;
 using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -12,6 +15,7 @@ using Avalonia.Platform.Storage;
 using MKVOrchestrator.App.Services;
 using MKVOrchestrator.Core.Models;
 using MKVOrchestrator.Core.Services;
+using MKVOrchestrator.Core.Services.Metadata;
 
 namespace MKVOrchestrator.App.ViewModels;
 
@@ -21,6 +25,19 @@ public partial class MainWindowViewModel
     {
         WriteIndented = true
     };
+
+    private readonly MediaServerDiscoveryService _mediaServerDiscovery = new();
+
+    public ObservableCollection<MediaServerItemViewModel> MediaServers { get; } = new();
+    public IReadOnlyList<string> MediaServerTypeOptions { get; } = new[] { "Emby", "Jellyfin", "Plex" };
+
+    [ObservableProperty] private string newMediaServerName = "Media Server";
+    [ObservableProperty] private string newMediaServerType = "Emby";
+    [ObservableProperty] private string newMediaServerUrl = string.Empty;
+    [ObservableProperty] private string newMediaServerApiKey = string.Empty;
+    [ObservableProperty] private bool makeNewMediaServerDefault;
+    [ObservableProperty] private string mediaServerMappingsText = string.Empty;
+    [ObservableProperty] private string mediaServerStatusText = "No media servers configured. Manual watch folders remain the fallback.";
 
     private void LoadSettings()
     {
@@ -56,6 +73,7 @@ public partial class MainWindowViewModel
         MergeKeepSubtitleLanguages = MkvMergeDefaultSubtitleLanguages;
         WatchFolderText = string.Join(Environment.NewLine, settings.WatchFolders ?? new List<string>());
         EnableLiveWatchFolderMonitoring = settings.EnableLiveWatchFolderMonitoring;
+        LoadMediaServerSettings(settings);
         LoadThemeSettings(settings);
         _lastBrowseFolderPath = settings.LastFolderPath ?? string.Empty;
 
@@ -287,11 +305,201 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
             MkvMergeDefaultSubtitleLanguages = NormalizeLanguageListText(MkvMergeDefaultSubtitleLanguages, "eng"),
             WatchFolders = ParseWatchFolderText(WatchFolderText).ToList(),
             EnableLiveWatchFolderMonitoring = EnableLiveWatchFolderMonitoring,
+            MediaServers = MediaServers.Select(server => server.ToSettings()).ToList(),
+            MediaServerPathMappings = ParseMediaServerPathMappings(MediaServerMappingsText),
             Workers = _workerSettings.CloneNormalized(),
-            SelectedThemeName = string.IsNullOrWhiteSpace(SelectedThemeName) ? "Midnight" : SelectedThemeName,
+            SelectedThemeName = string.IsNullOrWhiteSpace(SelectedThemeName) ? "Dark" : SelectedThemeName,
             CustomThemes = _customThemes.Select(ThemeService.Clone).ToList()
         });
     }
+
+    private void LoadMediaServerSettings(AppSettings settings)
+    {
+        foreach (var server in MediaServers)
+        {
+            server.SettingsChanged -= OnMediaServerItemChanged;
+        }
+
+        MediaServers.Clear();
+        foreach (var server in settings.MediaServers ?? new List<MediaServerSettings>())
+        {
+            var item = new MediaServerItemViewModel(server);
+            item.SettingsChanged += OnMediaServerItemChanged;
+            MediaServers.Add(item);
+        }
+
+        MediaServerMappingsText = FormatMediaServerPathMappings(settings.MediaServerPathMappings);
+        MediaServerStatusText = MediaServers.Count == 0
+            ? "No media servers configured. Manual watch folders remain the fallback."
+            : $"{MediaServers.Count} media server(s) configured.";
+    }
+
+    private void OnMediaServerItemChanged(object? sender, string? propertyName)
+    {
+        if (_isLoadingSettings) return;
+
+        if (propertyName == nameof(MediaServerItemViewModel.IsDefault)
+            && sender is MediaServerItemViewModel { IsDefault: true } promoted)
+        {
+            foreach (var other in MediaServers.Where(server => !ReferenceEquals(server, promoted) && server.IsDefault))
+            {
+                other.IsDefault = false;
+            }
+        }
+
+        SaveSettingsIfReady();
+    }
+
+    partial void OnMediaServerMappingsTextChanged(string value) => SaveSettingsIfReady();
+
+    [RelayCommand]
+    private void AddMediaServer()
+    {
+        var url = NewMediaServerUrl?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            MediaServerStatusText = "Enter a media server URL before adding it.";
+            return;
+        }
+
+        var item = new MediaServerItemViewModel(new MediaServerSettings
+        {
+            Name = string.IsNullOrWhiteSpace(NewMediaServerName) ? NewMediaServerType : NewMediaServerName.Trim(),
+            Type = MediaServerDiscoveryService.NormalizeServerType(NewMediaServerType),
+            ServerUrl = url,
+            ApiKey = NewMediaServerApiKey?.Trim() ?? string.Empty,
+            IsDefault = MakeNewMediaServerDefault || MediaServers.Count == 0
+        });
+
+        if (item.IsDefault)
+        {
+            foreach (var other in MediaServers)
+            {
+                other.IsDefault = false;
+            }
+        }
+
+        item.SettingsChanged += OnMediaServerItemChanged;
+        MediaServers.Add(item);
+
+        NewMediaServerName = "Media Server";
+        NewMediaServerUrl = string.Empty;
+        NewMediaServerApiKey = string.Empty;
+        MakeNewMediaServerDefault = false;
+        MediaServerStatusText = $"Media server added: {item.Name}. Test the connection, then sync libraries.";
+        SaveSettingsIfReady();
+        Log(MediaServerStatusText);
+    }
+
+    [RelayCommand]
+    private void RemoveMediaServer(MediaServerItemViewModel? server)
+    {
+        if (server is null) return;
+
+        server.SettingsChanged -= OnMediaServerItemChanged;
+        MediaServers.Remove(server);
+        MediaServerStatusText = $"Media server removed: {server.Name}.";
+        SaveSettingsIfReady();
+        Log(MediaServerStatusText);
+    }
+
+    [RelayCommand]
+    private async Task TestMediaServerConnectionAsync(MediaServerItemViewModel? server)
+    {
+        if (server is null) return;
+        if (string.IsNullOrWhiteSpace(server.ServerUrl))
+        {
+            server.StatusText = "Enter a server URL.";
+            return;
+        }
+
+        server.IsBusy = true;
+        server.StatusText = $"Testing {server.Name}...";
+        try
+        {
+            var libraries = await _mediaServerDiscovery.DiscoverLibrariesAsync(
+                server.ToSettings(),
+                ParseMediaServerPathMappings(MediaServerMappingsText),
+                CancellationToken.None);
+            server.StatusText = libraries.Count == 0
+                ? "Connection succeeded, but no library paths were returned."
+                : $"Connection succeeded. Found {libraries.Count} library path(s).";
+        }
+        catch (Exception ex)
+        {
+            server.StatusText = $"Connection failed: {ex.Message}";
+        }
+        finally
+        {
+            server.IsBusy = false;
+        }
+
+        Log($"Media server test ({server.Name}): {server.StatusText}");
+    }
+
+    [RelayCommand]
+    private async Task SyncMediaServerLibrariesAsync(MediaServerItemViewModel? server)
+    {
+        if (server is null) return;
+        if (string.IsNullOrWhiteSpace(server.ServerUrl))
+        {
+            server.StatusText = "Enter a server URL.";
+            return;
+        }
+
+        server.IsBusy = true;
+        server.StatusText = $"Syncing libraries from {server.Name}...";
+        try
+        {
+            var libraries = await _mediaServerDiscovery.DiscoverLibrariesAsync(
+                server.ToSettings(),
+                ParseMediaServerPathMappings(MediaServerMappingsText),
+                CancellationToken.None);
+            server.ReplaceLibraries(libraries);
+            server.LastSyncedUtc = DateTimeOffset.UtcNow;
+            server.StatusText = libraries.Count == 0
+                ? "Sync complete. No library paths were returned."
+                : $"Sync complete: {libraries.Count} library path(s).";
+            SaveSettingsIfReady();
+        }
+        catch (Exception ex)
+        {
+            server.StatusText = $"Sync failed: {ex.Message}";
+        }
+        finally
+        {
+            server.IsBusy = false;
+        }
+
+        Log($"Media server sync ({server.Name}): {server.StatusText}");
+    }
+
+    private static List<MediaServerPathMapping> ParseMediaServerPathMappings(string? text)
+    {
+        var mappings = new List<MediaServerPathMapping>();
+        foreach (var line in (text ?? string.Empty).Split('\r', '\n'))
+        {
+            var separatorIndex = line.IndexOf("=>", StringComparison.Ordinal);
+            if (separatorIndex < 0) continue;
+
+            var serverPrefix = line[..separatorIndex].Trim();
+            var containerPrefix = line[(separatorIndex + 2)..].Trim();
+            if (serverPrefix.Length == 0 || containerPrefix.Length == 0) continue;
+
+            mappings.Add(new MediaServerPathMapping
+            {
+                ServerPathPrefix = serverPrefix,
+                ContainerPathPrefix = containerPrefix
+            });
+        }
+
+        return mappings;
+    }
+
+    private static string FormatMediaServerPathMappings(IEnumerable<MediaServerPathMapping>? mappings)
+        => string.Join(Environment.NewLine, (mappings ?? Enumerable.Empty<MediaServerPathMapping>())
+            .Where(mapping => !string.IsNullOrWhiteSpace(mapping.ServerPathPrefix) && !string.IsNullOrWhiteSpace(mapping.ContainerPathPrefix))
+            .Select(mapping => $"{mapping.ServerPathPrefix} => {mapping.ContainerPathPrefix}"));
 
     partial void OnSelectedThemeNameChanged(string value)
     {
@@ -385,7 +593,7 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
             return;
         }
 
-        RefreshThemeOptions("Midnight");
+        RefreshThemeOptions("Dark");
         LoadSelectedThemeIntoEditor();
         ThemeService.Apply(ThemeService.GetTheme(SelectedThemeName, _customThemes));
         ThemeStatusText = $"Removed custom theme: {selected}";
@@ -399,7 +607,7 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
             .Select(ThemeService.Clone)
             .ToList();
 
-        RefreshThemeOptions(string.IsNullOrWhiteSpace(settings.SelectedThemeName) ? "Midnight" : settings.SelectedThemeName);
+        RefreshThemeOptions(string.IsNullOrWhiteSpace(settings.SelectedThemeName) ? "Dark" : settings.SelectedThemeName);
         LoadSelectedThemeIntoEditor();
         ThemeService.Apply(ThemeService.GetTheme(SelectedThemeName, _customThemes));
     }
@@ -419,7 +627,7 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
 
         SelectedThemeName = ThemeOptions.FirstOrDefault(t => string.Equals(t, preferredTheme, StringComparison.OrdinalIgnoreCase))
             ?? ThemeOptions.FirstOrDefault()
-            ?? "Midnight";
+            ?? "Dark";
     }
 
     private void LoadSelectedThemeIntoEditor()
