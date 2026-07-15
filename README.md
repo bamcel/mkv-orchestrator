@@ -229,6 +229,12 @@ docker compose -f docker-compose.yml -f docker-compose.nas.example.yml up --buil
 
 Keep `.env` local. Do not commit API keys, SMB usernames, SMB passwords, or server-specific paths.
 
+Optional container settings (see `docs/DOCKER_WEB_CONTAINER.md` for the full list):
+
+- `PUID` / `PGID` / `UMASK` run the app as a specific user so files written to shares are not root-owned.
+- `MKVO_AUTH_USERNAME` / `MKVO_AUTH_PASSWORD` enable HTTP basic auth for the web UI and API.
+- `MKVO_SCAN_WORKERS` and `MKVO_EDIT_WORKERS` tune scan and mkvpropedit concurrency.
+
 The web container wires Dashboard, Rename, Mux / Remux, Track Properties, Library, Settings, and Logs through the single ASP.NET Core host. The web UI and desktop app should continue sharing processing behavior through `MKVOrchestrator.Core`.
 
 Publish a Windows test build:

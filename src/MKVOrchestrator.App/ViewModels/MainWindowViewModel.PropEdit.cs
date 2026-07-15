@@ -594,8 +594,9 @@ public partial class MainWindowViewModel
         error = string.Empty;
         foreach (var type in new[] { "video", "audio", "subtitles" })
         {
-            var templateCount = template.Tracks.Count(t => t.Type == type);
-            var fileCount = file.Tracks.Count(t => t.Type == type);
+            var normalizedType = MkvTrackSelector.NormalizeTrackType(type);
+            var templateCount = template.Tracks.Count(t => MkvTrackSelector.NormalizeTrackType(t.Type) == normalizedType);
+            var fileCount = file.Tracks.Count(t => MkvTrackSelector.NormalizeTrackType(t.Type) == normalizedType);
             if (templateCount != fileCount)
             {
                 error = $"track layout mismatch for {type}: template has {templateCount}, file has {fileCount}";

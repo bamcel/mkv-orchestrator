@@ -34,6 +34,7 @@ type StoredRenameState = {
   template?: string;
   selectedIndex?: string;
   scopeKey?: string;
+  scopeKeys?: string[];
   previewRows?: RenamePreviewRow[];
   previewSummary?: string;
   statusText?: string;
@@ -63,7 +64,9 @@ export function RenamePage() {
   const [searchTitle, setSearchTitle] = useState(storedRenameState.searchTitle || "");
   const [template, setTemplate] = useState(storedRenameState.template || "{series} - S{season:00}E{episode:00} - {episodeTitle}");
   const [selectedIndex, setSelectedIndex] = useState(storedRenameState.selectedIndex || "0");
-  const [scopeKey, setScopeKey] = useState(storedRenameState.scopeKey || "");
+  const [scopeKeys, setScopeKeys] = useState<string[]>(
+    storedRenameState.scopeKeys ?? (storedRenameState.scopeKey ? [storedRenameState.scopeKey] : [])
+  );
   const [previewRows, setPreviewRows] = useState<RenamePreviewRow[]>(storedRenameState.previewRows ?? []);
   const [previewSummary, setPreviewSummary] = useState(storedRenameState.previewSummary || "");
   const [statusText, setStatusText] = useState(storedRenameState.statusText || "Scan files on Dashboard, then search metadata.");
@@ -123,7 +126,7 @@ export function RenamePage() {
         searchTitle,
         template,
         selectedIndex,
-        scopeKey,
+        scopeKeys,
         previewRows,
         previewSummary,
         statusText,
@@ -133,7 +136,7 @@ export function RenamePage() {
     } catch {
       // Session restore is optional; the page still works without storage access.
     }
-  }, [provider, language, searchTitle, template, selectedIndex, scopeKey, previewRows, previewSummary, statusText, searchResults, scopeRows]);
+  }, [provider, language, searchTitle, template, selectedIndex, scopeKeys, previewRows, previewSummary, statusText, searchResults, scopeRows]);
 
   useEffect(() => {
     if (files.length > 0 || !currentScan.data?.files.length) return;
@@ -188,7 +191,7 @@ export function RenamePage() {
       setSearchResults(response.results);
       setScopeRows([]);
       setSelectedIndex("0");
-      setScopeKey("");
+      setScopeKeys([]);
       setPreviewRows([]);
       setPreviewSummary("");
       setStatusText(response.results.length > 0 ? `${provider} results: ${response.results.length}` : `No ${provider} results found.`);
@@ -213,9 +216,9 @@ export function RenamePage() {
     mutationFn: loadRenameScopes,
     onSuccess: (response, variables) => {
       setScopeRows(response.scopes);
-      const selected = response.scopes.find((scope) => scope.isSelected) ?? response.scopes[0];
-      const selectedScopeKey = selected?.key ?? "";
-      setScopeKey(selectedScopeKey);
+      const selected = response.scopes.filter((scope) => scope.isSelected).map((scope) => scope.key);
+      const selectedScopeKeys = selected.length > 0 ? selected : response.scopes.slice(0, 1).map((scope) => scope.key);
+      setScopeKeys(selectedScopeKeys);
 
       if (selectedFiles.length > 0) {
         preview.mutate({
@@ -223,7 +226,7 @@ export function RenamePage() {
           selectedResult: variables.selectedResult,
           provider: variables.provider,
           language: variables.language,
-          scopeKey: selectedScopeKey,
+          scopeKeys: selectedScopeKeys,
           template
         });
       }
@@ -350,8 +353,27 @@ export function RenamePage() {
       selectedResult,
       provider,
       language,
-      scopeKey,
+      scopeKeys,
       template
+    });
+  }
+
+  function toggleScope(key: string) {
+    setScopeKeys((current) => {
+      // "All seasons + specials" and "All seasons" are exclusive shortcuts, mirroring
+      // the desktop scope cascade; concrete season/specials scopes combine freely.
+      if (key === "All") {
+        return current.includes("All") ? [] : ["All"];
+      }
+
+      if (key === "AllRegular") {
+        return current.includes("AllRegular") ? [] : ["AllRegular"];
+      }
+
+      const withoutShortcuts = current.filter((item) => item !== "All" && item !== "AllRegular");
+      return withoutShortcuts.includes(key)
+        ? withoutShortcuts.filter((item) => item !== key)
+        : [...withoutShortcuts, key];
     });
   }
 
@@ -464,7 +486,7 @@ export function RenamePage() {
                   setSearchResults([]);
                   setScopeRows([]);
                   setSelectedIndex("0");
-                  setScopeKey("");
+                  setScopeKeys([]);
                   setPreviewRows([]);
                   setPreviewSummary("");
                 }}
@@ -480,7 +502,7 @@ export function RenamePage() {
                 onChange={(event) => {
                   setLanguage(event.target.value);
                   setScopeRows([]);
-                  setScopeKey("");
+                  setScopeKeys([]);
                   setPreviewRows([]);
                   setPreviewSummary("");
                 }}
@@ -503,7 +525,7 @@ export function RenamePage() {
             onChange={(event) => {
               setSelectedIndex(event.target.value);
               setScopeRows([]);
-              setScopeKey("");
+              setScopeKeys([]);
               setPreviewRows([]);
               setPreviewSummary("");
             }}
@@ -532,18 +554,20 @@ export function RenamePage() {
           ) : null}
 
           <label className="mt-3 block text-sm font-semibold">Episodes</label>
-          <select
-            value={scopeKey}
-            onChange={(event) => setScopeKey(event.target.value)}
-            disabled={scopeRows.length === 0}
-            className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent disabled:text-disabled"
-          >
+          <div className="mt-1.5 max-h-36 overflow-auto rounded-md border border-border bg-input px-3 py-2">
             {scopeRows.length === 0 ? (
-              <option>N/A</option>
+              <div className="text-sm text-disabled">N/A</div>
             ) : scopeRows.map((scope: RenameScopeRow) => (
-              <option key={scope.key} value={scope.key}>{scope.label}</option>
-            ))} 
-          </select>
+              <label key={scope.key} className="flex h-7 items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={scopeKeys.includes(scope.key)}
+                  onChange={() => toggleScope(scope.key)}
+                />
+                <span className="truncate" title={scope.label}>{scope.label}</span>
+              </label>
+            ))}
+          </div>
 
           <label className="mt-3 block text-sm font-semibold">Naming Template</label>
           <select

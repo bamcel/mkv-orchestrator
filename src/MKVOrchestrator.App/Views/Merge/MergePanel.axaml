@@ -110,8 +110,6 @@
                             IsChecked="{Binding MergePreserveChapters}" />
                   <CheckBox Content="Preserve attachments/fonts"
                             IsChecked="{Binding MergePreserveAttachments}" />
-                  <CheckBox Content="Use safe temp-file replacement"
-                            IsChecked="{Binding MergeUseSafeTempReplacement}" />
                 </StackPanel>
 
                 <TextBlock Grid.Row="6" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,8,0,1" />

@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { RefreshCw, Wand2 } from "lucide-react";
-import { applyMuxPlan, buildMuxPreview, getCurrentScanFiles, getWebSettings, MuxPreviewRequest, MuxPreviewResponse } from "../api";
+import {
+  buildMuxPreview,
+  cancelOperationJob,
+  getCurrentScanFiles,
+  getOperationJob,
+  getWebSettings,
+  MuxPreviewRequest,
+  MuxPreviewResponse,
+  startMuxApply
+} from "../api";
 import { OutputModal } from "../components/OutputModal";
 import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
@@ -22,7 +31,6 @@ export function MuxRemuxPage() {
   const [trackIds, setTrackIds] = useState("");
   const [preserveChapters, setPreserveChapters] = useState(true);
   const [preserveAttachments, setPreserveAttachments] = useState(true);
-  const [safeReplace, setSafeReplace] = useState(true);
   const [muxExternal, setMuxExternal] = useState(false);
   const [externalLanguage, setExternalLanguage] = useState("eng");
   const [externalFormats, setExternalFormats] = useState("srt,ass,ssa,sub,idx");
@@ -35,6 +43,7 @@ export function MuxRemuxPage() {
   const [statusText, setStatusText] = useState("Load scanned files from Dashboard, then build a preview.");
   const [settingsDefaultsApplied, setSettingsDefaultsApplied] = useState(false);
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+  const [applyJobId, setApplyJobId] = useState<string | null>(null);
 
   useEffect(() => {
     if (files.length > 0 || !currentScan.data?.files.length) return;
@@ -80,16 +89,51 @@ export function MuxRemuxPage() {
   });
 
   const apply = useMutation({
-    mutationFn: applyMuxPlan,
-    onSuccess: (response) => {
-      setPreviewResult(response);
-      setStatusText(response.status);
-      currentScan.refetch().then((result) => {
-        if (result.data?.files.length) setFiles(result.data.files);
-      });
+    mutationFn: startMuxApply,
+    onSuccess: (job) => {
+      setApplyJobId(job.id);
+      setStatusText(`Applying ${job.total} mux/remux action(s)...`);
     },
     onError: (error) => setStatusText(error instanceof Error ? error.message : "Apply failed.")
   });
+
+  const applyJob = useQuery({
+    queryKey: ["operation-job", applyJobId],
+    queryFn: () => getOperationJob(applyJobId!),
+    enabled: applyJobId !== null,
+    refetchInterval: (query) => {
+      const job = query.state.data;
+      return job && ["Completed", "Failed", "Canceled"].includes(job.status) ? false : 1000;
+    }
+  });
+
+  const cancelApply = useMutation({ mutationFn: cancelOperationJob });
+  const runningJob = applyJob.data;
+  const isApplying = apply.isPending
+    || (applyJobId !== null && runningJob !== undefined && !["Completed", "Failed", "Canceled"].includes(runningJob.status));
+
+  useEffect(() => {
+    if (!runningJob) return;
+
+    if (runningJob.status === "Running" || runningJob.status === "Queued" || runningJob.status === "Canceling") {
+      const fileInfo = runningJob.currentFile ? ` | ${runningJob.currentFile} ${runningJob.currentFilePercent}%` : "";
+      setStatusText(`Applying ${runningJob.completed + runningJob.failed + runningJob.skipped}/${runningJob.total}${fileInfo}`);
+      return;
+    }
+
+    if (runningJob.muxResult) {
+      setPreviewResult(runningJob.muxResult);
+      setStatusText(runningJob.muxResult.status);
+    } else if (runningJob.status === "Failed") {
+      setStatusText(runningJob.error || "Apply failed.");
+    }
+
+    setApplyJobId(null);
+    currentScan.refetch().then((result) => {
+      if (result.data?.files.length) setFiles(result.data.files);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runningJob?.status, runningJob?.completed, runningJob?.currentFile, runningJob?.currentFilePercent]);
 
   function buildRequest(): MuxPreviewRequest {
     return {
@@ -103,7 +147,6 @@ export function MuxRemuxPage() {
       removeTrackIdsText: trackIds,
       preserveChapters,
       preserveAttachments,
-      useSafeTempReplacement: safeReplace,
       muxMatchingExternalSubtitles: muxExternal,
       externalSubtitleLanguage: externalLanguage,
       externalSubtitleFormats: externalFormats,
@@ -146,8 +189,13 @@ export function MuxRemuxPage() {
       return;
     }
 
-    setStatusText(`Applying ${previewResult.actions.length} mux/remux action(s)...`);
     apply.mutate(buildRequest());
+  }
+
+  function cancelRunningApply() {
+    if (!applyJobId) return;
+    cancelApply.mutate(applyJobId);
+    setStatusText("Canceling mux/remux job...");
   }
 
   return (
@@ -183,7 +231,7 @@ export function MuxRemuxPage() {
               <h2 className="pt-1 text-sm font-semibold">Preservation Options</h2>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={preserveChapters} onChange={(event) => setPreserveChapters(event.target.checked)} /> Preserve chapters</label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={preserveAttachments} onChange={(event) => setPreserveAttachments(event.target.checked)} /> Preserve attachments/fonts</label>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={safeReplace} onChange={(event) => setSafeReplace(event.target.checked)} /> Use safe temp-file replacement</label>
+              <p className="text-xs leading-5 text-muted">Originals are always replaced through a safe temp file with automatic backup.</p>
             </div>
           ) : null}
 
@@ -211,9 +259,15 @@ export function MuxRemuxPage() {
               {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
               Preview
             </button>
-            <button onClick={runApply} disabled={apply.isPending || selectedMkvPaths.length === 0 || !previewResult?.actions.length} className="h-10 flex-1 rounded-md bg-accent text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
-              {apply.isPending ? "Applying..." : "Apply"}
-            </button>
+            {isApplying ? (
+              <button onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-10 flex-1 rounded-md border border-warning bg-button text-sm font-semibold text-warning hover:bg-button-hover disabled:text-disabled">
+                Cancel
+              </button>
+            ) : (
+              <button onClick={runApply} disabled={selectedMkvPaths.length === 0 || !previewResult?.actions.length} className="h-10 flex-1 rounded-md bg-accent text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
+                Apply
+              </button>
+            )}
           </div>
           <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
           <div className="mt-1 text-xs text-muted">

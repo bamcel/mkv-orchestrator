@@ -2,13 +2,13 @@ using System.Diagnostics;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using MKVOrchestrator.Core.Models;
 using MKVOrchestrator.Core.Services;
 using MKVOrchestrator.Core.Services.Cache;
+using MKVOrchestrator.Core.Services.Metadata;
 using MKVOrchestrator.Core.Services.Rename;
+using MKVOrchestrator.WebHost;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,9 +18,15 @@ builder.Services.AddSingleton<MkvPropEditCommandBuilder>();
 builder.Services.AddSingleton<MkvPropEditService>();
 builder.Services.AddSingleton<AppSettingsService>();
 builder.Services.AddSingleton<RenameBatchHistoryService>();
+builder.Services.AddSingleton<FileConflictService>();
+builder.Services.AddSingleton<MediaServerDiscoveryService>();
 builder.Services.AddSingleton<ScanJobStore>();
+builder.Services.AddSingleton<OperationJobStore>();
 builder.Services.AddSingleton<CurrentScanStore>();
 builder.Services.AddSingleton<OperationLogStore>();
+builder.Services.AddSingleton<RenameEpisodeCache>();
+builder.Services.AddSingleton<WatchFolderMonitorService>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<WatchFolderMonitorService>());
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
 
 var app = builder.Build();
@@ -33,35 +39,79 @@ if (!Directory.Exists(mediaRoot))
     Directory.CreateDirectory(mediaRoot);
 }
 
+// Prune cache rows that have not been refreshed in 30 days so the web cache
+// database does not grow without bound across container restarts.
+try
+{
+    app.Services.GetRequiredService<MkvScannerService>().Cache.RemoveOlderThan(DateTime.UtcNow.AddDays(-30));
+}
+catch
+{
+    // Cache pruning is best effort; a locked or corrupt cache should not block startup.
+}
+
+// Optional HTTP basic auth. When MKVO_AUTH_USERNAME and MKVO_AUTH_PASSWORD are
+// both set, every request except the container healthcheck requires credentials.
+var authUsername = Environment.GetEnvironmentVariable("MKVO_AUTH_USERNAME");
+var authPassword = Environment.GetEnvironmentVariable("MKVO_AUTH_PASSWORD");
+if (!string.IsNullOrWhiteSpace(authUsername) && !string.IsNullOrWhiteSpace(authPassword))
+{
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api/health"))
+        {
+            await next();
+            return;
+        }
+
+        if (IsBasicAuthAuthorized(context.Request.Headers.Authorization.ToString(), authUsername, authPassword))
+        {
+            await next();
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        context.Response.Headers.WWWAuthenticate = "Basic realm=\"MKV Orchestrator\", charset=\"UTF-8\"";
+    });
+}
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
+// Bundled tool paths and versions do not change while the container is running,
+// so resolve them once instead of spawning six processes on every status call.
+var cachedToolStatuses = new Lazy<ToolStatus[]>(() => new[]
+{
+    ToolStatus.Create("mkvmerge", "mkvmerge.exe", "mkvmerge"),
+    ToolStatus.Create("mkvpropedit", "mkvpropedit.exe", "mkvpropedit"),
+    ToolStatus.Create("mkvextract", "mkvextract.exe", "mkvextract"),
+    ToolStatus.Create("mkvinfo", "mkvinfo.exe", "mkvinfo"),
+    ToolStatus.Create("ffmpeg", "ffmpeg.exe", "ffmpeg"),
+    ToolStatus.Create("ffprobe", "ffprobe.exe", "ffprobe")
+}, LazyThreadSafetyMode.ExecutionAndPublication);
+
 app.MapGet("/api/status", (AppSettingsService settingsService) =>
 {
-    var tools = new[]
-    {
-        ToolStatus.Create("mkvmerge", "mkvmerge.exe", "mkvmerge"),
-        ToolStatus.Create("mkvpropedit", "mkvpropedit.exe", "mkvpropedit"),
-        ToolStatus.Create("mkvextract", "mkvextract.exe", "mkvextract"),
-        ToolStatus.Create("mkvinfo", "mkvinfo.exe", "mkvinfo"),
-        ToolStatus.Create("ffmpeg", "ffmpeg.exe", "ffmpeg"),
-        ToolStatus.Create("ffprobe", "ffprobe.exe", "ffprobe")
-    };
-
     return Results.Ok(new AppStatusResponse(
         Name: "MKV Orchestrator Web",
         Version: typeof(MkvScannerService).Assembly.GetName().Version?.ToString() ?? "dev",
         MediaRoot: mediaRoot,
         ConfigRoot: CrossPlatformRuntime.AppDataDirectory,
         SourceRoots: BuildStatusSourceRoots(sourceRoots, BuildSettingsSnapshot(settingsService)),
-        Tools: tools));
+        Tools: cachedToolStatuses.Value));
 });
 
-app.MapGet("/api/filesystem", (string? path) =>
+app.MapGet("/api/filesystem", (string? path, AppSettingsService settingsService) =>
 {
     var target = string.IsNullOrWhiteSpace(path)
         ? mediaRoot
         : CrossPlatformRuntime.NormalizeUserPath(path);
+
+    var allowedRoots = BuildAllowedBrowseRoots(mediaRoot, sourceRoots, settingsService.Load());
+    if (!IsPathUnderAllowedRoots(target, allowedRoots))
+    {
+        return Results.Json(new ApiError("Browsing is limited to configured media source roots."), statusCode: StatusCodes.Status403Forbidden);
+    }
 
     if (!Directory.Exists(target))
     {
@@ -72,6 +122,11 @@ app.MapGet("/api/filesystem", (string? path) =>
     {
         var directory = new DirectoryInfo(target);
         var parent = directory.Parent?.FullName;
+        if (parent is not null && !IsPathUnderAllowedRoots(parent, allowedRoots))
+        {
+            parent = null;
+        }
+
         var entries = directory.EnumerateFileSystemInfos()
             .Where(info => IsVisibleBrowseEntry(info))
             .OrderByDescending(info => info is DirectoryInfo)
@@ -90,65 +145,6 @@ app.MapGet("/api/filesystem", (string? path) =>
     {
         return Results.Problem(ex.Message, statusCode: StatusCodes.Status500InternalServerError);
     }
-});
-
-app.MapPost("/api/scan", async (ScanRequest request, MkvScannerService scanner, CurrentScanStore currentScan, CancellationToken token) =>
-{
-    var sources = NormalizeSources(request, mediaRoot);
-    var ignored = NormalizeIgnoredFolders(request.IgnoredFolderNames);
-    var mkvMergePath = string.IsNullOrWhiteSpace(request.MkvMergePath) ? "mkvmerge" : request.MkvMergePath.Trim();
-    var ffProbePath = string.IsNullOrWhiteSpace(request.FfProbePath) ? "ffprobe" : request.FfProbePath.Trim();
-
-    var started = DateTimeOffset.UtcNow;
-    var rows = new List<MediaFileRow>();
-    var skipped = new List<string>();
-
-    foreach (var source in sources)
-    {
-        token.ThrowIfCancellationRequested();
-        var normalized = CrossPlatformRuntime.NormalizeUserPath(source);
-
-        if (File.Exists(normalized))
-        {
-            if (!CrossPlatformRuntime.IsSupportedMediaPath(normalized))
-            {
-                skipped.Add($"{normalized} is not an MKV or MP4 file.");
-                continue;
-            }
-
-            var file = await scanner.ScanFileSafeAsync(normalized, mkvMergePath, ffProbePath, token);
-            rows.Add(MediaFileRow.From(file));
-            continue;
-        }
-
-        if (!Directory.Exists(normalized))
-        {
-            skipped.Add($"{normalized} was not found.");
-            continue;
-        }
-
-        await foreach (var file in scanner.ScanAsync(normalized, mkvMergePath, ffProbePath, token, ignored))
-        {
-            rows.Add(MediaFileRow.From(file));
-        }
-    }
-
-    var orderedRows = rows
-        .OrderBy(row => row.Path, StringComparer.OrdinalIgnoreCase)
-        .ToArray();
-
-    var response = new ScanResponse(
-        StartedUtc: started,
-        CompletedUtc: DateTimeOffset.UtcNow,
-        Files: orderedRows,
-        Skipped: skipped,
-        Summary: new ScanSummary(
-            Total: orderedRows.Length,
-        Mkv: orderedRows.Count(row => row.Extension.Equals(".mkv", StringComparison.OrdinalIgnoreCase)),
-        Mp4: orderedRows.Count(row => row.Extension.Equals(".mp4", StringComparison.OrdinalIgnoreCase)),
-        Failed: orderedRows.Count(row => row.Status.Contains("failed", StringComparison.OrdinalIgnoreCase))));
-    currentScan.Set(response.Files, response.Summary);
-    return Results.Ok(response);
 });
 
 app.MapPost("/api/scans", (ScanRequest request, MkvScannerService scanner, ScanJobStore jobs, CurrentScanStore currentScan) =>
@@ -191,7 +187,7 @@ app.MapGet("/api/settings", (AppSettingsService settingsService) =>
     return Results.Ok(WebSettingsResponse.From(settings));
 });
 
-app.MapPut("/api/settings", (WebSettingsRequest request, AppSettingsService settingsService) =>
+app.MapPut("/api/settings", (WebSettingsRequest request, AppSettingsService settingsService, WatchFolderMonitorService watchMonitor) =>
 {
     var settings = settingsService.Load();
     settings.TvdbApiKey = request.TvdbApiKey?.Trim() ?? settings.TvdbApiKey;
@@ -253,10 +249,11 @@ app.MapPut("/api/settings", (WebSettingsRequest request, AppSettingsService sett
     }
 
     settingsService.Save(settings);
+    _ = watchMonitor.RestartAsync();
     return Results.Ok(WebSettingsResponse.From(BuildSettingsSnapshot(settingsService)));
 });
 
-app.MapPost("/api/media-servers/test", async (MediaServerConnectionRequest request, AppSettingsService settingsService, CancellationToken token) =>
+app.MapPost("/api/media-servers/test", async (MediaServerConnectionRequest request, AppSettingsService settingsService, MediaServerDiscoveryService discovery, CancellationToken token) =>
 {
     var settings = settingsService.Load();
     var server = ResolveMediaServerRequest(request, settings);
@@ -268,7 +265,7 @@ app.MapPost("/api/media-servers/test", async (MediaServerConnectionRequest reque
 
     try
     {
-        var libraries = await DiscoverMediaServerLibrariesAsync(server, settings.MediaServerPathMappings, token);
+        var libraries = await discovery.DiscoverLibrariesAsync(server, settings.MediaServerPathMappings, token);
         var status = libraries.Count == 0
             ? "Connection succeeded, but no library paths were returned."
             : $"Connection succeeded. Found {libraries.Count} library path(s).";
@@ -280,7 +277,7 @@ app.MapPost("/api/media-servers/test", async (MediaServerConnectionRequest reque
     }
 });
 
-app.MapPost("/api/media-servers/{id}/sync", async (string id, AppSettingsService settingsService, OperationLogStore logs, CancellationToken token) =>
+app.MapPost("/api/media-servers/{id}/sync", async (string id, AppSettingsService settingsService, MediaServerDiscoveryService discovery, OperationLogStore logs, CancellationToken token) =>
 {
     var settings = settingsService.Load();
     var server = settings.MediaServers.FirstOrDefault(item => item.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
@@ -291,7 +288,7 @@ app.MapPost("/api/media-servers/{id}/sync", async (string id, AppSettingsService
 
     try
     {
-        server.Libraries = (await DiscoverMediaServerLibrariesAsync(server, settings.MediaServerPathMappings, token)).ToList();
+        server.Libraries = (await discovery.DiscoverLibrariesAsync(server, settings.MediaServerPathMappings, token)).ToList();
         server.LastSyncedUtc = DateTimeOffset.UtcNow;
         settingsService.Save(settings);
 
@@ -327,7 +324,24 @@ app.MapPost("/api/rename/search", async (RenameSearchRequest request, AppSetting
     return Results.Ok(new RenameSearchResponse(results));
 });
 
-app.MapPost("/api/rename/scopes", async (RenameScopesRequest request, AppSettingsService settingsService, CancellationToken token) =>
+app.MapPost("/api/rename/test-provider", async (RenameProviderTestRequest request, AppSettingsService settingsService, CancellationToken token) =>
+{
+    var settings = BuildSettingsSnapshot(settingsService, request.Provider, request.Language);
+    var providerName = settings.RenameLookupProvider;
+    var provider = GetRenameMetadataProvider(providerName);
+
+    try
+    {
+        var results = await provider.SearchSeriesAsync("test", settings.TvdbLanguage, settings, token);
+        return Results.Ok(new RenameProviderTestResponse(true, $"{providerName} API connection successful. Results returned: {results.Count}"));
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new RenameProviderTestResponse(false, $"{providerName} API connection failed: {ex.Message}"));
+    }
+});
+
+app.MapPost("/api/rename/scopes", async (RenameScopesRequest request, AppSettingsService settingsService, RenameEpisodeCache episodeCache, CancellationToken token) =>
 {
     if (request.SelectedResult is null)
     {
@@ -335,11 +349,11 @@ app.MapPost("/api/rename/scopes", async (RenameScopesRequest request, AppSetting
     }
 
     var settings = BuildSettingsSnapshot(settingsService, request.Provider, request.Language);
-    var episodes = await LoadRenameEpisodesAsync(request.SelectedResult, settings, token);
+    var episodes = await LoadRenameEpisodesAsync(request.SelectedResult, settings, episodeCache, token);
     return Results.Ok(new RenameScopesResponse(BuildRenameScopeOptions(episodes, request.SelectedResult)));
 });
 
-app.MapPost("/api/rename/preview", async (RenamePreviewRequest request, AppSettingsService settingsService, CancellationToken token) =>
+app.MapPost("/api/rename/preview", async (RenamePreviewRequest request, AppSettingsService settingsService, RenameEpisodeCache episodeCache, CancellationToken token) =>
 {
     if (request.SelectedResult is null)
     {
@@ -353,12 +367,10 @@ app.MapPost("/api/rename/preview", async (RenamePreviewRequest request, AppSetti
     }
 
     var settings = BuildSettingsSnapshot(settingsService, request.Provider, request.Language, request.Template);
-    var allEpisodes = await LoadRenameEpisodesAsync(request.SelectedResult, settings, token);
+    var allEpisodes = await LoadRenameEpisodesAsync(request.SelectedResult, settings, episodeCache, token);
     var scopeOptions = BuildRenameScopeOptions(allEpisodes, request.SelectedResult);
-    var selectedScope = string.IsNullOrWhiteSpace(request.ScopeKey)
-        ? scopeOptions.FirstOrDefault(option => option.IsSelected)?.Key ?? "AllRegular"
-        : request.ScopeKey.Trim();
-    var episodes = FilterRenameEpisodes(allEpisodes, selectedScope, request.SelectedResult);
+    var selectedScopes = NormalizeRenameScopeKeys(request.ScopeKeys, request.ScopeKey, scopeOptions);
+    var episodes = FilterRenameEpisodes(allEpisodes, selectedScopes, request.SelectedResult);
     var preview = BuildRenamePreviewRows(sourceFiles, episodes, request.SelectedResult, settings.RenameTemplate);
 
     return Results.Ok(new RenamePreviewResponse(
@@ -444,45 +456,30 @@ app.MapPost("/api/mux/preview", (MuxPreviewRequest request, MkvMergeService muxS
     return Results.Ok(BuildMuxPreviewResponse(plan, dryRun: true, completed: 0, failed: 0));
 });
 
-app.MapPost("/api/mux/apply", async (MuxPreviewRequest request, MkvMergeService muxService, MkvScannerService scanner, CurrentScanStore currentScan, OperationLogStore logs, CancellationToken token) =>
+app.MapPost("/api/mux/apply", (MuxPreviewRequest request, MkvMergeService muxService, MkvScannerService scanner, CurrentScanStore currentScan, OperationLogStore logs, OperationJobStore operations, FileConflictService fileConflicts) =>
 {
     var plan = BuildMuxPlan(request, muxService);
-    var completed = 0;
-    var failed = 0;
-    var resultLines = new List<string>();
+    var job = operations.Create("mux", plan.Actions.Count);
+    _ = Task.Run(() => RunMuxJobAsync(job, plan, muxService, scanner, currentScan, logs, fileConflicts));
+    return Results.Accepted($"/api/operations/{job.Id}", job.ToResponse());
+});
 
-    foreach (var action in plan.Actions)
+app.MapGet("/api/operations/{id}", (string id, OperationJobStore operations) =>
+{
+    return operations.TryGet(id, out var job)
+        ? Results.Ok(job.ToResponse())
+        : Results.NotFound(new ApiError($"Operation not found: {id}"));
+});
+
+app.MapPost("/api/operations/{id}/cancel", (string id, OperationJobStore operations) =>
+{
+    if (!operations.TryGet(id, out var job))
     {
-        token.ThrowIfCancellationRequested();
-        var result = await muxService.ExecuteRemuxAsync(ResolveToolCommand("mkvmerge"), action, token);
-        if (result.ExitCode == 0)
-        {
-            completed++;
-            resultLines.Add($"SUCCESS: {Path.GetFileName(action.SourceFilePath)} - {action.Description}");
-            if (File.Exists(action.SourceFilePath))
-            {
-                try
-                {
-                    var refreshed = await scanner.ScanFileSafeAsync(action.SourceFilePath, ResolveToolCommand("mkvmerge"), ResolveToolCommand("ffprobe"), token);
-                    currentScan.Upsert(MediaFileRow.From(refreshed));
-                }
-                catch (Exception ex)
-                {
-                    resultLines.Add($"REFRESH WARNING: {Path.GetFileName(action.SourceFilePath)} - {ex.Message}");
-                }
-            }
-        }
-        else
-        {
-            failed++;
-            var error = string.IsNullOrWhiteSpace(result.StandardError) ? $"exit code {result.ExitCode}" : result.StandardError.Trim();
-            resultLines.Add($"FAILED: {Path.GetFileName(action.SourceFilePath)} - {error}");
-        }
+        return Results.NotFound(new ApiError($"Operation not found: {id}"));
     }
 
-    var response = BuildMuxPreviewResponse(plan, dryRun: false, completed, failed, resultLines);
-    logs.Add("Mux / Remux", $"Mux/remux complete: {completed} completed, {failed} failed", response.Summary);
-    return Results.Ok(response);
+    job.Cancel();
+    return Results.Ok(job.ToResponse());
 });
 
 app.MapPost("/api/propedit/template", (PropEditTemplateRequest request) =>
@@ -503,42 +500,12 @@ app.MapPost("/api/propedit/preview", (PropEditPreviewRequest request, MkvPropEdi
     return Results.Ok(BuildPropEditPreviewResponse(plan, dryRun: true, completed: 0, failed: 0));
 });
 
-app.MapPost("/api/propedit/apply", async (PropEditPreviewRequest request, MkvPropEditCommandBuilder builder, MkvPropEditService propEdit, MkvScannerService scanner, CurrentScanStore currentScan, OperationLogStore logs, CancellationToken token) =>
+app.MapPost("/api/propedit/apply", (PropEditPreviewRequest request, MkvPropEditCommandBuilder builder, MkvPropEditService propEdit, MkvScannerService scanner, CurrentScanStore currentScan, OperationLogStore logs, OperationJobStore operations, FileConflictService fileConflicts) =>
 {
     var plan = BuildPropEditPlan(request, builder);
-    var completed = 0;
-    var failed = 0;
-    var resultLines = new List<string>();
-
-    foreach (var action in plan.Actions)
-    {
-        token.ThrowIfCancellationRequested();
-        var result = await propEdit.ExecuteAsync(ResolveToolCommand("mkvpropedit"), action, token);
-        if (result.ExitCode == 0)
-        {
-            completed++;
-            resultLines.Add($"SUCCESS: {Path.GetFileName(action.FilePath)} - {action.Description}");
-            try
-            {
-                var refreshed = await scanner.ScanFileSafeAsync(action.FilePath, ResolveToolCommand("mkvmerge"), ResolveToolCommand("ffprobe"), token);
-                currentScan.Upsert(MediaFileRow.From(refreshed));
-            }
-            catch (Exception ex)
-            {
-                resultLines.Add($"REFRESH WARNING: {Path.GetFileName(action.FilePath)} - {ex.Message}");
-            }
-        }
-        else
-        {
-            failed++;
-            var error = string.IsNullOrWhiteSpace(result.StandardError) ? $"exit code {result.ExitCode}" : result.StandardError.Trim();
-            resultLines.Add($"FAILED: {Path.GetFileName(action.FilePath)} - {error}");
-        }
-    }
-
-    var response = BuildPropEditPreviewResponse(plan, dryRun: false, completed, failed, resultLines);
-    logs.Add("Track Properties", $"Property edit complete: {completed} completed, {failed} failed", response.Summary);
-    return Results.Ok(response);
+    var job = operations.Create("propedit", plan.Actions.Count);
+    _ = Task.Run(() => RunPropEditJobAsync(job, plan, propEdit, scanner, currentScan, logs, fileConflicts));
+    return Results.Accepted($"/api/operations/{job.Id}", job.ToResponse());
 });
 
 app.MapPost("/api/library/audit", (LibraryAuditRequest request) =>
@@ -646,285 +613,17 @@ static IReadOnlyList<SourceRoot> BuildStatusSourceRoots(IReadOnlyList<SourceRoot
     return roots;
 }
 
-static async Task<IReadOnlyList<MediaServerLibraryPath>> DiscoverMediaServerLibrariesAsync(
-    MediaServerSettings server,
-    IReadOnlyList<MediaServerPathMapping> mappings,
-    CancellationToken token)
-{
-    var type = NormalizeMediaServerType(server.Type);
-    if (type == "Plex")
-    {
-        return await DiscoverPlexLibrariesAsync(server, mappings, token);
-    }
-
-    return await DiscoverEmbyLikeLibrariesAsync(server, mappings, token);
-}
-
-static async Task<IReadOnlyList<MediaServerLibraryPath>> DiscoverEmbyLikeLibrariesAsync(
-    MediaServerSettings server,
-    IReadOnlyList<MediaServerPathMapping> mappings,
-    CancellationToken token)
-{
-    var endpoints = new[]
-    {
-        "Library/VirtualFolders",
-        "emby/Library/VirtualFolders"
-    };
-
-    foreach (var endpoint in endpoints)
-    {
-        var json = await TryGetMediaServerTextAsync(server, endpoint, usePlexToken: false, token);
-        if (string.IsNullOrWhiteSpace(json)) continue;
-
-        using var document = JsonDocument.Parse(json);
-        var libraries = ParseEmbyVirtualFolders(document.RootElement, server, mappings);
-        if (libraries.Count > 0)
-        {
-            return libraries;
-        }
-    }
-
-    var pathEndpoints = new[]
-    {
-        "Library/PhysicalPaths",
-        "emby/Library/PhysicalPaths"
-    };
-
-    foreach (var endpoint in pathEndpoints)
-    {
-        var json = await TryGetMediaServerTextAsync(server, endpoint, usePlexToken: false, token);
-        if (string.IsNullOrWhiteSpace(json)) continue;
-
-        using var document = JsonDocument.Parse(json);
-        var libraries = ParsePhysicalPaths(document.RootElement, server, mappings);
-        if (libraries.Count > 0)
-        {
-            return libraries;
-        }
-    }
-
-    throw new InvalidOperationException("Connected to the server, but no library paths were returned. Check the API key permissions and server type.");
-}
-
-static async Task<IReadOnlyList<MediaServerLibraryPath>> DiscoverPlexLibrariesAsync(
-    MediaServerSettings server,
-    IReadOnlyList<MediaServerPathMapping> mappings,
-    CancellationToken token)
-{
-    var xml = await TryGetMediaServerTextAsync(server, "library/sections", usePlexToken: true, token);
-    if (string.IsNullOrWhiteSpace(xml))
-    {
-        throw new InvalidOperationException("Plex did not return library sections. Check the server URL and token.");
-    }
-
-    var document = XDocument.Parse(xml);
-    var rows = new List<MediaServerLibraryPath>();
-    foreach (var directory in document.Descendants("Directory"))
-    {
-        var name = directory.Attribute("title")?.Value ?? "Library";
-        var type = directory.Attribute("type")?.Value ?? "library";
-        foreach (var location in directory.Elements("Location"))
-        {
-            var serverPath = location.Attribute("path")?.Value ?? string.Empty;
-            AddDiscoveredLibrary(rows, server, mappings, name, type, serverPath);
-        }
-    }
-
-    return DistinctLibraries(rows);
-}
-
-static async Task<string?> TryGetMediaServerTextAsync(MediaServerSettings server, string relativePath, bool usePlexToken, CancellationToken token)
-{
-    var url = BuildMediaServerUrl(server.ServerUrl, relativePath, server.ApiKey, usePlexToken);
-    using var client = new HttpClient
-    {
-        Timeout = TimeSpan.FromSeconds(15)
-    };
-    using var request = new HttpRequestMessage(HttpMethod.Get, url);
-    if (!string.IsNullOrWhiteSpace(server.ApiKey) && !usePlexToken)
-    {
-        request.Headers.TryAddWithoutValidation("X-Emby-Token", server.ApiKey.Trim());
-        request.Headers.TryAddWithoutValidation("X-MediaBrowser-Token", server.ApiKey.Trim());
-    }
-
-    using var response = await client.SendAsync(request, token);
-    if (!response.IsSuccessStatusCode)
-    {
-        return null;
-    }
-
-    return await response.Content.ReadAsStringAsync(token);
-}
-
-static string BuildMediaServerUrl(string serverUrl, string relativePath, string apiKey, bool usePlexToken)
-{
-    var trimmedServer = (serverUrl ?? string.Empty).Trim().TrimEnd('/');
-    if (string.IsNullOrWhiteSpace(trimmedServer))
-    {
-        throw new InvalidOperationException("Enter a server URL.");
-    }
-
-    var relative = relativePath.TrimStart('/');
-    var separator = relative.Contains('?') ? '&' : '?';
-    var tokenParameter = usePlexToken ? "X-Plex-Token" : "api_key";
-    var url = $"{trimmedServer}/{relative}";
-    if (!string.IsNullOrWhiteSpace(apiKey))
-    {
-        url += $"{separator}{tokenParameter}={Uri.EscapeDataString(apiKey.Trim())}";
-    }
-
-    return url;
-}
-
-static IReadOnlyList<MediaServerLibraryPath> ParseEmbyVirtualFolders(
-    JsonElement root,
-    MediaServerSettings server,
-    IReadOnlyList<MediaServerPathMapping> mappings)
-{
-    var rows = new List<MediaServerLibraryPath>();
-    if (root.ValueKind != JsonValueKind.Array) return rows;
-
-    foreach (var item in root.EnumerateArray())
-    {
-        var name = GetJsonString(item, "Name") ?? GetJsonString(item, "name") ?? "Library";
-        var type = GetJsonString(item, "CollectionType") ?? GetJsonString(item, "collectionType") ?? string.Empty;
-        var locations = GetJsonStringArray(item, "Locations")
-            .Concat(GetJsonStringArray(item, "locations"))
-            .DefaultIfEmpty(GetJsonString(item, "Path") ?? GetJsonString(item, "path") ?? string.Empty);
-
-        foreach (var serverPath in locations)
-        {
-            AddDiscoveredLibrary(rows, server, mappings, name, type, serverPath);
-        }
-    }
-
-    return DistinctLibraries(rows);
-}
-
-static IReadOnlyList<MediaServerLibraryPath> ParsePhysicalPaths(
-    JsonElement root,
-    MediaServerSettings server,
-    IReadOnlyList<MediaServerPathMapping> mappings)
-{
-    var rows = new List<MediaServerLibraryPath>();
-    if (root.ValueKind != JsonValueKind.Array) return rows;
-
-    foreach (var item in root.EnumerateArray())
-    {
-        var serverPath = item.ValueKind == JsonValueKind.String
-            ? item.GetString() ?? string.Empty
-            : GetJsonString(item, "Path") ?? GetJsonString(item, "path") ?? string.Empty;
-        AddDiscoveredLibrary(rows, server, mappings, GetDisplayPathName(serverPath), string.Empty, serverPath);
-    }
-
-    return DistinctLibraries(rows);
-}
-
-static IEnumerable<string> GetJsonStringArray(JsonElement item, string propertyName)
-{
-    if (!item.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Array)
-    {
-        return Array.Empty<string>();
-    }
-
-    return property.EnumerateArray()
-        .Where(value => value.ValueKind == JsonValueKind.String)
-        .Select(value => value.GetString() ?? string.Empty)
-        .Where(value => !string.IsNullOrWhiteSpace(value));
-}
-
-static string? GetJsonString(JsonElement item, string propertyName)
-{
-    if (!item.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.String)
-    {
-        return null;
-    }
-
-    return property.GetString();
-}
-
-static void AddDiscoveredLibrary(
-    List<MediaServerLibraryPath> rows,
-    MediaServerSettings server,
-    IReadOnlyList<MediaServerPathMapping> mappings,
-    string name,
-    string type,
-    string serverPath)
-{
-    if (string.IsNullOrWhiteSpace(serverPath)) return;
-
-    var containerPath = MapMediaServerPath(serverPath, mappings);
-    rows.Add(new MediaServerLibraryPath
-    {
-        Id = CreateStableLibraryId(server.Id, serverPath),
-        Name = string.IsNullOrWhiteSpace(name) ? GetDisplayPathName(serverPath) : name.Trim(),
-        Type = type.Trim(),
-        ServerPath = serverPath.Trim(),
-        ContainerPath = containerPath,
-        IsEnabled = true
-    });
-}
-
-static IReadOnlyList<MediaServerLibraryPath> DistinctLibraries(IEnumerable<MediaServerLibraryPath> libraries)
-{
-    return libraries
-        .Where(library => !string.IsNullOrWhiteSpace(library.ContainerPath))
-        .GroupBy(library => library.ContainerPath, StringComparer.OrdinalIgnoreCase)
-        .Select(group => group.First())
-        .OrderBy(library => library.Name, StringComparer.OrdinalIgnoreCase)
-        .ThenBy(library => library.ContainerPath, StringComparer.OrdinalIgnoreCase)
-        .ToArray();
-}
-
-static string MapMediaServerPath(string serverPath, IReadOnlyList<MediaServerPathMapping> mappings)
-{
-    var source = serverPath.Trim();
-    foreach (var mapping in mappings.OrderByDescending(mapping => mapping.ServerPathPrefix?.Length ?? 0))
-    {
-        var serverPrefix = TrimPathEnd(mapping.ServerPathPrefix);
-        var containerPrefix = TrimPathEnd(mapping.ContainerPathPrefix);
-        if (string.IsNullOrWhiteSpace(serverPrefix) || string.IsNullOrWhiteSpace(containerPrefix)) continue;
-
-        if (!TrimPathEnd(source).StartsWith(serverPrefix, StringComparison.OrdinalIgnoreCase)) continue;
-
-        var suffix = source.Length > serverPrefix.Length
-            ? source[serverPrefix.Length..].TrimStart('\\', '/')
-            : string.Empty;
-        var mapped = string.IsNullOrWhiteSpace(suffix)
-            ? containerPrefix
-            : $"{containerPrefix.TrimEnd('\\', '/')}/{suffix.Replace('\\', '/')}";
-        return CrossPlatformRuntime.NormalizeUserPath(mapped);
-    }
-
-    return CrossPlatformRuntime.NormalizeUserPath(source);
-}
-
 static string TrimPathEnd(string? path)
-    => (path ?? string.Empty).Trim().TrimEnd('\\', '/');
+    => MediaServerDiscoveryService.TrimPathEnd(path);
 
 static string GetDisplayPathName(string path)
-{
-    var clean = TrimPathEnd(path);
-    if (string.IsNullOrWhiteSpace(clean)) return "Library";
-    var slash = Math.Max(clean.LastIndexOf('/'), clean.LastIndexOf('\\'));
-    return slash >= 0 && slash < clean.Length - 1 ? clean[(slash + 1)..] : clean;
-}
+    => MediaServerDiscoveryService.GetDisplayPathName(path);
 
 static string CreateStableLibraryId(string serverId, string path)
-{
-    var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{serverId}:{path}".ToLowerInvariant()));
-    return Convert.ToHexString(bytes)[..16].ToLowerInvariant();
-}
+    => MediaServerDiscoveryService.CreateStableLibraryId(serverId, path);
 
 static string NormalizeMediaServerType(string? type)
-{
-    return (type ?? string.Empty).Trim().ToLowerInvariant() switch
-    {
-        "jellyfin" => "Jellyfin",
-        "plex" => "Plex",
-        _ => "Emby"
-    };
-}
+    => MediaServerDiscoveryService.NormalizeServerType(type);
 
 static MediaServerSettings ResolveMediaServerRequest(MediaServerConnectionRequest request, AppSettings settings)
 {
@@ -1125,7 +824,6 @@ static MkvMergeRemuxPlan BuildMuxPlan(MuxPreviewRequest request, MkvMergeService
         request.RemoveTrackIdsText ?? string.Empty,
         request.PreserveChapters,
         request.PreserveAttachments,
-        request.UseSafeTempReplacement,
         request.MuxMatchingExternalSubtitles,
         request.ExternalSubtitleLanguage ?? "eng",
         "{tag}",
@@ -1658,6 +1356,276 @@ static WorkerSettings ResolveWebWorkerSettings()
     return new WorkerSettings { MaxScanWorkers = workers }.Normalize();
 }
 
+static int ResolveWebEditWorkers()
+{
+    var configured = Environment.GetEnvironmentVariable("MKVO_EDIT_WORKERS");
+    var workers = int.TryParse(configured, out var value) ? value : 2;
+    return new WorkerSettings { MaxEditWorkers = workers }.Normalize().MaxEditWorkers;
+}
+
+static async Task RunMuxJobAsync(
+    OperationJobState job,
+    MkvMergeRemuxPlan plan,
+    MkvMergeService muxService,
+    MkvScannerService scanner,
+    CurrentScanStore currentScan,
+    OperationLogStore logs,
+    FileConflictService fileConflicts)
+{
+    job.MarkRunning();
+    var resultLines = new List<string>();
+
+    try
+    {
+        foreach (var action in plan.Actions)
+        {
+            job.Token.ThrowIfCancellationRequested();
+            var fileName = Path.GetFileName(action.SourceFilePath);
+            job.SetCurrentFile(fileName);
+
+            // Pre-flight conflict check so locked or missing files skip cleanly
+            // instead of surfacing as raw tool failures.
+            var conflict = fileConflicts.CheckReadableWritable(action.SourceFilePath, requireWrite: true);
+            if (!conflict.CanProceed)
+            {
+                job.RecordSkipped();
+                var line = $"SKIPPED: {fileName} - {conflict.Reason}";
+                resultLines.Add(line);
+                job.AddLine(line);
+                continue;
+            }
+
+            var result = await muxService.ExecuteRemuxAsync(
+                ResolveToolCommand("mkvmerge"),
+                action,
+                percent => job.SetCurrentFilePercent(percent),
+                job.Token);
+
+            if (result.ExitCode == 0)
+            {
+                job.RecordCompleted();
+                var line = $"SUCCESS: {fileName} - {action.Description}";
+                resultLines.Add(line);
+                job.AddLine(line);
+                if (File.Exists(action.SourceFilePath))
+                {
+                    try
+                    {
+                        var refreshed = await scanner.ScanFileSafeAsync(action.SourceFilePath, ResolveToolCommand("mkvmerge"), ResolveToolCommand("ffprobe"), job.Token);
+                        currentScan.Upsert(MediaFileRow.From(refreshed));
+                    }
+                    catch (Exception ex)
+                    {
+                        var warning = $"REFRESH WARNING: {fileName} - {ex.Message}";
+                        resultLines.Add(warning);
+                        job.AddLine(warning);
+                    }
+                }
+            }
+            else
+            {
+                job.RecordFailed();
+                var error = string.IsNullOrWhiteSpace(result.StandardError) ? $"exit code {result.ExitCode}" : result.StandardError.Trim();
+                var line = $"FAILED: {fileName} - {error}";
+                resultLines.Add(line);
+                job.AddLine(line);
+            }
+        }
+
+        var response = BuildMuxPreviewResponse(plan, dryRun: false, job.Completed, job.Failed, resultLines);
+        logs.Add("Mux / Remux", $"Mux/remux complete: {job.Completed} completed, {job.Failed} failed, {job.Skipped} skipped", response.Summary);
+        job.MarkCompleted(response, null);
+    }
+    catch (OperationCanceledException)
+    {
+        resultLines.Add("CANCELED: remaining actions were not executed.");
+        var response = BuildMuxPreviewResponse(plan, dryRun: false, job.Completed, job.Failed, resultLines);
+        logs.Add("Mux / Remux", $"Mux/remux canceled: {job.Completed} completed, {job.Failed} failed", response.Summary);
+        job.MarkCanceled(response, null);
+    }
+    catch (Exception ex)
+    {
+        logs.Add("Mux / Remux", "Mux/remux failed", ex.Message);
+        job.MarkFailed(ex.Message);
+    }
+}
+
+static async Task RunPropEditJobAsync(
+    OperationJobState job,
+    WebPropEditPlan plan,
+    MkvPropEditService propEdit,
+    MkvScannerService scanner,
+    CurrentScanStore currentScan,
+    OperationLogStore logs,
+    FileConflictService fileConflicts)
+{
+    job.MarkRunning();
+    var resultLines = new List<string>();
+    var linesGate = new object();
+
+    void AddResultLine(string line)
+    {
+        lock (linesGate)
+        {
+            resultLines.Add(line);
+        }
+
+        job.AddLine(line);
+    }
+
+    try
+    {
+        var editWorkers = ResolveWebEditWorkers();
+        var processed = 0;
+
+        await Parallel.ForEachAsync(
+            plan.Actions,
+            new ParallelOptions
+            {
+                CancellationToken = job.Token,
+                MaxDegreeOfParallelism = editWorkers
+            },
+            async (action, token) =>
+            {
+                var fileName = Path.GetFileName(action.FilePath);
+
+                var conflict = fileConflicts.CheckReadableWritable(action.FilePath, requireWrite: true);
+                if (!conflict.CanProceed)
+                {
+                    job.RecordSkipped();
+                    AddResultLine($"SKIPPED: {fileName} - {conflict.Reason}");
+                    return;
+                }
+
+                var result = await propEdit.ExecuteAsync(ResolveToolCommand("mkvpropedit"), action, token);
+                var done = Interlocked.Increment(ref processed);
+                job.SetCurrentFile($"{done}/{plan.Actions.Count}");
+
+                if (result.ExitCode == 0)
+                {
+                    job.RecordCompleted();
+                    AddResultLine($"SUCCESS: {fileName} - {action.Description}");
+                    try
+                    {
+                        var refreshed = await scanner.ScanFileSafeAsync(action.FilePath, ResolveToolCommand("mkvmerge"), ResolveToolCommand("ffprobe"), token);
+                        currentScan.Upsert(MediaFileRow.From(refreshed));
+                    }
+                    catch (Exception ex)
+                    {
+                        AddResultLine($"REFRESH WARNING: {fileName} - {ex.Message}");
+                    }
+                }
+                else
+                {
+                    job.RecordFailed();
+                    var error = string.IsNullOrWhiteSpace(result.StandardError) ? $"exit code {result.ExitCode}" : result.StandardError.Trim();
+                    AddResultLine($"FAILED: {fileName} - {error}");
+                }
+            });
+
+        var response = BuildPropEditPreviewResponse(plan, dryRun: false, job.Completed, job.Failed, resultLines);
+        logs.Add("Track Properties", $"Property edit complete: {job.Completed} completed, {job.Failed} failed, {job.Skipped} skipped", response.Summary);
+        job.MarkCompleted(null, response);
+    }
+    catch (OperationCanceledException)
+    {
+        AddResultLine("CANCELED: remaining edits were not executed.");
+        var response = BuildPropEditPreviewResponse(plan, dryRun: false, job.Completed, job.Failed, resultLines);
+        logs.Add("Track Properties", $"Property edit canceled: {job.Completed} completed, {job.Failed} failed", response.Summary);
+        job.MarkCanceled(null, response);
+    }
+    catch (Exception ex)
+    {
+        logs.Add("Track Properties", "Property edit failed", ex.Message);
+        job.MarkFailed(ex.Message);
+    }
+}
+
+static bool IsBasicAuthAuthorized(string authorizationHeader, string expectedUsername, string expectedPassword)
+{
+    const string scheme = "Basic ";
+    if (string.IsNullOrWhiteSpace(authorizationHeader) || !authorizationHeader.StartsWith(scheme, StringComparison.OrdinalIgnoreCase))
+    {
+        return false;
+    }
+
+    string decoded;
+    try
+    {
+        decoded = Encoding.UTF8.GetString(Convert.FromBase64String(authorizationHeader[scheme.Length..].Trim()));
+    }
+    catch (FormatException)
+    {
+        return false;
+    }
+
+    var separator = decoded.IndexOf(':');
+    if (separator < 0) return false;
+
+    var user = decoded[..separator];
+    var password = decoded[(separator + 1)..];
+
+    // Constant-time comparison so credential checking does not leak length/prefix timing.
+    var userMatch = CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(user), Encoding.UTF8.GetBytes(expectedUsername));
+    var passwordMatch = CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(password), Encoding.UTF8.GetBytes(expectedPassword));
+    return userMatch && passwordMatch;
+}
+
+static IReadOnlyList<string> BuildAllowedBrowseRoots(string mediaRoot, IReadOnlyList<SourceRoot> sourceRoots, AppSettings settings)
+{
+    var roots = new List<string> { mediaRoot };
+    roots.AddRange(sourceRoots.Select(root => root.Path));
+    roots.AddRange(settings.WatchFolders);
+    roots.AddRange(settings.MediaServers
+        .SelectMany(server => server.Libraries)
+        .Where(library => library.IsEnabled)
+        .Select(library => library.ContainerPath));
+
+    return roots
+        .Select(CrossPlatformRuntime.NormalizeUserPath)
+        .Where(root => !string.IsNullOrWhiteSpace(root))
+        .Distinct(CrossPlatformRuntime.PathComparer)
+        .ToArray();
+}
+
+static bool IsPathUnderAllowedRoots(string path, IReadOnlyList<string> allowedRoots)
+{
+    if (string.IsNullOrWhiteSpace(path)) return false;
+
+    string fullPath;
+    try
+    {
+        fullPath = Path.GetFullPath(CrossPlatformRuntime.NormalizeUserPath(path)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+    catch
+    {
+        return false;
+    }
+
+    var comparison = CrossPlatformRuntime.IsWindows || CrossPlatformRuntime.IsMacOS
+        ? StringComparison.OrdinalIgnoreCase
+        : StringComparison.Ordinal;
+
+    foreach (var root in allowedRoots)
+    {
+        string fullRoot;
+        try
+        {
+            fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+        catch
+        {
+            continue;
+        }
+
+        if (fullPath.Equals(fullRoot, comparison)) return true;
+        if (fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, comparison)) return true;
+        if (fullPath.StartsWith(fullRoot + Path.AltDirectorySeparatorChar, comparison)) return true;
+    }
+
+    return false;
+}
+
 static AppSettings BuildSettingsSnapshot(
     AppSettingsService settingsService,
     string? provider = null,
@@ -1686,11 +1654,15 @@ static IRenameMetadataProvider GetRenameMetadataProvider(string? provider)
 static async Task<IReadOnlyList<TvdbEpisode>> LoadRenameEpisodesAsync(
     TvdbSeriesSearchResult selectedResult,
     AppSettings settings,
+    RenameEpisodeCache episodeCache,
     CancellationToken token)
 {
-    var provider = GetRenameMetadataProvider(settings.RenameLookupProvider);
-    var episodes = await provider.GetEpisodesAsync(selectedResult, settings.TvdbLanguage, settings, token);
-    return OrderRenameEpisodes(episodes).ToArray();
+    return await episodeCache.GetOrLoadAsync(settings.RenameLookupProvider, selectedResult, settings.TvdbLanguage, async () =>
+    {
+        var provider = GetRenameMetadataProvider(settings.RenameLookupProvider);
+        var episodes = await provider.GetEpisodesAsync(selectedResult, settings.TvdbLanguage, settings, token);
+        return OrderRenameEpisodes(episodes).ToArray();
+    });
 }
 
 static IReadOnlyList<RenameScopeRow> BuildRenameScopeOptions(IReadOnlyList<TvdbEpisode> episodes, TvdbSeriesSearchResult selectedResult)
@@ -1727,9 +1699,27 @@ static IReadOnlyList<RenameScopeRow> BuildRenameScopeOptions(IReadOnlyList<TvdbE
     return scopes;
 }
 
+static IReadOnlyList<string> NormalizeRenameScopeKeys(
+    IReadOnlyList<string>? scopeKeys,
+    string? legacyScopeKey,
+    IReadOnlyList<RenameScopeRow> scopeOptions)
+{
+    var keys = (scopeKeys ?? Array.Empty<string>())
+        .Concat(string.IsNullOrWhiteSpace(legacyScopeKey) ? Array.Empty<string>() : new[] { legacyScopeKey })
+        .Select(key => key?.Trim() ?? string.Empty)
+        .Where(key => !string.IsNullOrWhiteSpace(key))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    if (keys.Length > 0) return keys;
+
+    var defaultKey = scopeOptions.FirstOrDefault(option => option.IsSelected)?.Key ?? "AllRegular";
+    return new[] { defaultKey };
+}
+
 static IReadOnlyList<TvdbEpisode> FilterRenameEpisodes(
     IReadOnlyList<TvdbEpisode> episodes,
-    string scopeKey,
+    IReadOnlyList<string> scopeKeys,
     TvdbSeriesSearchResult selectedResult)
 {
     if (selectedResult.Format.Equals("Movie", StringComparison.OrdinalIgnoreCase))
@@ -1737,17 +1727,35 @@ static IReadOnlyList<TvdbEpisode> FilterRenameEpisodes(
         return episodes.Take(1).ToArray();
     }
 
-    var filtered = scopeKey switch
+    if (scopeKeys.Any(key => key.Equals("All", StringComparison.OrdinalIgnoreCase)))
     {
-        "All" => episodes,
-        "Specials" => episodes.Where(episode => episode.SeasonNumber == 0),
-        var value when value.StartsWith("Season:", StringComparison.OrdinalIgnoreCase)
-            && int.TryParse(value["Season:".Length..], out var season)
-            => episodes.Where(episode => episode.SeasonNumber == season),
-        _ => episodes.Where(episode => episode.SeasonNumber > 0)
-    };
+        return OrderRenameEpisodes(episodes).ToArray();
+    }
 
-    return OrderRenameEpisodes(filtered).ToArray();
+    // Multiple scopes act as a union, mirroring the desktop checkbox behavior
+    // (e.g. Season 2 + Season 3, or all regular seasons plus specials).
+    var selected = new HashSet<TvdbEpisode>();
+    foreach (var key in scopeKeys)
+    {
+        IEnumerable<TvdbEpisode> matched = key switch
+        {
+            var value when value.Equals("AllRegular", StringComparison.OrdinalIgnoreCase)
+                => episodes.Where(episode => episode.SeasonNumber > 0),
+            var value when value.Equals("Specials", StringComparison.OrdinalIgnoreCase)
+                => episodes.Where(episode => episode.SeasonNumber == 0),
+            var value when value.StartsWith("Season:", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(value["Season:".Length..], out var season)
+                => episodes.Where(episode => episode.SeasonNumber == season),
+            _ => episodes.Where(episode => episode.SeasonNumber > 0)
+        };
+
+        foreach (var episode in matched)
+        {
+            selected.Add(episode);
+        }
+    }
+
+    return OrderRenameEpisodes(selected).ToArray();
 }
 
 static IReadOnlyList<RenameSourceFile> BuildRenameSourceFiles(IReadOnlyList<MediaFileRow> rows)
@@ -1769,7 +1777,7 @@ static IReadOnlyList<RenameSourceFile> BuildRenameSourceFiles(IReadOnlyList<Medi
         .OrderBy(file => file.SortKey.Season)
         .ThenBy(file => file.SortKey.Episode)
         .ThenBy(file => file.SortKey.Part)
-        .ThenBy(file => file.SortKey.RelativeName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(file => file.SortKey.RelativeName, NaturalStringComparer.Instance)
         .ToArray();
 }
 
@@ -2012,28 +2020,7 @@ static string BuildRenameFileName(
     string template,
     bool isMovie)
 {
-    var activeTemplate = string.IsNullOrWhiteSpace(template)
-        ? "{series} - S{season:00}E{episode:00} - {episodeTitle}"
-        : template.Trim();
-    if (isMovie && activeTemplate.Equals("{series} - S{season:00}E{episode:00} - {episodeTitle}", StringComparison.OrdinalIgnoreCase))
-    {
-        activeTemplate = "{title} ({year})";
-    }
-
-    var absolute = ((Math.Max(episode.SeasonNumber, 1) - 1) * 1000) + episode.EpisodeNumber;
-    var value = activeTemplate
-        .Replace("{title}", title, StringComparison.OrdinalIgnoreCase)
-        .Replace("{series}", title, StringComparison.OrdinalIgnoreCase)
-        .Replace("{year}", year?.ToString() ?? string.Empty, StringComparison.OrdinalIgnoreCase)
-        .Replace("{episodeTitle}", episode.Name, StringComparison.OrdinalIgnoreCase)
-        .Replace("{season:00}", episode.SeasonNumber.ToString("00"), StringComparison.OrdinalIgnoreCase)
-        .Replace("{episode:00}", episode.EpisodeNumber.ToString("00"), StringComparison.OrdinalIgnoreCase)
-        .Replace("{season}", episode.SeasonNumber.ToString(), StringComparison.OrdinalIgnoreCase)
-        .Replace("{episode}", episode.EpisodeNumber.ToString(), StringComparison.OrdinalIgnoreCase)
-        .Replace("{absolute:000}", absolute.ToString("000"), StringComparison.OrdinalIgnoreCase)
-        .Replace("{absolute}", absolute.ToString(), StringComparison.OrdinalIgnoreCase);
-
-    return SanitizeFileName(value.Trim()) + Path.GetExtension(sourcePath);
+    return RenameFileNameBuilder.Build(sourcePath, title, year, episode, template, isMovie);
 }
 
 static string BuildRenameSummary(IReadOnlyList<RenamePreviewRow> rows, int filesChanged, int filesSkipped, bool dryRun)
@@ -2144,18 +2131,6 @@ static string CleanSeriesTitle(string value)
     return value;
 }
 
-static string SanitizeFileName(string value)
-{
-    foreach (var invalid in Path.GetInvalidFileNameChars())
-    {
-        value = value.Replace(invalid, '-');
-    }
-
-    value = Regex.Replace(value, @"\s+", " ").Trim();
-    value = Regex.Replace(value, @"\s+-\s+", " - ").Trim();
-    return value.TrimEnd('.', ' ');
-}
-
 static int ParseSortNumber(string value, int fallback)
     => int.TryParse(value, out var parsed) ? parsed : fallback;
 
@@ -2240,13 +2215,6 @@ public sealed record ScanRequest(
     IReadOnlyList<string>? IgnoredFolderNames,
     string? MkvMergePath,
     string? FfProbePath);
-
-public sealed record ScanResponse(
-    DateTimeOffset StartedUtc,
-    DateTimeOffset CompletedUtc,
-    IReadOnlyList<MediaFileRow> Files,
-    IReadOnlyList<string> Skipped,
-    ScanSummary Summary);
 
 public sealed record ScanSummary(int Total, int Mkv, int Mp4, int Failed);
 
@@ -2394,7 +2362,6 @@ public sealed record MuxPreviewRequest(
     string? RemoveTrackIdsText,
     bool PreserveChapters,
     bool PreserveAttachments,
-    bool UseSafeTempReplacement,
     bool MuxMatchingExternalSubtitles,
     string? ExternalSubtitleLanguage,
     string? ExternalSubtitleFormats,
@@ -2522,7 +2489,12 @@ public sealed record RenamePreviewRequest(
     string? Provider,
     string? Language,
     string? ScopeKey,
+    IReadOnlyList<string>? ScopeKeys,
     string? Template);
+
+public sealed record RenameProviderTestRequest(string? Provider, string? Language);
+
+public sealed record RenameProviderTestResponse(bool Success, string Status);
 
 public sealed record RenamePreviewResponse(
     IReadOnlyList<RenamePreviewRow> Items,

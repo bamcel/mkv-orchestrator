@@ -10,7 +10,6 @@ public sealed class MkvMergeRemuxAction
 {
     public string SourceFilePath { get; set; } = string.Empty;
     public string TempOutputPath { get; set; } = string.Empty;
-    public bool UseSafeTempReplacement { get; set; } = true;
     public string Description { get; set; } = string.Empty;
     public string ToolName { get; set; } = "mkvmerge";
     public string Operation { get; set; } = "remux";

@@ -275,7 +275,6 @@ public sealed class MkvMergeService
         string removeTrackIdsText,
         bool preserveChapters,
         bool preserveAttachments,
-        bool useSafeTempReplacement,
         bool muxMatchingExternalSubtitles,
         string externalSubtitleLanguage,
         string externalSubtitleTrackName,
@@ -312,8 +311,7 @@ public sealed class MkvMergeService
                 removeUnwantedTrackIds,
                 parsedRemoveTrackIds,
                 preserveChapters,
-                preserveAttachments,
-                useSafeTempReplacement);
+                preserveAttachments);
 
             if (action is not null)
             {
@@ -329,8 +327,7 @@ public sealed class MkvMergeService
                     externalSubtitleTrackName,
                     externalSubtitleFormats,
                     preserveExternalSubtitleFiles,
-                    skipMuxIfSubtitleAlreadyExists,
-                    useSafeTempReplacement);
+                    skipMuxIfSubtitleAlreadyExists);
 
                 if (muxAction is not null)
                 {
@@ -505,8 +502,7 @@ public sealed class MkvMergeService
         string trackName,
         string formats,
         bool preserveExternalSubtitleFile,
-        bool skipIfSubtitleAlreadyExists,
-        bool useSafeTempReplacement)
+        bool skipIfSubtitleAlreadyExists)
     {
         var normalizedLanguage = string.IsNullOrWhiteSpace(language) ? "eng" : language.Trim().ToLowerInvariant();
         var subtitleInputs = FindMatchingExternalSubtitles(file.FilePath, formats)
@@ -547,7 +543,6 @@ public sealed class MkvMergeService
         {
             SourceFilePath = file.FilePath,
             TempOutputPath = tempPath,
-            UseSafeTempReplacement = useSafeTempReplacement,
             Description = BuildExternalSubtitleDescription(subtitleInputs),
             ToolName = "mkvmerge",
             Operation = "mux-external-subtitle",
@@ -581,7 +576,6 @@ public sealed class MkvMergeService
             {
                 SourceFilePath = file.FilePath,
                 TempOutputPath = outputPath,
-                UseSafeTempReplacement = false,
                 Description = $"Extract subtitle #{track.MkvMergeId}: {FormatTrackLabel(track)} -> {Path.GetFileName(outputPath)}",
                 ToolName = "mkvextract",
                 Operation = "extract-subtitle",
@@ -799,8 +793,7 @@ public sealed class MkvMergeService
         bool removeUnwantedTrackIds,
         ISet<int> removeTrackIds,
         bool preserveChapters,
-        bool preserveAttachments,
-        bool useSafeTempReplacement)
+        bool preserveAttachments)
     {
         var descriptions = new List<string>();
         var args = new List<string>();
@@ -874,7 +867,6 @@ public sealed class MkvMergeService
         {
             SourceFilePath = file.FilePath,
             TempOutputPath = tempPath,
-            UseSafeTempReplacement = useSafeTempReplacement,
             Description = string.Join("; ", descriptions),
             Arguments = args
         };
