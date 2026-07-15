@@ -8,28 +8,6 @@ public static class ThemeService
 {
     public static IReadOnlyList<ThemeDefinition> BuiltInThemes { get; } = new[]
     {
-        Create("Midnight", new()
-        {
-            ["WindowBackground"] = "#1E1F29",
-            ["CardBackground"] = "#282A36",
-            ["PanelBackground"] = "#2B2E3A",
-            ["SidebarBackground"] = "#232631",
-            ["InputBackground"] = "#282A36",
-            ["InputHoverBackground"] = "#2F3140",
-            ["ButtonBackground"] = "#44475A",
-            ["ButtonHoverBackground"] = "#BD93F9",
-            ["SelectedBackground"] = "#3A3D4F",
-            ["Border"] = "#343746",
-            ["BorderStrong"] = "#44475A",
-            ["Text"] = "#F8F8F2",
-            ["MutedText"] = "#CFCFEA",
-            ["SubtleText"] = "#8B93A7",
-            ["Accent"] = "#BD93F9",
-            ["AppTitle"] = "#BD93F9",
-            ["Success"] = "#50FA7B",
-            ["Warning"] = "#FFA500",
-            ["DisabledText"] = "#6272A4"
-        }),
         Create("Dark", new()
         {
             ["WindowBackground"] = "#15171C",
@@ -51,6 +29,28 @@ public static class ThemeService
             ["Success"] = "#50FA7B",
             ["Warning"] = "#EBCB8B",
             ["DisabledText"] = "#7D8797"
+        }),
+        Create("Midnight", new()
+        {
+            ["WindowBackground"] = "#1E1F29",
+            ["CardBackground"] = "#282A36",
+            ["PanelBackground"] = "#2B2E3A",
+            ["SidebarBackground"] = "#232631",
+            ["InputBackground"] = "#282A36",
+            ["InputHoverBackground"] = "#2F3140",
+            ["ButtonBackground"] = "#44475A",
+            ["ButtonHoverBackground"] = "#BD93F9",
+            ["SelectedBackground"] = "#3A3D4F",
+            ["Border"] = "#343746",
+            ["BorderStrong"] = "#44475A",
+            ["Text"] = "#F8F8F2",
+            ["MutedText"] = "#CFCFEA",
+            ["SubtleText"] = "#8B93A7",
+            ["Accent"] = "#BD93F9",
+            ["AppTitle"] = "#BD93F9",
+            ["Success"] = "#50FA7B",
+            ["Warning"] = "#FFA500",
+            ["DisabledText"] = "#6272A4"
         }),
         Create("Light", new()
         {
