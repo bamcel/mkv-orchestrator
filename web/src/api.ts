@@ -64,14 +64,6 @@ export type ScanSummary = {
   failed: number;
 };
 
-export type ScanResponse = {
-  startedUtc: string;
-  completedUtc: string;
-  files: MediaFileRow[];
-  skipped: string[];
-  summary: ScanSummary;
-};
-
 export type CurrentScanResponse = {
   updatedUtc: string | null;
   files: MediaFileRow[];
@@ -297,7 +289,6 @@ export type MuxPreviewRequest = {
   removeTrackIdsText: string;
   preserveChapters: boolean;
   preserveAttachments: boolean;
-  useSafeTempReplacement: boolean;
   muxMatchingExternalSubtitles: boolean;
   externalSubtitleLanguage: string;
   externalSubtitleFormats: string;
@@ -391,6 +382,30 @@ export type PropEditPreviewResponse = {
   status: string;
 };
 
+export type OperationJobResponse = {
+  id: string;
+  kind: "mux" | "propedit";
+  status: "Queued" | "Running" | "Canceling" | "Completed" | "Failed" | "Canceled";
+  createdUtc: string;
+  startedUtc: string | null;
+  completedUtc: string | null;
+  completed: number;
+  failed: number;
+  skipped: number;
+  total: number;
+  currentFile: string;
+  currentFilePercent: number;
+  lines: string[];
+  muxResult: MuxPreviewResponse | null;
+  propEditResult: PropEditPreviewResponse | null;
+  error: string;
+};
+
+export type RenameProviderTestResponse = {
+  success: boolean;
+  status: string;
+};
+
 export type LibraryAuditSummary = {
   groups: number;
   files: number;
@@ -443,16 +458,6 @@ export function getStatus(): Promise<AppStatus> {
 export function browseFileSystem(path?: string): Promise<FileSystemResponse> {
   const query = path ? `?path=${encodeURIComponent(path)}` : "";
   return fetchJson<FileSystemResponse>(`/api/filesystem${query}`);
-}
-
-export function scanSources(request: ScanRequest): Promise<ScanResponse> {
-  return fetchJson<ScanResponse>("/api/scan", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
 }
 
 export function startScan(request: ScanRequest): Promise<ScanJobResponse> {
@@ -549,12 +554,25 @@ export function loadRenameScopes(request: {
   });
 }
 
+export function testRenameProvider(request: {
+  provider?: string;
+  language?: string;
+}): Promise<RenameProviderTestResponse> {
+  return fetchJson<RenameProviderTestResponse>("/api/rename/test-provider", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(request)
+  });
+}
+
 export function buildRenamePreview(request: {
   files: MediaFileRow[];
   selectedResult: RenameSearchResult;
   provider?: string;
   language?: string;
-  scopeKey?: string;
+  scopeKeys?: string[];
   template?: string;
 }): Promise<RenamePreviewResponse> {
   return fetchJson<RenamePreviewResponse>("/api/rename/preview", {
@@ -610,13 +628,23 @@ export function buildMuxPreview(request: MuxPreviewRequest): Promise<MuxPreviewR
   });
 }
 
-export function applyMuxPlan(request: MuxPreviewRequest): Promise<MuxPreviewResponse> {
-  return fetchJson<MuxPreviewResponse>("/api/mux/apply", {
+export function startMuxApply(request: MuxPreviewRequest): Promise<OperationJobResponse> {
+  return fetchJson<OperationJobResponse>("/api/mux/apply", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
     body: JSON.stringify(request)
+  });
+}
+
+export function getOperationJob(id: string): Promise<OperationJobResponse> {
+  return fetchJson<OperationJobResponse>(`/api/operations/${encodeURIComponent(id)}`);
+}
+
+export function cancelOperationJob(id: string): Promise<OperationJobResponse> {
+  return fetchJson<OperationJobResponse>(`/api/operations/${encodeURIComponent(id)}/cancel`, {
+    method: "POST"
   });
 }
 
@@ -640,8 +668,8 @@ export function buildPropEditPreview(request: PropEditPreviewRequest): Promise<P
   });
 }
 
-export function applyPropEditPlan(request: PropEditPreviewRequest): Promise<PropEditPreviewResponse> {
-  return fetchJson<PropEditPreviewResponse>("/api/propedit/apply", {
+export function startPropEditApply(request: PropEditPreviewRequest): Promise<OperationJobResponse> {
+  return fetchJson<OperationJobResponse>("/api/propedit/apply", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"

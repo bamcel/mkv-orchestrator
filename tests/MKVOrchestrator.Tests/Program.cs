@@ -9,6 +9,13 @@ var tests = new (string Name, Action Test)[]
     ("RenamePlanner blocks duplicate targets", RenamePlannerBlocksDuplicateTargets),
     ("RenameEpisodeMatcher maps absolute episode to season episode", RenameEpisodeMatcherMapsAbsoluteEpisode),
     ("RenameEpisodeMatcher maps full list by row order", RenameEpisodeMatcherMapsFullListByRowOrder),
+    ("RenameEpisodeMatcher skips list order when counts differ", RenameEpisodeMatcherSkipsListOrderWhenCountsDiffer),
+    ("RenameEpisodeMatcher rejects absolute episodes beyond the list", RenameEpisodeMatcherRejectsAbsoluteBeyondList),
+    ("RenameEpisodeMatcher excludes specials from ordered matching", RenameEpisodeMatcherExcludesSpecialsFromOrderedMatching),
+    ("RenameFileNameBuilder keeps specials absolute token positive", RenameFileNameBuilderKeepsSpecialsAbsolutePositive),
+    ("RenameFileNameBuilder replaces tokens case-insensitively", RenameFileNameBuilderReplacesTokensCaseInsensitively),
+    ("RenameFileNameBuilder switches default template for movies", RenameFileNameBuilderSwitchesDefaultTemplateForMovies),
+    ("NaturalStringComparer orders embedded numbers by value", NaturalStringComparerOrdersEmbeddedNumbers),
     ("CrossPlatformRuntime normalizes quoted and environment paths", CrossPlatformRuntimeNormalizesPaths),
     ("CrossPlatformRuntime recognizes MP4 as readable media", CrossPlatformRuntimeRecognizesMp4Media),
     ("CodecDisplayNormalizer normalizes common video aliases", CodecDisplayNormalizerNormalizesCommonVideoAliases),
@@ -101,6 +108,92 @@ static void RenameEpisodeMatcherMapsFullListByRowOrder()
     AssertEqual(4, matches[93].Episode.SeasonNumber);
     AssertEqual(30, matches[93].Episode.EpisodeNumber);
     AssertEqual("List order match: row 93 = S04E29", matches[92].StatusText);
+}
+
+static void RenameEpisodeMatcherSkipsListOrderWhenCountsDiffer()
+{
+    var episodes = BuildAttackOnTitanEpisodeShape();
+    var matches = RenameEpisodeMatcher.MatchByListOrder(episodes, episodes.Count - 1);
+    AssertEqual(0, matches.Count);
+
+    matches = RenameEpisodeMatcher.MatchByListOrder(episodes, 0);
+    AssertEqual(0, matches.Count);
+}
+
+static void RenameEpisodeMatcherRejectsAbsoluteBeyondList()
+{
+    var episodes = BuildAttackOnTitanEpisodeShape();
+    AssertTrue(!RenameEpisodeMatcher.TryMatchAbsoluteEpisode(episodes, episodes.Count + 1, out _), "absolute episode beyond list should not match");
+    AssertTrue(!RenameEpisodeMatcher.TryMatchAbsoluteEpisode(episodes, 0, out _), "absolute episode zero should not match");
+    AssertTrue(!RenameEpisodeMatcher.TryMatchAbsoluteEpisode(episodes, null, out _), "missing absolute episode should not match");
+}
+
+static void RenameEpisodeMatcherExcludesSpecialsFromOrderedMatching()
+{
+    var episodes = new List<TvdbEpisode>
+    {
+        new() { Id = 1, SeasonNumber = 0, EpisodeNumber = 1, Name = "Special 1" },
+        new() { Id = 2, SeasonNumber = 1, EpisodeNumber = 1, Name = "S1 E1" },
+        new() { Id = 3, SeasonNumber = 1, EpisodeNumber = 2, Name = "S1 E2" }
+    };
+
+    var matches = RenameEpisodeMatcher.MatchByListOrder(episodes, 2);
+    AssertEqual(2, matches.Count);
+    AssertEqual(1, matches[0].Episode.SeasonNumber);
+    AssertEqual(1, matches[0].Episode.EpisodeNumber);
+    AssertEqual(2, matches[1].Episode.EpisodeNumber);
+}
+
+static void RenameFileNameBuilderKeepsSpecialsAbsolutePositive()
+{
+    var special = new TvdbEpisode { Id = 1, SeasonNumber = 0, EpisodeNumber = 3, Name = "OVA" };
+    var name = RenameFileNameBuilder.Build(
+        Path.Combine("media", "special.mkv"),
+        "Show",
+        2020,
+        special,
+        "{series} - {absolute:000} - {episodeTitle}",
+        isMovie: false);
+
+    AssertEqual("Show - 003 - OVA.mkv", name);
+}
+
+static void RenameFileNameBuilderReplacesTokensCaseInsensitively()
+{
+    var episode = new TvdbEpisode { Id = 1, SeasonNumber = 2, EpisodeNumber = 5, Name = "Pilot" };
+    var name = RenameFileNameBuilder.Build(
+        Path.Combine("media", "input.mkv"),
+        "Show",
+        2020,
+        episode,
+        "{Series} - S{Season:00}E{Episode:00} - {EpisodeTitle}",
+        isMovie: false);
+
+    AssertEqual("Show - S02E05 - Pilot.mkv", name);
+}
+
+static void RenameFileNameBuilderSwitchesDefaultTemplateForMovies()
+{
+    var movie = new TvdbEpisode { Id = 1, SeasonNumber = 1, EpisodeNumber = 1, Name = "The Movie" };
+    var name = RenameFileNameBuilder.Build(
+        Path.Combine("media", "movie.mkv"),
+        "The Movie",
+        2021,
+        movie,
+        RenameFileNameBuilder.DefaultSeriesTemplate,
+        isMovie: true);
+
+    AssertEqual("The Movie (2021).mkv", name);
+}
+
+static void NaturalStringComparerOrdersEmbeddedNumbers()
+{
+    var values = new List<string> { "Episode 10", "Episode 2", "Episode 1" };
+    values.Sort(NaturalStringComparer.Instance);
+
+    AssertEqual("Episode 1", values[0]);
+    AssertEqual("Episode 2", values[1]);
+    AssertEqual("Episode 10", values[2]);
 }
 
 static List<TvdbEpisode> BuildAttackOnTitanEpisodeShape()
@@ -231,7 +324,6 @@ static void MkvMergeServiceMuxesMultipleMatchingExternalSubtitles()
             removeTrackIdsText: string.Empty,
             preserveChapters: true,
             preserveAttachments: true,
-            useSafeTempReplacement: true,
             muxMatchingExternalSubtitles: true,
             externalSubtitleLanguage: "und",
             externalSubtitleTrackName: "{tag}",
@@ -279,7 +371,6 @@ static void MkvMergeServiceLeavesMp4ReadOnly()
         removeTrackIdsText: string.Empty,
         preserveChapters: true,
         preserveAttachments: true,
-        useSafeTempReplacement: true,
         muxMatchingExternalSubtitles: true,
         externalSubtitleLanguage: "eng",
         externalSubtitleTrackName: "{tag}",

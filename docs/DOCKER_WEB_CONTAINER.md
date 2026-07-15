@@ -39,6 +39,42 @@ MKVO_CONFIG_PATH=./tmp/docker-config
 MKVO_SOURCE_ROOTS=downloads=/downloads
 ```
 
+## Environment Variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MKVO_MEDIA_ROOT` | `/media` | Default root shown by the Dashboard browser. |
+| `MKVO_SOURCE_ROOTS` | `downloads=/downloads` | Additional named source roots (`name=/path`, comma separated). |
+| `MKVO_SCAN_WORKERS` | `6` | Maximum concurrent metadata scans (clamped 1-8). |
+| `MKVO_EDIT_WORKERS` | `2` | Maximum concurrent mkvpropedit edits (clamped 1-6). |
+| `PUID` / `PGID` | `0` / `0` | Run the app as this user/group so files written to shares are not root-owned. Unraid users typically want `99` / `100`. |
+| `UMASK` | unset | File creation mask applied at startup. |
+| `MKVO_AUTH_USERNAME` / `MKVO_AUTH_PASSWORD` | unset | When both are set, the web UI and API require HTTP basic auth (the browser shows a native login prompt). `/api/health` stays open for the container healthcheck. |
+| `MKVO_TVDB_API_KEY`, `MKVO_TVDB_PIN`, `MKVO_TMDB_API_KEY` | unset | Optional provider credentials; Settings-page values take effect otherwise. |
+
+## Security Notes
+
+- Filesystem browsing through the web UI is limited to the configured source
+  roots, watch folders, and enabled media-server library paths. Arbitrary
+  container paths are rejected.
+- The container has no authentication by default. Set
+  `MKVO_AUTH_USERNAME`/`MKVO_AUTH_PASSWORD` or front it with a reverse proxy
+  before exposing it beyond a trusted network.
+
+## Long-Running Operations
+
+Mux/remux and track property applies run as background jobs inside the
+container. The web UI polls job progress (per-file percent for remuxes), can
+cancel a running job, and survives page refreshes without dropping the
+operation. Results are also written to the Logs page.
+
+## Watch Folders
+
+Watch folders configured in Settings are monitored live inside the container
+when **Enable live watch-folder monitoring** is on: new or changed media files
+are re-scanned into the metadata cache automatically and deleted files are
+pruned. Cache entries not refreshed for 30 days are removed at startup.
+
 ## NAS / SMB Shares
 
 For a NAS share, copy `.env.example` to `.env`, edit the share paths, then run Docker Compose with the NAS example override:

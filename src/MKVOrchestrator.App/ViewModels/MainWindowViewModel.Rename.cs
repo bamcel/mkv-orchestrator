@@ -1058,47 +1058,18 @@ public partial class MainWindowViewModel
 
     private string BuildRenameFileName(RenamePreviewItem item, TvdbEpisode episode)
     {
-        var extension = Path.GetExtension(item.FilePath);
-        var template = string.IsNullOrWhiteSpace(RenameTemplate)
-            ? "{series} - S{season:00}E{episode:00} - {episodeTitle}"
-            : RenameTemplate.Trim();
-        if (IsSelectedMetadataResultMovie()
-            && string.Equals(template, "{series} - S{season:00}E{episode:00} - {episodeTitle}", StringComparison.OrdinalIgnoreCase))
-        {
-            template = "{title} ({year})";
-        }
-
-        var absolute = ((episode.SeasonNumber - 1) * 1000) + episode.EpisodeNumber;
-        var value = template
-            .Replace("{title}", item.SeriesTitle, StringComparison.OrdinalIgnoreCase)
-            .Replace("{series}", item.SeriesTitle)
-            .Replace("{year}", item.SeriesYear?.ToString() ?? string.Empty)
-            .Replace("{episodeTitle}", episode.Name)
-            .Replace("{season:00}", episode.SeasonNumber.ToString("00"))
-            .Replace("{episode:00}", episode.EpisodeNumber.ToString("00"))
-            .Replace("{season}", episode.SeasonNumber.ToString())
-            .Replace("{episode}", episode.EpisodeNumber.ToString())
-            .Replace("{absolute:000}", absolute.ToString("000"))
-            .Replace("{absolute}", absolute.ToString());
-
-        return SanitizeFileName(value.Trim()) + extension;
+        return RenameFileNameBuilder.Build(
+            item.FilePath,
+            item.SeriesTitle,
+            item.SeriesYear,
+            episode,
+            RenameTemplate,
+            IsSelectedMetadataResultMovie());
     }
 
     private bool IsSelectedMetadataResultMovie()
     {
         return SelectedTvdbSeries?.Format.Equals("Movie", StringComparison.OrdinalIgnoreCase) == true;
-    }
-
-    private static string SanitizeFileName(string value)
-    {
-        foreach (var invalid in Path.GetInvalidFileNameChars())
-        {
-            value = value.Replace(invalid, '-');
-        }
-
-        value = Regex.Replace(value, @"\s+", " ").Trim();
-        value = Regex.Replace(value, @"\s+-\s+", " - ").Trim();
-        return value.TrimEnd('.', ' ');
     }
 
     private string GuessRenameSearchTitle()

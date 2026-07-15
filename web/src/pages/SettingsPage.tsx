@@ -19,7 +19,8 @@ import {
   getWebSettings,
   saveWebSettings,
   syncMediaServerLibraries,
-  testMediaServerConnection
+  testMediaServerConnection,
+  testRenameProvider
 } from "../api";
 import type { WebMediaServer, WebMediaServerPathMapping, WebSettings } from "../api";
 import { SectionHeader } from "../components/SectionHeader";
@@ -54,6 +55,10 @@ export function SettingsPage() {
   const [tvdbApiKey, setTvdbApiKey] = useState("");
   const [tvdbPin, setTvdbPin] = useState("");
   const [tmdbApiKey, setTmdbApiKey] = useState("");
+  const [clearTvdbApiKey, setClearTvdbApiKey] = useState(false);
+  const [clearTvdbPin, setClearTvdbPin] = useState(false);
+  const [clearTmdbApiKey, setClearTmdbApiKey] = useState(false);
+  const [isTestingProvider, setIsTestingProvider] = useState(false);
   const [language, setLanguage] = useState("eng");
   const [provider, setProvider] = useState("TVDB");
   const [template, setTemplate] = useState("{series} - S{season:00}E{episode:00} - {episodeTitle}");
@@ -104,9 +109,9 @@ export function SettingsPage() {
   async function saveSettings(): Promise<WebSettings | null> {
     try {
       const saved = await saveWebSettings({
-        tvdbApiKey: tvdbApiKey || undefined,
-        tvdbPin: tvdbPin || undefined,
-        tmdbApiKey: tmdbApiKey || undefined,
+        tvdbApiKey: clearTvdbApiKey ? "" : tvdbApiKey || undefined,
+        tvdbPin: clearTvdbPin ? "" : tvdbPin || undefined,
+        tmdbApiKey: clearTmdbApiKey ? "" : tmdbApiKey || undefined,
         tvdbLanguage: language,
         renameLookupProvider: provider,
         renameTemplate: template,
@@ -133,6 +138,9 @@ export function SettingsPage() {
       setTvdbApiKey("");
       setTvdbPin("");
       setTmdbApiKey("");
+      setClearTvdbApiKey(false);
+      setClearTvdbPin(false);
+      setClearTmdbApiKey(false);
       setSettingsStatus("Settings saved.");
       webSettings.refetch();
       setLanguage(saved.tvdbLanguage);
@@ -232,6 +240,19 @@ export function SettingsPage() {
       status.refetch();
     } catch (error) {
       setSettingsStatus(error instanceof Error ? error.message : "Media server sync failed.");
+    }
+  }
+
+  async function testSelectedProvider() {
+    setIsTestingProvider(true);
+    setSettingsStatus(`Testing ${provider} connection...`);
+    try {
+      const result = await testRenameProvider({ provider, language });
+      setSettingsStatus(result.status);
+    } catch (error) {
+      setSettingsStatus(error instanceof Error ? error.message : "Provider test failed.");
+    } finally {
+      setIsTestingProvider(false);
     }
   }
 
@@ -340,36 +361,63 @@ export function SettingsPage() {
             <div className="grid gap-5 xl:grid-cols-[minmax(360px,520px)_1fr]">
               <SettingsCard title="API Providers" description="TVDB and TMDB lookup requires your own API keys. Leave saved key fields blank to keep existing values.">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <label className="block">
-                    <span className="text-xs font-semibold text-muted">TVDB API Key</span>
-                    <input
-                      value={tvdbApiKey}
-                      onChange={(event) => setTvdbApiKey(event.target.value)}
-                      placeholder={webSettings.data?.hasTvdbApiKey ? "Saved - leave blank to keep" : "User-provided TVDB API key"}
-                      type="password"
-                      className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-semibold text-muted">TVDB PIN</span>
-                    <input
-                      value={tvdbPin}
-                      onChange={(event) => setTvdbPin(event.target.value)}
-                      placeholder={webSettings.data?.hasTvdbPin ? "Saved - leave blank to keep" : "Optional TVDB subscriber PIN"}
-                      type="password"
-                      className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-semibold text-muted">TMDB API Key</span>
-                    <input
-                      value={tmdbApiKey}
-                      onChange={(event) => setTmdbApiKey(event.target.value)}
-                      placeholder={webSettings.data?.hasTmdbApiKey ? "Saved - leave blank to keep" : "User-provided TMDB API key"}
-                      type="password"
-                      className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
-                    />
-                  </label>
+                  <div>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-muted">TVDB API Key</span>
+                      <input
+                        value={tvdbApiKey}
+                        onChange={(event) => setTvdbApiKey(event.target.value)}
+                        placeholder={webSettings.data?.hasTvdbApiKey ? "Saved - leave blank to keep" : "User-provided TVDB API key"}
+                        type="password"
+                        disabled={clearTvdbApiKey}
+                        className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
+                      />
+                    </label>
+                    {webSettings.data?.hasTvdbApiKey ? (
+                      <label className="mt-1.5 flex items-center gap-2 text-xs text-muted">
+                        <input type="checkbox" checked={clearTvdbApiKey} onChange={(event) => setClearTvdbApiKey(event.target.checked)} />
+                        Remove saved key on next save
+                      </label>
+                    ) : null}
+                  </div>
+                  <div>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-muted">TVDB PIN</span>
+                      <input
+                        value={tvdbPin}
+                        onChange={(event) => setTvdbPin(event.target.value)}
+                        placeholder={webSettings.data?.hasTvdbPin ? "Saved - leave blank to keep" : "Optional TVDB subscriber PIN"}
+                        type="password"
+                        disabled={clearTvdbPin}
+                        className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
+                      />
+                    </label>
+                    {webSettings.data?.hasTvdbPin ? (
+                      <label className="mt-1.5 flex items-center gap-2 text-xs text-muted">
+                        <input type="checkbox" checked={clearTvdbPin} onChange={(event) => setClearTvdbPin(event.target.checked)} />
+                        Remove saved PIN on next save
+                      </label>
+                    ) : null}
+                  </div>
+                  <div>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-muted">TMDB API Key</span>
+                      <input
+                        value={tmdbApiKey}
+                        onChange={(event) => setTmdbApiKey(event.target.value)}
+                        placeholder={webSettings.data?.hasTmdbApiKey ? "Saved - leave blank to keep" : "User-provided TMDB API key"}
+                        type="password"
+                        disabled={clearTmdbApiKey}
+                        className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
+                      />
+                    </label>
+                    {webSettings.data?.hasTmdbApiKey ? (
+                      <label className="mt-1.5 flex items-center gap-2 text-xs text-muted">
+                        <input type="checkbox" checked={clearTmdbApiKey} onChange={(event) => setClearTmdbApiKey(event.target.checked)} />
+                        Remove saved key on next save
+                      </label>
+                    ) : null}
+                  </div>
                   <label className="block">
                     <span className="text-xs font-semibold text-muted">Metadata Language</span>
                     <input
@@ -398,6 +446,15 @@ export function SettingsPage() {
                     />
                   </label>
                 </div>
+                <button
+                  type="button"
+                  onClick={testSelectedProvider}
+                  disabled={isTestingProvider}
+                  className="mt-4 inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+                >
+                  <CheckCircle2 size={15} />
+                  {isTestingProvider ? "Testing..." : "Test Selected Provider"}
+                </button>
               </SettingsCard>
 
               <SettingsCard title="Rename Templates" description="One template per line. The selected default template is always preserved when settings are saved.">

@@ -19,7 +19,6 @@ public partial class MainWindowViewModel
     [ObservableProperty] private bool mergeRemoveUnwantedTrackIds;
     [ObservableProperty] private bool mergePreserveChapters = true;
     [ObservableProperty] private bool mergePreserveAttachments = true;
-    [ObservableProperty] private bool mergeUseSafeTempReplacement = true;
     [ObservableProperty] private string mergeKeepAudioLanguages = "eng,jpn";
     [ObservableProperty] private string mergeKeepSubtitleLanguages = "eng";
     [ObservableProperty] private string mergeRemoveTrackIdsText = string.Empty;
@@ -171,7 +170,6 @@ public partial class MainWindowViewModel
             MergeRemoveTrackIdsText,
             MergePreserveChapters,
             MergePreserveAttachments,
-            MergeUseSafeTempReplacement,
             MergeMuxMatchingExternalSubtitles,
             MergeExternalSubtitleLanguage,
             "{tag}",

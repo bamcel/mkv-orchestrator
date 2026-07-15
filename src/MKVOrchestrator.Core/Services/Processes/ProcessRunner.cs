@@ -19,6 +19,22 @@ public sealed class ProcessRunner
         {
             using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
             process.Start();
+
+            // WaitForExitAsync only stops waiting on cancellation; the external tool keeps
+            // running unless it is killed explicitly, so canceled scans must tear it down.
+            using var registration = token.Register(() =>
+            {
+                try
+                {
+                    if (!process.HasExited)
+                        process.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                    // Best-effort cancellation cleanup.
+                }
+            });
+
             var stdoutTask = process.StandardOutput.ReadToEndAsync(token);
             var stderrTask = process.StandardError.ReadToEndAsync(token);
             await process.WaitForExitAsync(token);
