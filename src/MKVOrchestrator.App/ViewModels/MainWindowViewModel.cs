@@ -194,7 +194,7 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string cacheTempEntryCountText = "0";
     [ObservableProperty] private string cacheDatabaseSizeText = "0 B";
     [ObservableProperty] private string cacheLastCleanupText = "Not yet this session";
-    [ObservableProperty] private string selectedThemeName = "Midnight";
+    [ObservableProperty] private string selectedThemeName = "Dark";
     [ObservableProperty] private string customThemeName = string.Empty;
     [ObservableProperty] private string themeEditorText = string.Empty;
     [ObservableProperty] private string themeStatusText = "Select a theme, edit its JSON, then reload to apply.";

@@ -9,9 +9,12 @@
         xmlns:audit="using:MKVOrchestrator.App.Views.Audit"
         x:Class="MKVOrchestrator.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Width="1500" Height="900"
+        Width="1280" Height="800"
         MinWidth="1150" MinHeight="720"
-        SystemDecorations="None"
+        WindowStartupLocation="CenterScreen"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1"
         Title="MKV Orchestrator">
   <Grid RowDefinitions="36,*">
     <Border Grid.Row="0"

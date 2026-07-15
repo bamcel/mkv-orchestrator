@@ -448,6 +448,148 @@
                           <TextBlock Text="{Binding CacheStatusText}" TextWrapping="Wrap" Classes="muted" />
                         </StackPanel>
                       </Border>
+
+                      <TextBlock Text="Optional discovery for Emby, Jellyfin, or Plex library paths. Manual watch folders remain the fallback when no media server is configured." TextWrapping="Wrap" Classes="muted" />
+                      <Border Classes="panel">
+                        <StackPanel Spacing="10">
+                          <TextBlock Text="Media Servers" Classes="section-header" />
+                          <TextBlock Text="{Binding MediaServerStatusText}" TextWrapping="Wrap" Classes="muted" />
+
+                          <ItemsControl ItemsSource="{Binding MediaServers}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="vm:MediaServerItemViewModel">
+                                <Border Background="{DynamicResource ThemePanelBackgroundBrush}"
+                                        BorderBrush="{DynamicResource ThemeBorderStrongBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="12"
+                                        Margin="0,0,0,10">
+                                  <StackPanel Spacing="8">
+                                    <Grid ColumnDefinitions="*,150,Auto" ColumnSpacing="8">
+                                      <TextBox Grid.Column="0" Text="{Binding Name}" Watermark="Server name" />
+                                      <ComboBox Grid.Column="1"
+                                                ItemsSource="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).MediaServerTypeOptions}"
+                                                SelectedItem="{Binding ServerType}"
+                                                HorizontalAlignment="Stretch" />
+                                      <CheckBox Grid.Column="2" Content="Default server" IsChecked="{Binding IsDefault}" VerticalAlignment="Center" />
+                                    </Grid>
+
+                                    <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto" RowSpacing="8" ColumnSpacing="8">
+                                      <TextBlock Grid.Row="0" Grid.Column="0" Text="Server URL" VerticalAlignment="Center" />
+                                      <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding ServerUrl}" Watermark="http://localhost:8096" />
+
+                                      <TextBlock Grid.Row="1" Grid.Column="0" Text="API key / token" VerticalAlignment="Center" />
+                                      <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ApiKey}" PasswordChar="*" Watermark="API key or token" />
+                                    </Grid>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                      <Button Content="Test Connection"
+                                              Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).TestMediaServerConnectionCommand}"
+                                              CommandParameter="{Binding}"
+                                              IsEnabled="{Binding !IsBusy}" />
+                                      <Button Content="Sync Libraries"
+                                              Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).SyncMediaServerLibrariesCommand}"
+                                              CommandParameter="{Binding}"
+                                              IsEnabled="{Binding !IsBusy}" />
+                                      <Button Content="Remove"
+                                              Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).RemoveMediaServerCommand}"
+                                              CommandParameter="{Binding}" />
+                                    </StackPanel>
+
+                                    <TextBlock Text="{Binding StatusText}"
+                                               TextWrapping="Wrap"
+                                               Classes="muted"
+                                               IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                                    <Border BorderBrush="{DynamicResource ThemeBorderStrongBrush}"
+                                            Background="{DynamicResource ThemeInputBackgroundBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            IsVisible="{Binding HasLibraries}">
+                                      <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding Libraries}">
+                                          <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:MediaServerLibraryItemViewModel">
+                                              <Grid ColumnDefinitions="Auto,220,*" ColumnSpacing="8" Margin="8,3">
+                                                <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled}" />
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Name}"
+                                                           FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center"
+                                                           ToolTip.Tip="{Binding Name}" />
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding ContainerPath}"
+                                                           FontFamily="Consolas"
+                                                           Classes="muted"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center"
+                                                           ToolTip.Tip="{Binding PathToolTip}" />
+                                              </Grid>
+                                            </DataTemplate>
+                                          </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                      </ScrollViewer>
+                                    </Border>
+                                    <TextBlock Text="No synced libraries yet. Test the connection, then click Sync Libraries."
+                                               Classes="muted"
+                                               IsVisible="{Binding !HasLibraries}" />
+
+                                    <TextBlock Text="{Binding LastSyncedText}" Classes="muted" FontSize="11" />
+                                  </StackPanel>
+                                </Border>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+
+                          <Border Background="{DynamicResource ThemePanelBackgroundBrush}"
+                                  BorderBrush="{DynamicResource ThemeBorderStrongBrush}"
+                                  BorderThickness="1"
+                                  CornerRadius="8"
+                                  Padding="12">
+                            <StackPanel Spacing="8">
+                              <TextBlock Text="Add a Server" FontWeight="SemiBold" />
+                              <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="8">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Name" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding NewMediaServerName}" Watermark="Media Server" />
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Type" VerticalAlignment="Center" />
+                                <ComboBox Grid.Row="1" Grid.Column="1"
+                                          ItemsSource="{Binding MediaServerTypeOptions}"
+                                          SelectedItem="{Binding NewMediaServerType}"
+                                          MaxWidth="220"
+                                          HorizontalAlignment="Left" />
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Server URL" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding NewMediaServerUrl}" Watermark="http://localhost:8096" />
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="API key / token" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding NewMediaServerApiKey}" PasswordChar="*" Watermark="API key or token" />
+                              </Grid>
+                              <StackPanel Orientation="Horizontal" Spacing="12">
+                                <CheckBox Content="Use as default server" IsChecked="{Binding MakeNewMediaServerDefault}" />
+                                <Button Content="Add Server" Command="{Binding AddMediaServerCommand}" />
+                              </StackPanel>
+                            </StackPanel>
+                          </Border>
+                        </StackPanel>
+                      </Border>
+
+                      <Border Classes="panel">
+                        <StackPanel Spacing="8">
+                          <TextBlock Text="Path Mapping" Classes="section-header" />
+                          <TextBlock Text="Translate paths reported by the media server into paths available on this machine. One mapping per line, using server_prefix =&gt; local_prefix." TextWrapping="Wrap" Classes="muted" />
+                          <TextBox Classes="settingsConsoleBox"
+                                   Text="{Binding MediaServerMappingsText}"
+                                   AcceptsReturn="True"
+                                   Height="110"
+                                   VerticalContentAlignment="Top"
+                                   TextWrapping="NoWrap"
+                                   FontFamily="Consolas"
+                                   Watermark="\\server\media =&gt; /media&#x0a;/mnt/media =&gt; /media" />
+                          <TextBlock Text="Example: if Emby reports \\server\media\Anime and this machine mounts that share at /media/Anime, add \\server\media =&gt; /media. Mappings apply on the next test or sync." TextWrapping="Wrap" Classes="muted" FontSize="11" />
+                        </StackPanel>
+                      </Border>
                     </StackPanel>
                   </ScrollViewer>
                 </TabItem>
