@@ -54,6 +54,13 @@ public static class RenameFileNameBuilder
             value = value.Replace(invalid, '-');
         }
 
+        // Windows-reserved characters are replaced on every OS so rename results
+        // stay identical between the desktop app and the Linux web container.
+        foreach (var invalid in "\\/:*?\"<>|")
+        {
+            value = value.Replace(invalid, '-');
+        }
+
         value = Regex.Replace(value, @"\s+", " ").Trim();
         value = Regex.Replace(value, @"\s+-\s+", " - ").Trim();
         return value.TrimEnd('.', ' ');

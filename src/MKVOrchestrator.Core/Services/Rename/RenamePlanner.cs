@@ -107,13 +107,12 @@ public sealed class RenamePlanner
             clean = clean.Replace(invalid, ' ');
         }
 
-        clean = clean.Replace(':', ' ')
-            .Replace('*', ' ')
-            .Replace('?', ' ')
-            .Replace('"', '\'')
-            .Replace('<', '(')
-            .Replace('>', ')')
-            .Replace('|', '-');
+        // Windows-reserved characters are replaced on every OS so rename results
+        // stay identical between the desktop app and the Linux web container.
+        foreach (var invalid in "\\/:*?\"<>|")
+        {
+            clean = clean.Replace(invalid, ' ');
+        }
 
         while (clean.Contains("  ", StringComparison.Ordinal))
         {
