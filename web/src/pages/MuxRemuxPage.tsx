@@ -39,6 +39,8 @@ export function MuxRemuxPage() {
   const [extractSubtitles, setExtractSubtitles] = useState(false);
   const [extractLanguages, setExtractLanguages] = useState("eng");
   const [extractOverwrite, setExtractOverwrite] = useState(false);
+  const [convertMp4, setConvertMp4] = useState(false);
+  const [deleteMp4AfterConvert, setDeleteMp4AfterConvert] = useState(false);
   const [previewResult, setPreviewResult] = useState<MuxPreviewResponse | null>(null);
   const [statusText, setStatusText] = useState("Load scanned files from Dashboard, then build a preview.");
   const [settingsDefaultsApplied, setSettingsDefaultsApplied] = useState(false);
@@ -68,8 +70,13 @@ export function MuxRemuxPage() {
   }, [files]);
 
   const mkvFiles = useMemo(() => files.filter((file) => file.extension.toLowerCase() === ".mkv"), [files]);
+  const mp4Files = useMemo(() => files.filter((file) => file.extension.toLowerCase() === ".mp4"), [files]);
   const selectedMkvPaths = useMemo(
     () => selectedPaths.filter((path) => files.some((file) => file.path === path && file.extension.toLowerCase() === ".mkv")),
+    [files, selectedPaths]
+  );
+  const selectedMp4Paths = useMemo(
+    () => selectedPaths.filter((path) => files.some((file) => file.path === path && file.extension.toLowerCase() === ".mp4")),
     [files, selectedPaths]
   );
   const selectedNonMkvCount = selectedPaths.length - selectedMkvPaths.length;
@@ -138,7 +145,7 @@ export function MuxRemuxPage() {
   function buildRequest(): MuxPreviewRequest {
     return {
       files,
-      selectedPaths: selectedMkvPaths,
+      selectedPaths: convertMp4 ? [...selectedMkvPaths, ...selectedMp4Paths] : selectedMkvPaths,
       removeUnwantedAudioLanguages: removeAudio,
       keepAudioLanguages: audioLanguages,
       removeUnwantedSubtitleLanguages: removeSubtitles,
@@ -154,7 +161,9 @@ export function MuxRemuxPage() {
       skipMuxIfSubtitleAlreadyExists: skipExistingSubtitle,
       extractSubtitles,
       extractSubtitleLanguages: extractLanguages,
-      extractOverwriteExistingFiles: extractOverwrite
+      extractOverwriteExistingFiles: extractOverwrite,
+      convertMp4ToMkv: convertMp4,
+      deleteMp4AfterConvert
     };
   }
 
@@ -175,8 +184,9 @@ export function MuxRemuxPage() {
   }
 
   function runPreview() {
-    if (selectedMkvPaths.length === 0) {
-      setStatusText("Mux / Remux requires at least one selected MKV file.");
+    const hasConvertibleMp4s = convertMp4 && selectedMp4Paths.length > 0;
+    if (selectedMkvPaths.length === 0 && !hasConvertibleMp4s) {
+      setStatusText("Mux / Remux requires at least one selected MKV file (or MP4 with conversion enabled).");
       return;
     }
 
@@ -232,6 +242,17 @@ export function MuxRemuxPage() {
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={preserveChapters} onChange={(event) => setPreserveChapters(event.target.checked)} /> Preserve chapters</label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={preserveAttachments} onChange={(event) => setPreserveAttachments(event.target.checked)} /> Preserve attachments/fonts</label>
               <p className="text-xs leading-5 text-muted">Originals are always replaced through a safe temp file with automatic backup.</p>
+              {mp4Files.length > 0 ? (
+                <>
+                  <h2 className="pt-1 text-sm font-semibold">MP4 Conversion</h2>
+                  <p className="text-xs text-muted">{mp4Files.length === 1 ? "1 MP4 file detected" : `${mp4Files.length} MP4 files detected`}</p>
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={convertMp4} onChange={(event) => setConvertMp4(event.target.checked)} /> Convert selected MP4 files to MKV</label>
+                  <label className={["flex items-center gap-2 pl-5 text-sm", convertMp4 ? "" : "text-disabled"].join(" ")}>
+                    <input type="checkbox" checked={deleteMp4AfterConvert} disabled={!convertMp4} onChange={(event) => setDeleteMp4AfterConvert(event.target.checked)} /> Delete original MP4 after success
+                  </label>
+                  <p className="text-xs leading-5 text-muted">Lossless container copy via mkvmerge - no re-encoding. The new .mkv is created next to the source file; files whose .mkv already exists are skipped.</p>
+                </>
+              ) : null}
             </div>
           ) : null}
 
@@ -255,7 +276,7 @@ export function MuxRemuxPage() {
 
           <h2 className="mt-4 text-sm font-semibold">Execution</h2>
           <div className="mt-2 flex gap-2">
-            <button onClick={runPreview} disabled={preview.isPending || selectedMkvPaths.length === 0} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
+            <button onClick={runPreview} disabled={preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0))} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
               {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
               Preview
             </button>

@@ -16,9 +16,29 @@ A Docker web build is also available for server or NAS-style access. The desktop
 - Records rename batches so recent rename operations can be reviewed and undone.
 - Plans MKV mux/remux operations with MKVToolNix.
 - Muxes matching external subtitle sidecars into MKV files.
+- Converts MP4 files to MKV with a lossless container copy (no re-encoding), with optional cleanup of the original MP4.
 - Edits MKV container title, track names, languages, default flags, and forced flags.
 - Builds and manages a local metadata cache for watch folders.
+- Discovers library paths from Emby, Jellyfin, or Plex servers with per-library enablement and path mapping.
 - Supports user-editable GUI themes.
+
+## Screenshots
+
+Application screenshots live in [`docs/screenshots/`](docs/screenshots/). Add new captures there using the naming pattern `<area>-<detail>.png`, for example:
+
+```text
+docs/screenshots/dashboard-scan.png
+docs/screenshots/rename-preview.png
+docs/screenshots/mux-remux-mp4-conversion.png
+docs/screenshots/settings-library-media-servers.png
+docs/screenshots/web-dashboard.png
+```
+
+Reference them from this README or other docs with standard Markdown:
+
+```markdown
+![Dashboard scan](docs/screenshots/dashboard-scan.png)
+```
 
 ## Requirements
 

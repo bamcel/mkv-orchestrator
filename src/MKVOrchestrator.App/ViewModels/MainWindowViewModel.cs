@@ -154,6 +154,8 @@ public partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HasDashboardFiles));
         OnPropertyChanged(nameof(HasNoDashboardFiles));
+        OnPropertyChanged(nameof(HasMp4Files));
+        OnPropertyChanged(nameof(Mp4FileCountText));
     }
 
     [ObservableProperty] private string folderPath = string.Empty;

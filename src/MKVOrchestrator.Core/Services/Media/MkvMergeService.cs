@@ -354,6 +354,47 @@ public sealed class MkvMergeService
         return plan;
     }
 
+    /// <summary>
+    /// Builds lossless MP4 -> MKV container conversions for the selected files.
+    /// mkvmerge reads MP4 natively, so the streams are copied without re-encoding.
+    /// Non-MP4 files and MP4s whose target .mkv already exists are reported as no-change.
+    /// </summary>
+    public MkvMergeRemuxPlan BuildConvertToMkvPlan(IEnumerable<MkvFileItem> files, bool deleteSourceAfterSuccess)
+    {
+        var plan = new MkvMergeRemuxPlan();
+        foreach (var file in files.Where(f => f.Selected))
+        {
+            if (!CrossPlatformRuntime.IsMp4Path(file.FilePath))
+            {
+                plan.NoChangeFiles.Add(file.FilePath);
+                continue;
+            }
+
+            var targetPath = Path.ChangeExtension(file.FilePath, ".mkv");
+            if (File.Exists(targetPath))
+            {
+                plan.NoChangeFiles.Add(file.FilePath);
+                continue;
+            }
+
+            var tempPath = BuildTempOutputPath(file.FilePath);
+            plan.Actions.Add(new MkvMergeRemuxAction
+            {
+                SourceFilePath = file.FilePath,
+                TempOutputPath = tempPath,
+                FinalOutputPath = targetPath,
+                Description = $"Convert to MKV (lossless container copy): {Path.GetFileName(file.FilePath)} -> {Path.GetFileName(targetPath)}"
+                              + (deleteSourceAfterSuccess ? "; delete original MP4 after success" : "; keep original MP4"),
+                ToolName = "mkvmerge",
+                Operation = "convert-mkv",
+                DeleteSourceAfterSuccess = deleteSourceAfterSuccess,
+                Arguments = new List<string> { "-o", tempPath, file.FilePath }
+            });
+        }
+
+        return plan;
+    }
+
     public async Task<ProcessResult> ExecuteRemuxAsync(string mkvMergePath, MkvMergeRemuxAction action, CancellationToken token)
         => await ExecuteRemuxAsync(mkvMergePath, action, null, token);
 
@@ -401,7 +442,26 @@ public sealed class MkvMergeService
             return new ProcessResult(-1, result.StandardOutput, "mkvmerge completed but the temp output file was not created.");
         }
 
-        ReplaceOriginalWithTemp(action.SourceFilePath, tempPath);
+        if (string.Equals(action.Operation, "convert-mkv", StringComparison.OrdinalIgnoreCase))
+        {
+            // Conversion writes a new .mkv beside the source instead of replacing it.
+            if (File.Exists(action.FinalOutputPath))
+            {
+                TryDeleteTempFile(tempPath);
+                return new ProcessResult(-1, result.StandardOutput, $"Target file already exists: {action.FinalOutputPath}");
+            }
+
+            File.Move(tempPath, action.FinalOutputPath);
+            if (action.DeleteSourceAfterSuccess)
+            {
+                TryDeleteTempFile(action.SourceFilePath);
+            }
+        }
+        else
+        {
+            ReplaceOriginalWithTemp(action.SourceFilePath, tempPath);
+        }
+
         if (action.DeleteExternalSubtitleAfterSuccess)
         {
             foreach (var externalSubtitlePath in GetExternalSubtitlePaths(action))

@@ -792,7 +792,7 @@ export function SettingsPage() {
                     This web build shares the desktop app's core media logic where possible and exposes it through a React web interface.
                   </p>
                   <p>
-                    Current supported workflows include MKV and MP4 scanning, metadata inspection, provider-based rename previews, rename apply and undo batches, MKV mux/remux operations, MKV track property edits, library audit views, logs, and container tool checks.
+                    Current supported workflows include MKV and MP4 scanning, metadata inspection, provider-based rename previews, rename apply and undo batches, MKV mux/remux operations, lossless MP4 to MKV conversion, MKV track property edits, library audit views, logs, and container tool checks.
                   </p>
                   <p>
                     TVDB and TMDB lookup requires your own API keys. Saved keys are written to the container config volume under <span className="font-mono text-text">/config</span>, so do not commit or publish that volume.

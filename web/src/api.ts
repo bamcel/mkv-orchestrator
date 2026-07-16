@@ -297,6 +297,8 @@ export type MuxPreviewRequest = {
   extractSubtitles: boolean;
   extractSubtitleLanguages: string;
   extractOverwriteExistingFiles: boolean;
+  convertMp4ToMkv: boolean;
+  deleteMp4AfterConvert: boolean;
 };
 
 export type MuxActionRow = {

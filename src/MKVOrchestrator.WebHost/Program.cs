@@ -814,7 +814,7 @@ static MkvMergeRemuxPlan BuildMuxPlan(MuxPreviewRequest request, MkvMergeService
         .Select(row => ToMkvFileItem(row, selectedPaths.Count == 0 || selectedPaths.Contains(row.Path)))
         .ToList();
 
-    return muxService.BuildRemuxPlan(
+    var plan = muxService.BuildRemuxPlan(
         files,
         request.KeepAudioLanguages ?? "eng,jpn",
         request.KeepSubtitleLanguages ?? "eng",
@@ -833,6 +833,22 @@ static MkvMergeRemuxPlan BuildMuxPlan(MuxPreviewRequest request, MkvMergeService
         request.ExtractSubtitles,
         request.ExtractSubtitleLanguages ?? "eng",
         request.ExtractOverwriteExistingFiles);
+
+    if (!request.ConvertMp4ToMkv)
+    {
+        return plan;
+    }
+
+    var convertPlan = muxService.BuildConvertToMkvPlan(files, request.DeleteMp4AfterConvert);
+    plan.Actions.AddRange(convertPlan.Actions);
+
+    // MP4s picked up by the conversion pass are no longer "no change".
+    var actionPaths = plan.Actions
+        .Select(action => action.SourceFilePath)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    plan.NoChangeFiles.RemoveAll(actionPaths.Contains);
+
+    return plan;
 }
 
 static MuxPreviewResponse BuildMuxPreviewResponse(
@@ -1417,6 +1433,22 @@ static async Task RunMuxJobAsync(
                     catch (Exception ex)
                     {
                         var warning = $"REFRESH WARNING: {fileName} - {ex.Message}";
+                        resultLines.Add(warning);
+                        job.AddLine(warning);
+                    }
+                }
+
+                // Conversions create a new .mkv beside the source; scan it so it shows up immediately.
+                if (string.Equals(action.Operation, "convert-mkv", StringComparison.OrdinalIgnoreCase) && File.Exists(action.FinalOutputPath))
+                {
+                    try
+                    {
+                        var converted = await scanner.ScanFileSafeAsync(action.FinalOutputPath, ResolveToolCommand("mkvmerge"), ResolveToolCommand("ffprobe"), job.Token);
+                        currentScan.Upsert(MediaFileRow.From(converted));
+                    }
+                    catch (Exception ex)
+                    {
+                        var warning = $"REFRESH WARNING: {Path.GetFileName(action.FinalOutputPath)} - {ex.Message}";
                         resultLines.Add(warning);
                         job.AddLine(warning);
                     }
@@ -2369,7 +2401,9 @@ public sealed record MuxPreviewRequest(
     bool SkipMuxIfSubtitleAlreadyExists,
     bool ExtractSubtitles,
     string? ExtractSubtitleLanguages,
-    bool ExtractOverwriteExistingFiles);
+    bool ExtractOverwriteExistingFiles,
+    bool ConvertMp4ToMkv = false,
+    bool DeleteMp4AfterConvert = false);
 
 public sealed record MuxActionRow(
     int Index,

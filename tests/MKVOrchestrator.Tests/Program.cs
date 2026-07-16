@@ -22,7 +22,8 @@ var tests = new (string Name, Action Test)[]
     ("MkvScannerService routes MKV metadata through mkvmerge first", MkvScannerServiceRoutesMkvThroughMkvMergeFirst),
     ("MkvPropEditCommandBuilder uses type ordinal selectors", MkvPropEditCommandBuilderUsesTrackSelectors),
     ("MkvMergeService muxes multiple matching external subtitles", MkvMergeServiceMuxesMultipleMatchingExternalSubtitles),
-    ("MkvMergeService leaves MP4 files read-only", MkvMergeServiceLeavesMp4ReadOnly)
+    ("MkvMergeService leaves MP4 files read-only", MkvMergeServiceLeavesMp4ReadOnly),
+    ("MkvMergeService converts MP4 files to MKV losslessly", MkvMergeServiceBuildsConvertToMkvPlan)
 };
 
 var failures = 0;
@@ -383,6 +384,33 @@ static void MkvMergeServiceLeavesMp4ReadOnly()
 
     AssertEqual(0, plan.Actions.Count);
     AssertContains(file.FilePath, plan.NoChangeFiles);
+}
+
+static void MkvMergeServiceBuildsConvertToMkvPlan()
+{
+    var mp4 = new MkvFileItem
+    {
+        FilePath = Path.Combine("media", "Episode 01.mp4"),
+        Selected = true
+    };
+    var mkv = new MkvFileItem
+    {
+        FilePath = Path.Combine("media", "Episode 02.mkv"),
+        Selected = true
+    };
+
+    var plan = new MkvMergeService().BuildConvertToMkvPlan(new[] { mp4, mkv }, deleteSourceAfterSuccess: true);
+
+    AssertEqual(1, plan.Actions.Count);
+    var action = plan.Actions[0];
+    AssertEqual("convert-mkv", action.Operation);
+    AssertEqual(mp4.FilePath, action.SourceFilePath);
+    AssertEqual(Path.Combine("media", "Episode 01.mkv"), action.FinalOutputPath);
+    AssertTrue(action.DeleteSourceAfterSuccess, "delete-source flag should carry through");
+    AssertTrue(action.TempOutputPath.EndsWith(".mkvo-remux.tmp.mkv", StringComparison.OrdinalIgnoreCase), "conversion should write through a temp file");
+    AssertContains(mp4.FilePath, action.Arguments);
+    AssertContains(action.TempOutputPath, action.Arguments);
+    AssertContains(mkv.FilePath, plan.NoChangeFiles);
 }
 
 static void AssertEqual<T>(T expected, T actual)
