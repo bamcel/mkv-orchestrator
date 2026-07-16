@@ -24,21 +24,35 @@ A Docker web build is also available for server or NAS-style access. The desktop
 
 ## Screenshots
 
-Application screenshots live in [`docs/screenshots/`](docs/screenshots/). Add new captures there using the naming pattern `<area>-<detail>.png`, for example:
+### Dashboard
 
-```text
-docs/screenshots/dashboard-scan.png
-docs/screenshots/rename-preview.png
-docs/screenshots/mux-remux-mp4-conversion.png
-docs/screenshots/settings-library-media-servers.png
-docs/screenshots/web-dashboard.png
-```
+![Dashboard](docs/screenshots/mkvo-dashboard.png)
 
-Reference them from this README or other docs with standard Markdown:
+### Rename Files
 
-```markdown
-![Dashboard scan](docs/screenshots/dashboard-scan.png)
-```
+![Rename Files](docs/screenshots/mkvo-rename.png)
+
+### Mux / Remux
+
+![Mux / Remux](docs/screenshots/mkvo-mux_remux.png)
+
+### Track Properties
+
+![Track Properties](docs/screenshots/mkvo-track_properties.png)
+
+### Library
+
+![Library](docs/screenshots/mkvo-library.png)
+
+### Settings
+
+![Settings](docs/screenshots/mkvo-settings.png)
+
+### Logs
+
+![Logs](docs/screenshots/mkvo-logs.png)
+
+Screenshots live in [`docs/screenshots/`](docs/screenshots/); see that folder's README for naming conventions when adding new captures.
 
 ## Requirements
 
