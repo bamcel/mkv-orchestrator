@@ -617,7 +617,7 @@
 
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="MP4" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentBrush}" />
                             <TextBlock Grid.Row="1" Grid.Column="1"
-                                       Text="Read-only integration: scan, inspect, cache, library overview, and rename planning through ffprobe metadata. MP4 files are not converted, remuxed, muxed, or property-edited by MKV Orchestrator."
+                                       Text="Read-only integration: scan, inspect, cache, library overview, and rename planning through ffprobe metadata. MP4 files can optionally be converted to MKV in Mux / Remux via a lossless container copy; MP4 internals are never edited in place."
                                        TextWrapping="Wrap" />
 
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Safety" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentBrush}" />

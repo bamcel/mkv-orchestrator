@@ -140,4 +140,4 @@ The Settings page reports the resolved tool paths and version strings from insid
 
 ## Current Scope
 
-This is a single-container web release. Dashboard scanning, rename preview/apply/undo, mux/remux planning, track property edits, library overview, settings, and logs are exposed through the same ASP.NET Core host. The processing logic should continue moving through shared core services instead of being duplicated in the React UI.
+This is a single-container web release. Dashboard scanning, rename preview/apply/undo, mux/remux planning, lossless MP4 to MKV conversion, track property edits, library overview, settings, and logs are exposed through the same ASP.NET Core host. The processing logic should continue moving through shared core services instead of being duplicated in the React UI.

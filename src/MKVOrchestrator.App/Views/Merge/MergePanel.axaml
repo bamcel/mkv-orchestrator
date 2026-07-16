@@ -112,9 +112,27 @@
                             IsChecked="{Binding MergePreserveAttachments}" />
                 </StackPanel>
 
-                <TextBlock Grid.Row="6" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,8,0,1" />
+                <StackPanel Grid.Row="6" Spacing="1" IsVisible="{Binding HasMp4Files}">
+                  <TextBlock Text="MP4 Conversion" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,8,0,1" />
+                  <TextBlock Text="{Binding Mp4FileCountText}" Classes="muted" FontSize="12" />
+                </StackPanel>
 
-                <StackPanel Grid.Row="7"
+                <StackPanel Grid.Row="7" Spacing="3" HorizontalAlignment="Left" Width="318" IsVisible="{Binding HasMp4Files}">
+                  <CheckBox Content="Convert selected MP4 files to MKV"
+                            IsChecked="{Binding MergeConvertMp4ToMkv}" />
+                  <CheckBox Content="Delete original MP4 after success"
+                            IsChecked="{Binding MergeDeleteMp4AfterConvert}"
+                            IsEnabled="{Binding MergeConvertMp4ToMkv}"
+                            Margin="10,0,0,0" />
+                  <TextBlock Text="Lossless container copy via mkvmerge - no re-encoding. The new .mkv is created next to the source file; files whose .mkv already exists are skipped."
+                             TextWrapping="Wrap"
+                             Classes="muted"
+                             FontSize="12" />
+                </StackPanel>
+
+                <TextBlock Grid.Row="8" Text="Execution" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextBrush}" Margin="0,8,0,1" />
+
+                <StackPanel Grid.Row="9"
                             Orientation="Horizontal"
                             Spacing="6"
                             Margin="0,4,0,0"

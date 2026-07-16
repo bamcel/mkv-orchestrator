@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MKVOrchestrator.Core.Models;
+using MKVOrchestrator.Core.Services;
 
 namespace MKVOrchestrator.App.ViewModels;
 
@@ -30,6 +31,18 @@ public partial class MainWindowViewModel
     [ObservableProperty] private bool mergeExtractSubtitles;
     [ObservableProperty] private string mergeExtractSubtitleLanguages = "eng";
     [ObservableProperty] private bool mergeExtractOverwriteExistingFiles;
+    [ObservableProperty] private bool mergeConvertMp4ToMkv;
+    [ObservableProperty] private bool mergeDeleteMp4AfterConvert;
+
+    public bool HasMp4Files => Files.Any(f => CrossPlatformRuntime.IsMp4Path(f.FilePath));
+    public string Mp4FileCountText
+    {
+        get
+        {
+            var count = Files.Count(f => CrossPlatformRuntime.IsMp4Path(f.FilePath));
+            return count == 1 ? "1 MP4 file detected" : $"{count} MP4 files detected";
+        }
+    }
 
     [RelayCommand]
     private void BuildMkvMergePreview()
@@ -118,8 +131,21 @@ public partial class MainWindowViewModel
                     AddMkvMergeLine("  SUCCESS");
                     _executionQueue.Complete(job, "SUCCESS");
                     var file = Files.FirstOrDefault(f => string.Equals(f.FilePath, action.SourceFilePath, StringComparison.OrdinalIgnoreCase));
-                    if (file is not null) file.Status = "Remuxed - refresh pending";
-                    await RefreshFileMediaInfoAsync(action.SourceFilePath, _cts.Token);
+                    if (string.Equals(action.Operation, "convert-mkv", StringComparison.OrdinalIgnoreCase))
+                    {
+                        AddMkvMergeLine($"  Created: {Path.GetFileName(action.FinalOutputPath)}");
+                        if (file is not null)
+                        {
+                            file.Status = action.DeleteSourceAfterSuccess
+                                ? "Converted to MKV - original deleted, rescan folder"
+                                : "Converted to MKV - rescan folder to load it";
+                        }
+                    }
+                    else
+                    {
+                        if (file is not null) file.Status = "Remuxed - refresh pending";
+                        await RefreshFileMediaInfoAsync(action.SourceFilePath, _cts.Token);
+                    }
                 }
                 else
                 {
@@ -160,7 +186,7 @@ public partial class MainWindowViewModel
 
     private MkvMergeRemuxPlan BuildMkvMergePlan()
     {
-        return _mkvMerge.BuildRemuxPlan(
+        var plan = _mkvMerge.BuildRemuxPlan(
             Files,
             MergeKeepAudioLanguages,
             MergeKeepSubtitleLanguages,
@@ -179,6 +205,22 @@ public partial class MainWindowViewModel
             MergeExtractSubtitles,
             MergeExtractSubtitleLanguages,
             MergeExtractOverwriteExistingFiles);
+
+        if (!MergeConvertMp4ToMkv)
+        {
+            return plan;
+        }
+
+        var convertPlan = _mkvMerge.BuildConvertToMkvPlan(Files, MergeDeleteMp4AfterConvert);
+        plan.Actions.AddRange(convertPlan.Actions);
+
+        // MP4s picked up by the conversion pass are no longer "no change".
+        var actionPaths = plan.Actions
+            .Select(action => action.SourceFilePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        plan.NoChangeFiles.RemoveAll(actionPaths.Contains);
+
+        return plan;
     }
 
     private void BuildMkvMergeSummary(MkvMergeRemuxPlan plan, bool dryRun, int completed, int failed)
