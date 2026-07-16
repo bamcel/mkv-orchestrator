@@ -296,3 +296,9 @@ MKVO uses external tools and metadata providers selected or configured by the us
 - FFmpeg and ffprobe are used for media metadata inspection.
 - This product uses the TMDB API but is not endorsed or certified by TMDB.
 - Metadata may be provided by TheTVDB.
+
+MKVO invokes MKVToolNix and FFmpeg as external tools and does not bundle or link their code in this repository. Those projects are distributed under their own licenses.
+
+## License
+
+MKV Orchestrator is released under the [MIT License](LICENSE).
