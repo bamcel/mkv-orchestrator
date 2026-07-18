@@ -1,5 +1,12 @@
 # Versioning and Migrations
 
+## Product version
+
+The current product version is `1.1.0`. The shared .NET version is defined in
+`Directory.Build.props`; the web package version is kept in `web/package.json`
+and `web/package-lock.json`. Release tags use the matching `vMAJOR.MINOR.PATCH`
+format, such as `v1.1.0`.
+
 ## Settings schema
 
 `AppSettings.SettingsSchemaVersion` tracks the JSON settings schema.

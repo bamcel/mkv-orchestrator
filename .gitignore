@@ -21,6 +21,7 @@ logs/
 publish/
 artifacts/publish/
 artifacts/release/
+artifacts/review-publish/
 tmp/
 node_modules/
 web/node_modules/
