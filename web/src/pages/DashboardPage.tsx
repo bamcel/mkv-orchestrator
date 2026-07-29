@@ -278,7 +278,7 @@ export function DashboardPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Dashboard" description="Scan folders and review MKV or MP4 file metadata." />
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[370px_minmax(0,1fr)] gap-5">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[278px_minmax(0,1fr)] gap-5">
         <section className="min-h-0 overflow-auto rounded-xl border border-border bg-card p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
           <h2 className="text-base font-semibold">Scan Sources</h2>
 
@@ -327,7 +327,7 @@ export function DashboardPage() {
             <button
               type="button"
               onClick={openBrowse}
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+              className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-button px-2 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
             >
               <FolderOpen size={15} />
               Browse
@@ -335,7 +335,7 @@ export function DashboardPage() {
             <button
               onClick={runScan}
               disabled={isScanning || !hasSources}
-              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-window transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled"
+              className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-2 text-sm font-semibold text-window transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled"
             >
               {isScanning ? <RefreshCw size={15} className="animate-spin" /> : <Search size={15} />}
               Scan
@@ -464,7 +464,7 @@ export function DashboardPage() {
           ) : null}
 
           {selectedFile ? (
-            <div className="mt-4 grid h-[26vh] min-h-[190px] max-h-[250px] min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4">
+            <div className="mt-4 grid h-[26vh] min-h-[190px] max-h-[250px] min-w-0 shrink-0 grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-4">
               <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-panel p-4">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">Media Info</h3>
@@ -497,15 +497,15 @@ export function DashboardPage() {
               <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-panel p-4">
                 <h3 className={["text-sm font-semibold", selectedFile && !isTemplate(selectedFile) && normalizeTrackSignature(selectedFile) !== normalizeTrackSignature(templateFile ?? selectedFile) ? "text-warning" : ""].join(" ")}>Track Info</h3>
                 <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-md border border-border">
-                  <table className="w-full border-collapse text-left text-xs">
+                  <table className="w-full table-fixed border-collapse text-left text-xs">
                     <thead className="sticky top-0 bg-panel text-subtle">
                       <tr>
-                        <th className="border-b border-border px-2 py-2">ID</th>
-                        <th className="border-b border-border px-2 py-2">Type</th>
-                        <th className="border-b border-border px-2 py-2">Codec</th>
-                        <th className="border-b border-border px-2 py-2">Lang</th>
+                        <th className="w-10 border-b border-border px-2 py-2">ID</th>
+                        <th className="w-16 border-b border-border px-2 py-2">Type</th>
+                        <th className="w-24 border-b border-border px-2 py-2">Codec</th>
+                        <th className="w-14 border-b border-border px-2 py-2">Lang</th>
                         <th className="border-b border-border px-2 py-2">Name</th>
-                        <th className="border-b border-border px-2 py-2">Flags</th>
+                        <th className="w-20 border-b border-border px-2 py-2">Flags</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -515,12 +515,12 @@ export function DashboardPage() {
                         </tr>
                       ) : selectedFile.tracks.map((track, index) => (
                         <tr key={`${track.type}-${track.id}-${track.trackNumber}`} className="bg-card">
-                          <td className="border-b border-border px-2 py-2">{track.id}</td>
-                          <td className={["border-b border-border px-2 py-2 capitalize", trackTextClass(index, (item) => item.type)].join(" ")}>{track.type}</td>
-                          <td className={["border-b border-border px-2 py-2", trackTextClass(index, (item) => item.codec)].join(" ")}>{track.codec || "Unknown"}</td>
-                          <td className={["border-b border-border px-2 py-2", trackTextClass(index, (item) => item.language)].join(" ")}>{track.language || "und"}</td>
+                          <td className="truncate border-b border-border px-2 py-2">{track.id}</td>
+                          <td className={["truncate border-b border-border px-2 py-2 capitalize", trackTextClass(index, (item) => item.type)].join(" ")}>{track.type}</td>
+                          <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => item.codec)].join(" ")} title={track.codec}>{track.codec || "Unknown"}</td>
+                          <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => item.language)].join(" ")}>{track.language || "und"}</td>
                           <td className={["max-w-[220px] truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => item.name)].join(" ")} title={track.name}>{track.name || "-"}</td>
-                          <td className={["border-b border-border px-2 py-2", trackTextClass(index, (item) => `${item.default}-${item.forced}`), trackTextClass(index, (item) => `${item.default}-${item.forced}`) === "text-text" ? "text-subtle" : ""].join(" ")}>
+                          <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => `${item.default}-${item.forced}`), trackTextClass(index, (item) => `${item.default}-${item.forced}`) === "text-text" ? "text-subtle" : ""].join(" ")}>
                             {[track.default ? "Default" : "", track.forced ? "Forced" : ""].filter(Boolean).join(", ") || "-"}
                           </td>
                         </tr>
