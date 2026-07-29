@@ -211,7 +211,7 @@ export function MuxRemuxPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Mux / Remux" description="Remove tracks, mux matching subtitle sidecars, or extract subtitle tracks with MKVToolNix." />
-      <div className="grid min-h-0 flex-1 grid-cols-[370px_1fr] gap-3">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[278px_minmax(0,1fr)] gap-3">
         <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-card p-3 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
           <div className="flex justify-end">
             <button onClick={refreshFiles} className="rounded-md border border-border bg-button px-2.5 py-1.5 text-xs font-semibold text-muted hover:bg-button-hover hover:text-text">Refresh</button>
