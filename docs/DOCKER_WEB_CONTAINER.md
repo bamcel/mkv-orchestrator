@@ -112,7 +112,7 @@ Do not commit `.env`, SMB usernames, SMB passwords, API keys, or server-specific
 An Unraid Docker template is available at:
 
 ```text
-unraid/mkvo.xml
+unraid/my-MKV-Orchestrator.xml
 ```
 
 The template uses generic defaults:
