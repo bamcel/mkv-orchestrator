@@ -290,7 +290,7 @@ export function TrackPropertiesPage() {
         <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_190px] gap-3">
           <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
             <h2 className="shrink-0 text-base font-semibold">Track Properties</h2>
-            <div className="mt-4 grid min-h-0 flex-1 grid-rows-2 gap-3">
+            <div className="mt-4 grid min-h-0 flex-1 auto-rows-[minmax(260px,1fr)] gap-3 overflow-y-auto pr-1">
               <TrackEditor
                   title="Audio Tracks"
                   rows={audioTracks}
@@ -407,14 +407,14 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
   onChange: (type: TrackType, trackNumber: number, patch: Partial<PropEditTrackConfigRow>) => void;
 }) {
   return (
-    <section className="flex min-h-0 flex-col rounded-lg border border-border bg-panel p-3">
+    <section className="flex min-h-[260px] min-w-0 flex-col rounded-lg border border-border bg-panel p-3">
       <h3 className="text-base font-semibold">{title}</h3>
       <div className="mt-2 flex shrink-0 flex-wrap gap-3">
         <FlagSelect label="Set default track" value={defaultValue} onChange={onDefaultChange} options={flagOptions} />
         <FlagSelect label="Set forced track" value={forcedValue} onChange={onForcedChange} options={flagOptions} />
       </div>
 
-      <div className="mt-2 min-h-0 flex-1 overflow-auto bg-card">
+      <div className="mt-2 min-h-[140px] min-w-0 flex-1 overflow-auto rounded-md border border-border bg-card">
         {rows.length === 0 ? (
           <div className="flex h-full min-h-[120px] items-center justify-center text-sm text-subtle">No tracks available.</div>
         ) : (
