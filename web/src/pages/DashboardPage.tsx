@@ -91,6 +91,10 @@ export function DashboardPage() {
     if (files.length === 0) return null;
     return files.find((file) => file.path === templateFilePath) ?? files[0];
   }, [files, templateFilePath]);
+  const selectedMismatchMessages = useMemo(
+    () => selectedFile ? getTemplateMismatchMessages(selectedFile, templateFile) : [],
+    [selectedFile, templateFile]
+  );
   const dashboardStatus = actionStatus
     || (isScanning ? `scan executing ${progressText}` : files.length > 0 ? `${files.length} file(s) scanned` : hasSources ? "ready" : "choose a source to scan");
 
@@ -373,6 +377,14 @@ export function DashboardPage() {
           </div>
 
           <div className="mt-4 text-sm text-success">{dashboardStatus}</div>
+          {selectedMismatchMessages.length > 0 ? (
+            <div className="mt-3 rounded-md border border-warning bg-input p-3 text-xs text-warning">
+              <div className="font-semibold">Selected file mismatches</div>
+              <ul className="mt-2 list-disc space-y-1 pl-4 leading-5">
+                {selectedMismatchMessages.map((message) => <li key={message}>{message}</li>)}
+              </ul>
+            </div>
+          ) : null}
           {currentScanJob?.currentSource && isScanning ? (
             <div className="mt-2 truncate text-xs text-subtle" title={currentScanJob.currentSource}>
               {currentScanJob.currentSource}
@@ -767,14 +779,56 @@ function normalizeCompareValue(value: string | null | undefined) {
 }
 
 function hasTemplateMismatch(file: MediaFileRow, templateFile: MediaFileRow | null) {
-  if (!templateFile || file.path === templateFile.path) return false;
+  return getTemplateMismatchMessages(file, templateFile).length > 0;
+}
 
-  return normalizeCompareValue(file.codec) !== normalizeCompareValue(templateFile.codec)
-    || normalizeCompareValue(file.resolution) !== normalizeCompareValue(templateFile.resolution)
-    || normalizeCompareValue(file.bitDepth) !== normalizeCompareValue(templateFile.bitDepth)
-    || normalizeCompareValue(file.audioSummary) !== normalizeCompareValue(templateFile.audioSummary)
-    || normalizeCompareValue(file.subtitleSummary) !== normalizeCompareValue(templateFile.subtitleSummary)
-    || normalizeTrackSignature(file) !== normalizeTrackSignature(templateFile);
+function getTemplateMismatchMessages(file: MediaFileRow, templateFile: MediaFileRow | null) {
+  if (!templateFile || file.path === templateFile.path) return [];
+
+  const messages: string[] = [];
+  addValueMismatch(messages, "Codec", file.codec, templateFile.codec);
+  addValueMismatch(messages, "Resolution", file.resolution, templateFile.resolution);
+  addValueMismatch(messages, "Bit depth", file.bitDepth, templateFile.bitDepth);
+  addValueMismatch(messages, "Audio summary", file.audioSummary, templateFile.audioSummary);
+  addValueMismatch(messages, "Subtitle summary", file.subtitleSummary, templateFile.subtitleSummary);
+
+  const trackCount = Math.max(file.tracks.length, templateFile.tracks.length);
+  for (let index = 0; index < trackCount; index += 1) {
+    const track = file.tracks[index];
+    const templateTrack = templateFile.tracks[index];
+    const label = `Track ${index + 1}`;
+
+    if (!track && templateTrack) {
+      messages.push(`${label} is missing (template: ${formatCompareValue(templateTrack.type)}).`);
+      continue;
+    }
+    if (track && !templateTrack) {
+      messages.push(`${label} is extra (${formatCompareValue(track.type)}).`);
+      continue;
+    }
+    if (!track || !templateTrack) continue;
+
+    addValueMismatch(messages, `${label} ID`, `${track.id}/${track.trackNumber}`, `${templateTrack.id}/${templateTrack.trackNumber}`);
+    addValueMismatch(messages, `${label} type`, track.type, templateTrack.type);
+    addValueMismatch(messages, `${label} codec`, track.codec, templateTrack.codec);
+    addValueMismatch(messages, `${label} language`, track.language, templateTrack.language);
+    const isVideo = normalizeCompareValue(track.type) === "video" || normalizeCompareValue(templateTrack.type) === "video";
+    if (!isVideo) addValueMismatch(messages, `${label} name`, track.name, templateTrack.name);
+    addValueMismatch(messages, `${label} default flag`, track.default ? "Yes" : "No", templateTrack.default ? "Yes" : "No");
+    addValueMismatch(messages, `${label} forced flag`, track.forced ? "Yes" : "No", templateTrack.forced ? "Yes" : "No");
+  }
+
+  return messages;
+}
+
+function addValueMismatch(messages: string[], label: string, value: string, templateValue: string) {
+  if (normalizeCompareValue(value) === normalizeCompareValue(templateValue)) return;
+  messages.push(`${label}: ${formatCompareValue(value)} (template: ${formatCompareValue(templateValue)}).`);
+}
+
+function formatCompareValue(value: string | null | undefined) {
+  const clean = (value ?? "").trim();
+  return clean || "None";
 }
 
 function normalizeTrackSignature(file: MediaFileRow) {
