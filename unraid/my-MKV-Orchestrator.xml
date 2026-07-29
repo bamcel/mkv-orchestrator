@@ -12,7 +12,7 @@
   <Overview>MKV Orchestrator is a media operations console for scanning MKV/MP4 files, reviewing media and track metadata, renaming files from TVDB/TMDB metadata, mux/remux planning, track property edits, and library overview workflows. The container includes MKVToolNix and FFmpeg/FFprobe. Mount your Unraid shares into /media and optionally /downloads; configure provider API keys in the web Settings page or through the optional masked environment variables below.</Overview>
   <Category>MediaApp:Video Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/bamcel/mkv-orchestrator/main/unraid/mkvo.xml</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/bamcel/mkv-orchestrator/main/unraid/my-MKV-Orchestrator.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/bamcel/mkv-orchestrator/main/web/src/assets/mkvo-icon-purple.png</Icon>
   <ExtraParams/>
   <PostArgs/>
