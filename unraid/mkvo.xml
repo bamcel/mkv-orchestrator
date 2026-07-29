@@ -20,7 +20,7 @@
   <DonateText/>
   <DonateLink/>
   <Requires/>
-  <Config Name="Web UI Port" Target="8080" Default="8080" Mode="tcp" Description="Web interface port." Type="Port" Display="always" Required="true" Mask="false">8080</Config>
+  <Config Name="Web UI Port" Target="8080" Default="8886" Mode="tcp" Description="Web interface port." Type="Port" Display="always" Required="true" Mask="false">8886</Config>
   <Config Name="Media Path" Target="/media" Default="/mnt/user/media" Mode="rw" Description="Primary media library path mounted into the container." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media</Config>
   <Config Name="Downloads Path" Target="/downloads" Default="/mnt/user/downloads/media" Mode="rw" Description="Optional downloads or staging path mounted into the container." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/downloads/media</Config>
   <Config Name="Config Path" Target="/config" Default="/mnt/user/appdata/mkvo" Mode="rw" Description="Persistent MKVO settings, logs, and cache data." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/mkvo</Config>

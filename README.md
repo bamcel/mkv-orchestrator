@@ -242,7 +242,7 @@ docker compose up --build
 Open:
 
 ```text
-http://localhost:8080
+http://localhost:8886
 ```
 
 Default local volume mounts:
