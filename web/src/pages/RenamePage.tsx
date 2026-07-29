@@ -610,11 +610,18 @@ export function RenamePage() {
           <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
         </section>
 
-        <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_190px] gap-3">
-        <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+        <div className="min-h-0 min-w-0">
+        <section className="flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
           <div className="flex shrink-0 items-center justify-between">
             <h2 className="text-base font-semibold">Rename Preview</h2>
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSummaryExpanded(true)}
+                className="inline-flex h-9 min-w-32 items-center justify-center whitespace-nowrap rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+              >
+                Preview Summary
+              </button>
               <button
                 type="button"
                 onClick={() => setCompactPreview((current) => !current)}
@@ -688,21 +695,6 @@ export function RenamePage() {
               </div>
             )}
           </div>
-        </section>
-        <section className="rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Preview Summary</h3>
-            <button
-              type="button"
-              onClick={() => setIsSummaryExpanded(true)}
-              className="h-7 rounded-md bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-            >
-              Expand
-            </button>
-          </div>
-          <pre className="mt-3 h-[125px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-input p-3 font-mono text-xs leading-5 text-muted">
-            {previewSummary || "Build a preview to see planned filename changes."}
-          </pre>
         </section>
         </div>
       </div>

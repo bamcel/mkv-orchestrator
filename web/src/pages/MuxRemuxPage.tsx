@@ -299,9 +299,18 @@ export function MuxRemuxPage() {
           ) : null}
         </section>
 
-        <div className="grid min-h-0 min-w-0 grid-rows-[1.3fr_1fr_190px] gap-3">
+        <div className="grid min-h-0 min-w-0 grid-rows-[1.3fr_1fr] gap-3">
           <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
-            <h2 className="shrink-0 text-base font-semibold">File Info</h2>
+            <div className="flex shrink-0 items-center justify-between gap-3">
+              <h2 className="text-base font-semibold">File Info</h2>
+              <button
+                type="button"
+                onClick={() => setIsSummaryExpanded(true)}
+                className="inline-flex h-9 min-w-32 items-center justify-center whitespace-nowrap rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+              >
+                Preview Summary
+              </button>
+            </div>
             <div className="mt-3 min-h-0 flex-1 overflow-auto">
               <table className="w-full min-w-[900px] border-collapse text-left text-sm">
                 <thead className="sticky top-0 bg-card text-xs text-text">
@@ -393,21 +402,6 @@ export function MuxRemuxPage() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Preview Summary</h3>
-              <button
-                type="button"
-                onClick={() => setIsSummaryExpanded(true)}
-                className="h-7 rounded-md bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-              >
-                Expand
-              </button>
-            </div>
-            <pre className="mt-3 h-[125px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-input p-3 font-mono text-xs leading-5 text-muted">
-              {previewResult?.summary || "Build a preview to see planned mux/remux operations."}
-            </pre>
-          </section>
         </div>
       </div>
       {isSummaryExpanded ? (
