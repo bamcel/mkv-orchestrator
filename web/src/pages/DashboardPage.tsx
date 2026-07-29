@@ -278,7 +278,7 @@ export function DashboardPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Dashboard" description="Scan folders and review MKV or MP4 file metadata." />
-      <div className="grid min-h-0 flex-1 grid-cols-[370px_1fr] gap-5">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[370px_minmax(0,1fr)] gap-5">
         <section className="min-h-0 overflow-auto rounded-xl border border-border bg-card p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
           <h2 className="text-base font-semibold">Scan Sources</h2>
 
@@ -382,23 +382,23 @@ export function DashboardPage() {
         </section>
 
         <section className="flex min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
-          <div className="flex shrink-0 items-center justify-between">
-            <div>
+          <div className="flex min-w-0 shrink-0 items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
               <h2 className="text-base font-semibold">File Info</h2>
-              <div className="mt-1 max-w-[720px] truncate text-xs text-muted" title={templateFile?.path}>
+              <div className="mt-1 truncate text-xs text-muted" title={templateFile?.path}>
                 Template: {templateFile?.fileName ?? "None selected"}
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-3">
               <button
                 type="button"
                 onClick={useSelectedAsTemplate}
                 disabled={!selectedFile}
-                className="rounded-md border border-border bg-button px-3 py-2 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+                className="whitespace-nowrap rounded-md border border-border bg-button px-3 py-2 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
               >
                 Use Selected as Template
               </button>
-              <div className="text-xs text-muted">
+              <div className="whitespace-nowrap text-xs text-muted">
                 {summary.total} total | {summary.mkv} MKV | {summary.mp4} MP4 | {summary.failed} failed
               </div>
             </div>
@@ -464,7 +464,7 @@ export function DashboardPage() {
           ) : null}
 
           {selectedFile ? (
-            <div className="mt-4 grid h-[26vh] min-h-[190px] max-h-[250px] shrink-0 grid-cols-2 gap-4">
+            <div className="mt-4 grid h-[26vh] min-h-[190px] max-h-[250px] min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4">
               <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-panel p-4">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">Media Info</h3>
