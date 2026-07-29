@@ -211,10 +211,10 @@ export function MuxRemuxPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Mux / Remux" description="Remove tracks, mux matching subtitle sidecars, or extract subtitle tracks with MKVToolNix." />
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[278px_minmax(0,1fr)] gap-3">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[300px_minmax(0,1fr)] gap-3">
         <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
           <div className="flex justify-end">
-            <button onClick={refreshFiles} className="rounded-md border border-border bg-button px-2.5 py-1.5 text-xs font-semibold text-muted hover:bg-button-hover hover:text-text">Refresh</button>
+            <button onClick={refreshFiles} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">Refresh</button>
           </div>
 
           <div className="mt-2 flex gap-5 text-sm">
@@ -276,16 +276,16 @@ export function MuxRemuxPage() {
 
           <h2 className="mt-4 text-sm font-semibold">Execution</h2>
           <div className="mt-2 flex gap-2">
-            <button onClick={runPreview} disabled={preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0))} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
+            <button onClick={runPreview} disabled={preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0))} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
               {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
               Preview
             </button>
             {isApplying ? (
-              <button onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-10 flex-1 rounded-md border border-warning bg-button text-sm font-semibold text-warning hover:bg-button-hover disabled:text-disabled">
+              <button onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-9 flex-1 rounded-md border border-warning bg-button px-3 text-sm font-semibold text-warning hover:bg-button-hover disabled:text-disabled">
                 Cancel
               </button>
             ) : (
-              <button onClick={runApply} disabled={selectedMkvPaths.length === 0 || !previewResult?.actions.length} className="h-10 flex-1 rounded-md bg-accent text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
+              <button onClick={runApply} disabled={selectedMkvPaths.length === 0 || !previewResult?.actions.length} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
                 Apply
               </button>
             )}

@@ -48,15 +48,15 @@ export function LogsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Logs" description="Review recent scan and operation output." />
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[323px_minmax(0,1fr)] gap-5">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[300px_minmax(0,1fr)] gap-5">
         <section className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold">Recent Operations</h2>
             <div className="flex gap-2">
-              <button onClick={() => logs.refetch()} className="rounded-md border border-border bg-button p-2 text-muted hover:bg-button-hover hover:text-text" title="Refresh">
+              <button onClick={() => logs.refetch()} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-button text-muted hover:bg-button-hover hover:text-text" title="Refresh">
                 <RefreshCw size={15} />
               </button>
-              <button onClick={() => clear.mutate()} className="rounded-md border border-border bg-button p-2 text-muted hover:bg-button-hover hover:text-text" title="Clear">
+              <button onClick={() => clear.mutate()} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-button text-muted hover:bg-button-hover hover:text-text" title="Clear">
                 <Trash2 size={15} />
               </button>
             </div>
@@ -108,11 +108,11 @@ export function LogsPage() {
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold">Output</h2>
             <div className="flex gap-2">
-              <button onClick={copySelectedOutput} disabled={!selected} className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled" title="Copy output">
+              <button onClick={copySelectedOutput} disabled={!selected} className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled" title="Copy output">
                 <Copy size={14} />
                 Copy
               </button>
-              <button onClick={downloadSelectedOutput} disabled={!selected} className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled" title="Download output">
+              <button onClick={downloadSelectedOutput} disabled={!selected} className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled" title="Download output">
                 <Download size={14} />
                 Download
               </button>
