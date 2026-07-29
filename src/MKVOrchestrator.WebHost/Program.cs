@@ -598,7 +598,7 @@ static IReadOnlyList<SourceRoot> BuildStatusSourceRoots(IReadOnlyList<SourceRoot
 
     foreach (var folder in settings.WatchFolders)
     {
-        Add($"Watch: {GetDisplayPathName(folder)}", folder);
+        Add(GetDisplayPathName(folder), folder);
     }
 
     foreach (var server in settings.MediaServers)

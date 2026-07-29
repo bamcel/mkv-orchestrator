@@ -516,7 +516,7 @@ export function DashboardPage() {
                         </tr>
                       ) : selectedFile.tracks.map((track, index) => (
                         <tr key={`${track.type}-${track.id}-${track.trackNumber}`} className="bg-card">
-                          <td className="truncate border-b border-border px-2 py-2">{track.id}</td>
+                          <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => `${item.id}-${item.trackNumber}`)].join(" ")}>{track.id}</td>
                           <td className={["truncate border-b border-border px-2 py-2 capitalize", trackTextClass(index, (item) => item.type)].join(" ")}>{track.type}</td>
                           <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => item.codec)].join(" ")} title={track.codec}>{track.codec || "Unknown"}</td>
                           <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => item.language)].join(" ")}>{track.language || "und"}</td>
@@ -537,85 +537,100 @@ export function DashboardPage() {
 
       {isBrowseOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
-          <section className="flex h-[82vh] min-h-[620px] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-            <div className="flex h-[82px] shrink-0 items-center justify-between border-b border-border px-5 py-4">
+          <section className="flex h-[80vh] min-h-[560px] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+            <div className="flex h-[76px] shrink-0 items-center justify-between border-b border-border px-6 py-4">
               <div className="min-w-0">
-                <h2 className="text-base font-semibold">Browse Media Sources</h2>
-                <div className="mt-1 max-w-[620px] truncate font-mono text-xs text-subtle" title={browser.data?.path ?? browsePath}>
-                  {browser.data?.path ?? browsePath}
-                </div>
+                <h2 className="text-lg font-semibold">Browse Media Sources</h2>
+                <div className="mt-1 text-xs text-subtle">Choose a folder or an individual media file to add as a scan source.</div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsBrowseOpen(false)}
-                className="rounded-md p-2 text-muted transition hover:bg-button-hover hover:text-text"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted transition hover:bg-button-hover hover:text-text"
                 aria-label="Close browser"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="shrink-0 space-y-2 border-b border-border px-5 py-3">
-              <div className="flex items-center gap-2">
-                <input
-                  value={browsePathInput}
-                  onChange={(event) => setBrowsePathInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") navigateBrowsePath(browsePathInput);
-                  }}
-                  className="h-9 min-w-0 flex-1 rounded-md border border-border bg-input px-3 font-mono text-xs text-text outline-none transition focus:border-accent"
-                />
-                <button
-                  type="button"
-                  onClick={() => navigateBrowsePath(browsePathInput)}
-                  className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-                >
-                  Go
-                </button>
-                <button
-                  type="button"
-                  onClick={goBrowseParent}
-                  disabled={!browser.data?.parentPath && !getParentPath(browsePath)}
-                  className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
-                >
-                  <ChevronUp size={15} />
-                  Up
-                </button>
+            <div className="shrink-0 space-y-3 border-b border-border bg-panel/40 px-5 py-4">
+              <div>
+                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-subtle">Current location</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={goBrowseParent}
+                    disabled={!browser.data?.parentPath && !getParentPath(browsePath)}
+                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+                    title="Go to parent folder"
+                  >
+                    <ChevronUp size={15} />
+                    Up
+                  </button>
+                  <input
+                    value={browsePathInput}
+                    onChange={(event) => setBrowsePathInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") navigateBrowsePath(browsePathInput);
+                    }}
+                    className="h-10 min-w-0 flex-1 rounded-md border border-border bg-input px-3 font-mono text-sm text-text outline-none transition focus:border-accent"
+                    aria-label="Current folder path"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => navigateBrowsePath(browsePathInput)}
+                    className="h-10 shrink-0 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                  >
+                    Go
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => browser.refetch()}
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-button text-muted transition hover:bg-button-hover hover:text-text"
+                    title="Refresh current folder"
+                    aria-label="Refresh current folder"
+                  >
+                    <RefreshCw size={15} />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 overflow-x-auto">
-                {browseRootOptions.map((root) => (
-                  <button
-                    key={root.path}
-                    type="button"
-                    onClick={() => navigateBrowsePath(root.path)}
-                    className="h-9 shrink-0 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-                    title={root.path}
-                  >
-                    {root.name}
-                  </button>
-                ))}
-                <div className="min-w-2 flex-1" />
-                <button
-                  type="button"
-                  onClick={() => addBrowsePath(browser.data?.path ?? browsePath, "folder")}
-                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-window transition hover:bg-accent-hover"
-                >
-                  <Plus size={14} />
-                  Add This Folder
-                </button>
-                <button
-                  type="button"
-                  onClick={() => browser.refetch()}
-                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-                >
-                  <RefreshCw size={14} />
-                  Refresh
-                </button>
+              <div>
+                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-subtle">Libraries</div>
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {browseRootOptions.map((root) => {
+                    const activeRoot = normalizeCompareValue(root.path) === normalizeCompareValue(browser.data?.path ?? browsePath);
+                    return (
+                      <button
+                        key={root.path}
+                        type="button"
+                        onClick={() => navigateBrowsePath(root.path)}
+                        className={[
+                          "inline-flex h-9 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-semibold transition",
+                          activeRoot
+                            ? "border-accent bg-selected text-text"
+                            : "border-border bg-button text-muted hover:bg-button-hover hover:text-text"
+                        ].join(" ")}
+                        title={root.path}
+                      >
+                        <FolderOpen size={14} />
+                        {root.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-auto p-4">
+            <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
+              <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
+                <div className="min-w-0 truncate font-mono text-xs text-muted" title={browser.data?.path ?? browsePath}>
+                  {browser.data?.path ?? browsePath}
+                </div>
+                <div className="shrink-0 text-xs text-subtle">
+                  {browser.data?.entries.length ?? 0} item(s)
+                </div>
+              </div>
               {browser.isLoading ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted">loading directory</div>
               ) : browser.error ? (
@@ -640,14 +655,14 @@ export function DashboardPage() {
                               <span className="min-w-0 flex-1 truncate">{entry.name}</span>
                             </button>
                           </td>
-                          <td className="w-24 border-b border-border px-3 py-2 text-xs uppercase tracking-wide text-subtle">
+                          <td className="w-24 border-b border-border px-3 py-3 text-xs uppercase tracking-wide text-subtle">
                             {entry.kind}
                           </td>
                           <td className="w-24 border-b border-border px-3 py-2 text-right">
                             <button
                               type="button"
                               onClick={() => addBrowsePath(entry.path, entry.kind)}
-                              className="rounded-md border border-border bg-button px-2 py-1 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                              className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
                             >
                               Add
                             </button>
@@ -658,6 +673,26 @@ export function DashboardPage() {
                   </table>
                 </div>
               )}
+            </div>
+            <div className="flex h-[64px] shrink-0 items-center justify-between gap-4 border-t border-border bg-panel/40 px-5">
+              <div className="min-w-0 truncate text-xs text-subtle">Add the current folder, or use Add beside an individual item.</div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBrowseOpen(false)}
+                  className="h-9 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addBrowsePath(browser.data?.path ?? browsePath, "folder")}
+                  className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-window transition hover:bg-accent-hover"
+                >
+                  <Plus size={14} />
+                  Add Current Folder
+                </button>
+              </div>
             </div>
           </section>
         </div>
@@ -744,8 +779,9 @@ function hasTemplateMismatch(file: MediaFileRow, templateFile: MediaFileRow | nu
 
 function normalizeTrackSignature(file: MediaFileRow) {
   return file.tracks
-    .filter((track) => track.type === "audio" || track.type === "subtitles")
     .map((track) => [
+      String(track.id),
+      String(track.trackNumber),
       track.type,
       track.codec,
       track.language,
