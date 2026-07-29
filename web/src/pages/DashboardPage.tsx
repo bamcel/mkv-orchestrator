@@ -520,7 +520,7 @@ export function DashboardPage() {
                           <td className={["truncate border-b border-border px-2 py-2 capitalize", trackTextClass(index, (item) => item.type)].join(" ")}>{track.type}</td>
                           <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => item.codec)].join(" ")} title={track.codec}>{track.codec || "Unknown"}</td>
                           <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => item.language)].join(" ")}>{track.language || "und"}</td>
-                          <td className={["max-w-[220px] truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => item.name)].join(" ")} title={track.name}>{track.name || "-"}</td>
+                          <td className={["max-w-[220px] truncate border-b border-border px-2 py-2", normalizeCompareValue(track.type) === "video" ? "text-text" : trackTextClass(index, (item) => item.name)].join(" ")} title={track.name}>{track.name || "-"}</td>
                           <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => `${item.default}-${item.forced}`), trackTextClass(index, (item) => `${item.default}-${item.forced}`) === "text-text" ? "text-subtle" : ""].join(" ")}>
                             {[track.default ? "Default" : "", track.forced ? "Forced" : ""].filter(Boolean).join(", ") || "-"}
                           </td>
@@ -779,15 +779,18 @@ function hasTemplateMismatch(file: MediaFileRow, templateFile: MediaFileRow | nu
 
 function normalizeTrackSignature(file: MediaFileRow) {
   return file.tracks
-    .map((track) => [
-      String(track.id),
-      String(track.trackNumber),
-      track.type,
-      track.codec,
-      track.language,
-      track.name,
-      track.default ? "default" : "",
-      track.forced ? "forced" : ""
-    ].map(normalizeCompareValue).join("|"))
+    .map((track) => {
+      const isVideo = normalizeCompareValue(track.type) === "video";
+      return [
+        String(track.id),
+        String(track.trackNumber),
+        track.type,
+        track.codec,
+        track.language,
+        isVideo ? "" : track.name,
+        track.default ? "default" : "",
+        track.forced ? "forced" : ""
+      ].map(normalizeCompareValue).join("|");
+    })
     .join(";");
 }
