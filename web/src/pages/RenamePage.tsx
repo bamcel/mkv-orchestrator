@@ -445,7 +445,7 @@ export function RenamePage() {
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Rename" description="Match files to provider metadata and preview safe destination names." />
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[278px_minmax(0,1fr)] gap-3">
-        <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-card p-3 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+        <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold">Rename Options</h2>
             <button
