@@ -36,7 +36,10 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64
           push: true
+          provenance: false
+          sbom: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
