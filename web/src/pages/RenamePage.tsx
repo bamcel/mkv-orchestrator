@@ -205,7 +205,7 @@ export function RenamePage() {
   const preview = useMutation({
     mutationFn: buildRenamePreview,
     onSuccess: (response) => {
-      setPreviewRows(response.items);
+      setPreviewRows(response.items.map((item) => ({ ...item, selected: item.canApply })));
       setPreviewSummary(response.summary);
       setStatusText(response.status);
     },
@@ -444,14 +444,14 @@ export function RenamePage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Rename" description="Match files to provider metadata and preview safe destination names." />
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[278px_minmax(0,1fr)] gap-3">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[300px_minmax(0,1fr)] gap-3">
         <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold">Rename Options</h2>
             <button
               type="button"
               onClick={openUndoBatch}
-              className="h-8 shrink-0 rounded-md border border-border bg-button px-2.5 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+              className="h-9 shrink-0 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
             >
               Undo Batch
             </button>
@@ -618,7 +618,7 @@ export function RenamePage() {
               <button
                 type="button"
                 onClick={() => setCompactPreview((current) => !current)}
-                className="inline-flex h-8 min-w-32 items-center justify-center whitespace-nowrap rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                className="inline-flex h-9 min-w-32 items-center justify-center whitespace-nowrap rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
               >
                 {compactPreview ? "Detailed View" : "Compact View"}
               </button>

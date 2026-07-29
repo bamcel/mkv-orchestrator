@@ -278,7 +278,7 @@ export function DashboardPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Dashboard" description="Scan folders and review MKV or MP4 file metadata." />
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[278px_minmax(0,1fr)] gap-5">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[300px_minmax(0,1fr)] gap-5">
         <section className="min-h-0 overflow-auto rounded-xl border border-border bg-card p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
           <h2 className="text-base font-semibold">Scan Sources</h2>
 
@@ -365,7 +365,7 @@ export function DashboardPage() {
           <div className="mt-4 flex gap-2">
             <button
               onClick={() => status.refetch()}
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
             >
               <RefreshCw size={15} />
               Refresh
@@ -425,32 +425,33 @@ export function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {files.map((file) => (
-                      <tr
-                        key={file.path}
-                        onClick={() => setSelectedFilePath(file.path)}
-                        onContextMenu={(event) => openFileContextMenu(event, file)}
-                        className={[
-                          "cursor-pointer bg-card hover:bg-selected",
-                          selectedFile?.path === file.path ? "bg-selected" : ""
-                        ].join(" ")}
-                      >
-                        <td className={[
-                          "max-w-[340px] truncate border-b border-border px-3 py-2",
-                          isTemplate(file) ? "text-accent" : "text-text"
-                        ].join(" ")} title={file.path}>
-                          {file.fileName}
-                        </td>
-                        <td className="border-b border-border px-3 py-2 text-muted">{file.reader}</td>
-                        <td className={["border-b border-border px-3 py-2", compareTextClass(file, (row) => row.codec)].join(" ")}>{file.codec || "Unknown"}</td>
-                        <td className={["border-b border-border px-3 py-2", compareTextClass(file, (row) => row.resolution)].join(" ")}>{file.resolution || "Unknown"}</td>
-                        <td className={["max-w-[250px] truncate border-b border-border px-3 py-2", compareTextClass(file, (row) => row.audioSummary)].join(" ")} title={file.audioSummary}>{file.audioSummary || "None"}</td>
-                        <td className={["max-w-[250px] truncate border-b border-border px-3 py-2", compareTextClass(file, (row) => row.subtitleSummary)].join(" ")} title={file.subtitleSummary}>{file.subtitleSummary || "None"}</td>
-                        <td className={["border-b border-border px-3 py-2", isTemplate(file) ? "text-accent" : hasTemplateMismatch(file, templateFile) ? "text-warning" : "text-success"].join(" ")}>
-                          {isTemplate(file) ? "Template" : hasTemplateMismatch(file, templateFile) ? "Warning" : file.status}
-                        </td>
-                      </tr>
-                    ))}
+                    {files.map((file) => {
+                      const templateRow = isTemplate(file);
+                      const mismatchRow = !templateRow && hasTemplateMismatch(file, templateFile);
+
+                      return (
+                        <tr
+                          key={file.path}
+                          onClick={() => setSelectedFilePath(file.path)}
+                          onContextMenu={(event) => openFileContextMenu(event, file)}
+                          className={[
+                            "cursor-pointer bg-card hover:bg-selected",
+                            selectedFile?.path === file.path ? "bg-selected" : "",
+                            templateRow ? "text-accent" : mismatchRow ? "text-warning" : "text-text"
+                          ].join(" ")}
+                        >
+                          <td className="max-w-[340px] truncate border-b border-border px-3 py-2" title={file.path}>{file.fileName}</td>
+                          <td className="border-b border-border px-3 py-2">{file.reader}</td>
+                          <td className="border-b border-border px-3 py-2">{file.codec || "Unknown"}</td>
+                          <td className="border-b border-border px-3 py-2">{file.resolution || "Unknown"}</td>
+                          <td className="max-w-[250px] truncate border-b border-border px-3 py-2" title={file.audioSummary}>{file.audioSummary || "None"}</td>
+                          <td className="max-w-[250px] truncate border-b border-border px-3 py-2" title={file.subtitleSummary}>{file.subtitleSummary || "None"}</td>
+                          <td className={["border-b border-border px-3 py-2", !templateRow && !mismatchRow ? "text-success" : ""].join(" ")}>
+                            {templateRow ? "Template" : mismatchRow ? "Warning" : file.status}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -588,7 +589,7 @@ export function DashboardPage() {
                     key={root.path}
                     type="button"
                     onClick={() => navigateBrowsePath(root.path)}
-                    className="h-8 shrink-0 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                    className="h-9 shrink-0 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
                     title={root.path}
                   >
                     {root.name}
@@ -598,7 +599,7 @@ export function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => addBrowsePath(browser.data?.path ?? browsePath, "folder")}
-                  className="inline-flex h-8 shrink-0 items-center gap-2 rounded-md bg-accent px-3 text-xs font-semibold text-window transition hover:bg-accent-hover"
+                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-window transition hover:bg-accent-hover"
                 >
                   <Plus size={14} />
                   Add This Folder
@@ -606,7 +607,7 @@ export function DashboardPage() {
                 <button
                   type="button"
                   onClick={() => browser.refetch()}
-                  className="inline-flex h-8 shrink-0 items-center gap-2 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                  className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
                 >
                   <RefreshCw size={14} />
                   Refresh

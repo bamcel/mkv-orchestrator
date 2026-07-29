@@ -1936,7 +1936,7 @@ static RenamePreviewBuildResult BuildRenamePreviewRows(
         }
 
         rows.Add(new RenamePreviewRow(
-            Selected: !string.Equals(source.CurrentFileName, newFileName, StringComparison.OrdinalIgnoreCase),
+            Selected: true,
             SourcePath: source.Path,
             CurrentFileName: source.CurrentFileName,
             Detected: isMovie ? "Movie" : FormatDetectedEpisode(detectedSeason, detectedEpisode),
