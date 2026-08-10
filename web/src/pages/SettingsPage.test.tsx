@@ -236,3 +236,37 @@ describe("Settings library folders", () => {
     );
   });
 });
+
+describe("Settings attribution", () => {
+  /// TMDB's API terms require this notice. The Avalonia About tab carried it;
+  /// when that UI was deleted this became the only place it can appear.
+  it("shows the notice TMDB's terms require", async () => {
+    const user = userEvent.setup();
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^about$/i }));
+
+    expect(
+      await screen.findByText(
+        /this product uses the TMDB API but is not endorsed or certified by TMDB\./i
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("credits every provider and tool it relies on", async () => {
+    const user = userEvent.setup();
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^about$/i }));
+
+    for (const name of ["TMDB", "TheTVDB", "MKVToolNix", "FFmpeg"]) {
+      expect(await screen.findByAltText(`${name} logo`)).toBeInTheDocument();
+    }
+  });
+});

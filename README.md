@@ -2,9 +2,9 @@
 
 MKV Orchestrator, or MKVO, is a desktop media operations console for scanning media folders, reviewing track metadata, matching rename metadata from TVDB or TMDB, previewing safe file renames, planning mux/remux work, and editing MKV track properties.
 
-The app is built with Avalonia and is currently maintained as a desktop application.
+The app is built with Tauri and Rust. One React interface serves both the desktop app and the container, so a feature lands once and appears in both.
 
-A Docker web build is also available for server or NAS-style access. The desktop app remains the primary product, while the web container is maintained as a single-container companion that shares MKVO core processing logic.
+A Docker build is available for server or NAS-style access. Desktop and container run the same Rust core; they differ only in how they are reached and in how far they may browse -- the desktop browses the whole machine, the container stays inside the roots it was given.
 
 ## What MKVO Does
 
@@ -58,8 +58,9 @@ Screenshots live in [`docs/screenshots/`](docs/screenshots/); see that folder's 
 
 ### Required For Running From Source
 
-- Windows desktop environment.
-- .NET 10 SDK.
+- Windows desktop environment. Linux and macOS build from the same sources.
+- Rust 1.88 or newer.
+- Node.js 22 or newer.
 - Git, if you are cloning from GitHub.
 
 ### Required Media Tools
@@ -211,27 +212,31 @@ The repository `.gitignore` excludes the common local runtime files.
 
 ## Build From Source
 
-Restore and build:
+Build the workspace:
 
 ```powershell
-dotnet build MKVOrchestrator.sln
+cargo build --workspace
 ```
 
-Run the desktop app:
+Run the desktop app with hot reload:
 
 ```powershell
-dotnet run --project src\MKVOrchestrator.App\MKVOrchestrator.App.csproj
+npm --prefix web run tauri -- dev
 ```
 
-Run the test harness:
+Run the tests:
 
 ```powershell
-dotnet run --project tests\MKVOrchestrator.Tests\MKVOrchestrator.Tests.csproj
+cargo test --workspace
+```
+
+```powershell
+npm --prefix web test
 ```
 
 ## Docker Web Container
 
-The Docker build runs as one container. It serves the React web UI and ASP.NET Core API from the same process and installs MKVToolNix plus FFmpeg inside the image.
+The Docker build runs as one container. It serves the React web UI and the Rust API from the same process and installs MKVToolNix plus FFmpeg inside the image.
 
 Build and run:
 
@@ -269,15 +274,15 @@ Optional container settings (see `docs/DOCKER_WEB_CONTAINER.md` for the full lis
 - `MKVO_AUTH_USERNAME` / `MKVO_AUTH_PASSWORD` enable HTTP basic auth for the web UI and API.
 - `MKVO_SCAN_WORKERS` and `MKVO_EDIT_WORKERS` tune scan and mkvpropedit concurrency.
 
-The web container wires Dashboard, Rename, Mux / Remux, Track Properties, Library, Settings, and Logs through the single ASP.NET Core host. The web UI and desktop app should continue sharing processing behavior through `MKVOrchestrator.Core`.
+The container wires Dashboard, Rename, Mux / Remux, Track Properties, Library, Settings, and Logs through the single Rust host, from the same React sources the desktop app embeds.
 
-Publish a Windows test build:
+Publish desktop installers:
 
 ```powershell
-dotnet publish src\MKVOrchestrator.App\MKVOrchestrator.App.csproj -c Release -r win-x64 --self-contained true -o .\artifacts\publish\MKVO
+.\scripts\publish-windows.ps1
 ```
 
-Adjust the output folder as needed.
+Bundles are written to `target/release/bundle`. The Linux equivalent is `scripts/publish-linux.sh`.
 
 ## Documentation
 

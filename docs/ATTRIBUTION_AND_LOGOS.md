@@ -11,7 +11,7 @@ Settings > About
 Logo assets are stored in:
 
 ```text
-src/MKVOrchestrator.App/Assets/Logos/
+web/src/assets/logos/
 ```
 
 Current assets:
@@ -67,6 +67,9 @@ FFmpeg and ffprobe are used for media metadata analysis.
 - Keep provider attribution separate from primary workflow screens.
 - Do not make third-party branding more prominent than MKVO branding.
 
-## SVG runtime note
+## Image format note
 
-TMDB and TheTVDB logos are stored/rendered as PNG assets in the app to avoid requiring an additional Avalonia SVG image package at runtime.
+TMDB and TheTVDB logos are stored as PNG assets. The webview renders SVG
+natively, so the original constraint behind this choice -- avoiding an extra
+Avalonia SVG package -- no longer applies; PNG is kept because the supplied
+brand assets are authoritative in that form.

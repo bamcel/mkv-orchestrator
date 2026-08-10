@@ -2,10 +2,15 @@
 
 ## Product version
 
-The current product version is `1.1.0`. The shared .NET version is defined in
-`Directory.Build.props`; the web package version is kept in `web/package.json`
-and `web/package-lock.json`. Release tags use the matching `vMAJOR.MINOR.PATCH`
-format, such as `v1.1.0`.
+Release tags use `vMAJOR.MINOR.PATCH`, such as `v1.1.0`. The version now lives
+in three places: `version` under `[workspace.package]` in the root `Cargo.toml`,
+`version` in `apps/desktop/src-tauri/tauri.conf.json` (which sets the installer
+and window metadata), and `web/package.json` with its lock file.
+
+These currently disagree -- the Rust workspace and Tauri host say `0.1.0` while
+the web package still says `1.1.0`, a leftover of the .NET tree carrying the
+product version in `Directory.Build.props` before the cutover removed it. Settle
+on one number before the first Tauri release and set all three together.
 
 ## Settings schema
 

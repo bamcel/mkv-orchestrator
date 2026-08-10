@@ -881,13 +881,31 @@ Exit criteria: every desktop section meets its parity checklist.
 
 Exit criteria: Docker/NAS feature parity with the current web companion.
 
-### Phase 8: Cutover
+### Phase 8: Cutover — done 2026-08-08
 
 - Run side-by-side beta releases.
 - Provide settings/cache/history migration or documented rebuild behavior.
 - Measure scan results and generated plans against the current application.
 - Make Tauri the default desktop build only after parity gates pass.
 - Retire .NET projects after at least one stable release and rollback window.
+
+`src/MKVOrchestrator.{App,Cli,Core,WebHost}`, `tests/MKVOrchestrator.Tests`,
+the solution file and `Directory.Build.props` are deleted. The Rust container
+took the default `Dockerfile` and `docker-compose.yml` names, the `dotnet` CI
+job is gone, and the publish scripts build Tauri bundles.
+
+Two deliberate departures from the bullets above. The retirement happened
+without waiting out a stable release and rollback window: git history is the
+rollback, and keeping a parallel UI alive was the cost the migration existed to
+remove. And `MKVOrchestrator.Cli` (`scan`, `inspect`, `cleanup`, `rename`) went
+with it -- it depended on `Core` and so could not outlive the cutover. Nothing
+referenced it, and there is no Rust replacement; those verbs are reachable only
+through the desktop app or the HTTP API until one is written.
+
+What survives from the .NET era: `tests/parity-fixtures/`, read by eight Rust
+test sites, and the legacy settings importer in `mkvo-infra-sqlite`, which reads
+the old application's `settings.json` at runtime and is unaffected by the source
+deletion.
 
 ## 24. Data migration
 
