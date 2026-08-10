@@ -13,6 +13,7 @@ mkvo-application = { path = "../mkvo-application" }
 mkvo-contracts = { path = "../mkvo-contracts" }
 mkvo-domain = { path = "../mkvo-domain" }
 mkvo-infra-media-servers = { path = "../mkvo-infra-media-servers" }
+mkvo-infra-netshare = { path = "../mkvo-infra-netshare" }
 mkvo-infra-process = { path = "../mkvo-infra-process" }
 mkvo-infra-providers = { path = "../mkvo-infra-providers" }
 mkvo-infra-sqlite = { path = "../mkvo-infra-sqlite" }

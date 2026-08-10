@@ -22,6 +22,7 @@ use mkvo_domain::{
 use mkvo_infra_media_servers::{
     ConfiguredMediaServerClient, MediaServerDiscoveryClient, MediaServerPathMapping,
 };
+use mkvo_infra_netshare::{UncTarget, classify_unc, list_server_shares};
 use mkvo_infra_providers::{
     AniDbClient, AniListClient, ConfiguredAniDbProvider, ConfiguredAniListProvider,
     ConfiguredTmdbProvider, ConfiguredTvdbProvider, ProviderCredentials, SecretString, TmdbClient,
@@ -488,6 +489,17 @@ impl MkvoRuntime {
             return Ok(volume_listing());
         }
 
+        // A bare `\\server` is not a directory, so `read_dir` would only ever
+        // report that the network name cannot be found. Its shares have to be
+        // enumerated instead, which is how the user reaches a share that no
+        // drive letter points at.
+        if unrestricted
+            && let Some(requested) = path.as_deref()
+            && let Some(UncTarget::Server(server)) = classify_unc(requested)
+        {
+            return server_listing(&server);
+        }
+
         let requested = path
             .filter(|value| !value.trim().is_empty())
             .map_or_else(|| self.inner.config.media_root.clone(), PathBuf::from);
@@ -553,9 +565,17 @@ impl MkvoRuntime {
             }),
             // Above a volume root is the volume list, addressed as the empty
             // path, so the user can always navigate all the way out.
-            BrowseScope::Unrestricted => {
-                Some(authorized.parent().map_or_else(String::new, display_path))
-            }
+            BrowseScope::Unrestricted => Some(match authorized.parent() {
+                Some(parent) => display_path(parent),
+                // Rust folds `\\server\share` into a single path prefix, so a
+                // share root reports no parent even though the server above it
+                // is real and listable. Falling through to the volume list here
+                // would skip a level that a file manager shows.
+                None => match classify_unc(&display_path(&authorized)) {
+                    Some(UncTarget::Share { server }) => format!(r"\\{server}"),
+                    _ => String::new(),
+                },
+            }),
         };
         Ok(FileSystemResponse {
             path: display_path(&authorized),
@@ -1913,6 +1933,32 @@ fn volume_listing() -> FileSystemResponse {
         parent_path: None,
         entries,
     }
+}
+
+/// The shares a server publishes, presented as an ordinary folder listing so
+/// the browser can navigate into one without knowing it came from elsewhere.
+fn server_listing(server: &str) -> RuntimeResult<FileSystemResponse> {
+    let shares = list_server_shares(server).map_err(|error| {
+        RuntimeError::invalid(format!(r"cannot list the shares of \\{server}: {error}"))
+    })?;
+
+    Ok(FileSystemResponse {
+        path: format!(r"\\{server}"),
+        // Above a server is the volume list, the same as above a drive.
+        parent_path: Some(String::new()),
+        entries: shares
+            .into_iter()
+            .map(|share| FileSystemEntry {
+                name: share.name,
+                path: share.path,
+                kind: FileSystemEntryKind::Folder,
+                // A share has no meaningful size or timestamp of its own;
+                // asking the server for one would mean a round trip per share.
+                size_bytes: None,
+                modified_utc: SystemTime::UNIX_EPOCH.into(),
+            })
+            .collect(),
+    })
 }
 
 #[cfg(test)]

@@ -10,6 +10,8 @@ import {
   FileVideo,
   HardDrive,
   Monitor,
+  Network,
+  Plus,
   RefreshCw,
   Search,
   Star,
@@ -87,6 +89,9 @@ function formatSize(bytes: number | null): string {
 function formatModified(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
+  // A network share has no timestamp of its own and is reported as the epoch.
+  // Rendering that as "12/31/1969" would be worse than showing nothing.
+  if (date.getTime() === 0) return "";
   return date.toLocaleString(undefined, {
     year: "numeric",
     month: "2-digit",
@@ -94,6 +99,28 @@ function formatModified(value: string): string {
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+const networkStorageKey = "mkvo.web.networkLocations";
+
+/**
+ * The `\\server` root of a UNC path, or null when the path is local.
+ *
+ * `\\?\` and `\\.\` also begin with two separators but address a local device,
+ * so a leading `?` or `.` is not a server name.
+ */
+function networkRoot(path: string): string | null {
+  const match = /^[\\/]{2}([^\\/?.][^\\/]*)/.exec(path.trim());
+  return match ? `\\\\${match[1]}` : null;
+}
+
+function readNetworkLocations(): string[] {
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(networkStorageKey) ?? "[]");
+    return Array.isArray(stored) ? stored.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 function describeType(entry: FileSystemEntry): string {
@@ -116,6 +143,10 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
   const [selected, setSelected] = useState<FileSystemEntry | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  // Servers are remembered rather than discovered: enumerating hosts on the
+  // network is slow and unreliable, and a NAS the user has reached once is the
+  // one they want again.
+  const [networkLocations, setNetworkLocations] = useState<string[]>(readNetworkLocations);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const listing = useQuery({
@@ -148,6 +179,42 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
   }, [listing.data?.parentPath, navigate, path]);
 
   useEffect(() => setPathDraft(listing.data?.path ?? path), [listing.data?.path, path]);
+
+  // Remembering only on a successful listing keeps typos and unreachable hosts
+  // out of the sidebar.
+  const reachedPath = listing.data?.path;
+  useEffect(() => {
+    const server = reachedPath ? networkRoot(reachedPath) : null;
+    if (!server) return;
+    setNetworkLocations((current) => {
+      if (current.some((item) => samePath(item, server))) return current;
+      const next = [...current, server].sort((left, right) => left.localeCompare(right));
+      try {
+        window.localStorage.setItem(networkStorageKey, JSON.stringify(next));
+      } catch {
+        // Ignore storage failures; browsing should still work.
+      }
+      return next;
+    });
+  }, [reachedPath]);
+
+  function forgetNetworkLocation(server: string) {
+    setNetworkLocations((current) => {
+      const next = current.filter((item) => !samePath(item, server));
+      try {
+        window.localStorage.setItem(networkStorageKey, JSON.stringify(next));
+      } catch {
+        // Ignore storage failures; browsing should still work.
+      }
+      return next;
+    });
+  }
+
+  /** Opens the address bar ready for a UNC path, so adding a server needs no separate dialog. */
+  function addNetworkLocation() {
+    setPathDraft("\\\\");
+    setEditingPath(true);
+  }
 
   const entries = useMemo(() => {
     const all = listing.data?.entries ?? [];
@@ -284,7 +351,10 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
                 if (event.key === "Enter") setEditingPath(true);
               }}
               className="flex h-8 min-w-0 flex-1 cursor-text items-center gap-0.5 overflow-x-auto rounded-md border border-border bg-input px-2 text-xs"
-              title="Click to type a path"
+              // Labelled explicitly because the crumbs inside are buttons too,
+              // which would otherwise make this element's name theirs.
+              aria-label="Address bar"
+              title={`${currentPath || "This PC"} — click to type a path`}
             >
               {hasVolumeList ? (
                 <button
@@ -387,6 +457,49 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
                 <span className="truncate">{volume.name}</span>
               </button>
             ))}
+
+            {hasVolumeList ? (
+              <>
+                <div className="px-4 pb-1.5 pt-4 text-[10px] font-semibold uppercase tracking-wider text-subtle">
+                  Network
+                </div>
+                {networkLocations.map((server) => (
+                  <div key={server} className="group/net relative flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => navigate(server)}
+                      className={[
+                        "flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-4 pr-7 text-left text-xs transition",
+                        samePath(server, currentPath)
+                          ? "bg-selected text-text"
+                          : "text-muted hover:bg-button-hover hover:text-text"
+                      ].join(" ")}
+                      title={server}
+                    >
+                      <Network size={13} className="shrink-0 text-subtle" />
+                      <span className="truncate">{server.replace(/^\\\\/, "")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => forgetNetworkLocation(server)}
+                      className="absolute right-1.5 hidden h-5 w-5 items-center justify-center rounded text-subtle transition hover:bg-button-hover hover:text-text group-hover/net:flex"
+                      aria-label={`Forget ${server}`}
+                      title="Remove from this list"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addNetworkLocation}
+                  className="flex w-full items-center gap-2 px-4 py-1.5 text-left text-xs text-subtle transition hover:bg-button-hover hover:text-text"
+                >
+                  <Plus size={13} className="shrink-0" />
+                  <span className="truncate">Add network location</span>
+                </button>
+              </>
+            ) : null}
           </nav>
 
           <div
@@ -442,9 +555,12 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
                           <span className="truncate">{entry.name}</span>
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-3 py-1.5 text-subtle">{formatModified(entry.modifiedUtc)}</td>
-                      <td className="whitespace-nowrap px-3 py-1.5 text-subtle">{describeType(entry)}</td>
-                      <td className="whitespace-nowrap px-3 py-1.5 text-right text-subtle">{formatSize(entry.sizeBytes)}</td>
+                      {/* Truncating rather than merely not wrapping keeps a
+                          long value from overflowing its fixed column and
+                          scrolling the whole list sideways. */}
+                      <td className="truncate px-3 py-1.5 text-subtle">{formatModified(entry.modifiedUtc)}</td>
+                      <td className="truncate px-3 py-1.5 text-subtle">{describeType(entry)}</td>
+                      <td className="truncate px-3 py-1.5 text-right text-subtle">{formatSize(entry.sizeBytes)}</td>
                     </tr>
                   );
                 })}

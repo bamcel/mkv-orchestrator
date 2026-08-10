@@ -180,6 +180,7 @@ mkv-orchestrator/
 │   ├── mkvo-infra-providers/
 │   ├── mkvo-infra-watch/
 │   ├── mkvo-infra-media-servers/
+│   ├── mkvo-infra-netshare/
 │   └── mkvo-test-support/
 ├── migrations/                     # SQLite migrations
 ├── fixtures/                       # Sanitized mkvmerge/ffprobe/provider fixtures
@@ -285,6 +286,7 @@ pub trait MetadataCache: Send + Sync {
 - `mkvo-infra-providers`: TVDB/TMDB HTTP clients, normalization, retry policy, credential redaction, and response caching.
 - `mkvo-infra-watch`: native filesystem watching, polling fallback, debounce, refresh dispatch, and stale cache removal.
 - `mkvo-infra-media-servers`: Emby/Jellyfin/Plex discovery, connection tests, per-library selection, and path mapping.
+- `mkvo-infra-netshare`: UNC classification and SMB share enumeration, so a NAS that no drive letter points at is still browsable. The only crate permitted to use `unsafe`; the workspace forbids it everywhere else, and this crate exists so that ban stays intact.
 
 ## 9. Frontend architecture
 

@@ -7,6 +7,7 @@ members = [
     "crates/mkvo-contracts",
     "crates/mkvo-domain",
     "crates/mkvo-infra-media-servers",
+    "crates/mkvo-infra-netshare",
     "crates/mkvo-infra-process",
     "crates/mkvo-infra-providers",
     "crates/mkvo-infra-sqlite",
