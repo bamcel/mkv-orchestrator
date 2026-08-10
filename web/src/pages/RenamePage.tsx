@@ -437,8 +437,8 @@ export function RenamePage() {
       items: previewRows,
       provider,
       template,
-      planId: preview.data?.planId,
-      planFingerprint: preview.data?.planFingerprint,
+      planId: preview.data?.planId ?? undefined,
+      planFingerprint: preview.data?.planFingerprint ?? undefined,
       idempotencyKey: preview.data?.idempotencyKey ?? crypto.randomUUID()
     });
   }

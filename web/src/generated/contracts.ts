@@ -153,9 +153,7 @@ export interface JobSummary {
 }
 
 export interface LibraryAuditRequest {
-  "root": string;
-  "ignoredFolderNames": Array<string>;
-  "includeUncached": boolean;
+  "files": Array<MediaFileRow>;
 }
 
 export interface LibraryAuditResponse {
@@ -249,8 +247,8 @@ export interface MediaFileRow {
 export interface MediaServerConnectionRequest {
   "id"?: string | null;
   "name"?: string | null;
-  "kind": MediaServerKind;
-  "serverUrl": string;
+  "type"?: string | null;
+  "serverUrl"?: string | null;
   "apiKey"?: string | null;
 }
 
@@ -293,8 +291,10 @@ export interface MuxActionRow {
   "command": string;
 }
 
+export type MuxApplyRequest = MuxPreviewRequest;
+
 export interface MuxPreviewRequest {
-  "files": Array<MediaFileDto>;
+  "files": Array<MediaFileRow>;
   "selectedPaths": Array<string>;
   "removeUnwantedAudioLanguages": boolean;
   "keepAudioLanguages": string;
@@ -306,6 +306,7 @@ export interface MuxPreviewRequest {
   "preserveAttachments": boolean;
   "muxMatchingExternalSubtitles": boolean;
   "externalSubtitleLanguage": string;
+  "externalSubtitleTrackName"?: string | null;
   "externalSubtitleFormats": string;
   "preserveExternalSubtitleFiles": boolean;
   "skipMuxIfSubtitleAlreadyExists": boolean;
@@ -314,7 +315,8 @@ export interface MuxPreviewRequest {
   "extractOverwriteExistingFiles": boolean;
   "convertMp4ToMkv": boolean;
   "deleteMp4AfterConvert": boolean;
-  "expiresInSeconds": number;
+  "planId"?: string | null;
+  "planFingerprint"?: string | null;
   "idempotencyKey"?: string | null;
 }
 
@@ -323,14 +325,29 @@ export interface MuxPreviewResponse {
   "noChangeFiles": Array<string>;
   "summary": string;
   "status": string;
-  "planId"?: string | null;
-  "planFingerprint"?: string | null;
+  "planId": string | null;
+  "planFingerprint": string | null;
+  "idempotencyKey": string | null;
 }
 
-export type OperationJobResponse = JobSnapshot & {
-  "muxResult"?: MuxPreviewResponse | null;
-  "propEditResult"?: PropEditPreviewResponse | null;
-};
+export interface OperationJobResponse {
+  "id": string;
+  "kind": string;
+  "status": JobStatus;
+  "createdUtc": string;
+  "startedUtc": string | null;
+  "completedUtc": string | null;
+  "completed": number;
+  "failed": number;
+  "skipped": number;
+  "total": number;
+  "currentFile": string;
+  "currentFilePercent": number;
+  "lines": Array<string>;
+  "muxResult": MuxPreviewResponse | null;
+  "propEditResult": PropEditPreviewResponse | null;
+  "error": string;
+}
 
 export interface OperationLogEntry {
   "timestampUtc": string;
@@ -341,6 +358,10 @@ export interface OperationLogEntry {
   "detail": string;
 }
 
+export interface OperationLogResponse {
+  "entries": Array<OperationLogEntry>;
+}
+
 export interface PropEditActionRow {
   "index": number;
   "filePath": string;
@@ -349,10 +370,12 @@ export interface PropEditActionRow {
   "command": string;
 }
 
+export type PropEditApplyRequest = PropEditPreviewRequest;
+
 export type PropEditNoChangeRow = PropEditSkippedRow;
 
 export interface PropEditPreviewRequest {
-  "files": Array<MediaFileDto>;
+  "files": Array<MediaFileRow>;
   "selectedPaths": Array<string>;
   "templatePath"?: string | null;
   "containerTitleMode": TitleEditMode;
@@ -365,7 +388,8 @@ export interface PropEditPreviewRequest {
   "selectedForcedAudio": string;
   "selectedDefaultSubtitle": string;
   "selectedForcedSubtitle": string;
-  "expiresInSeconds": number;
+  "planId"?: string | null;
+  "planFingerprint"?: string | null;
   "idempotencyKey"?: string | null;
 }
 
@@ -375,8 +399,9 @@ export interface PropEditPreviewResponse {
   "noChange": Array<PropEditNoChangeRow>;
   "summary": string;
   "status": string;
-  "planId"?: string | null;
-  "planFingerprint"?: string | null;
+  "planId": string | null;
+  "planFingerprint": string | null;
+  "idempotencyKey": string | null;
 }
 
 export interface PropEditSkippedRow {
@@ -386,7 +411,8 @@ export interface PropEditSkippedRow {
 }
 
 export interface PropEditTemplateRequest {
-  "templatePath": string;
+  "files": Array<MediaFileRow>;
+  "templatePath"?: string | null;
 }
 
 export interface PropEditTemplateResponse {
@@ -424,6 +450,15 @@ export interface RemuxPreviewRequest {
   "preserveAttachments": boolean;
   "deleteSourceAfterSuccess": boolean;
   "expiresInSeconds": number;
+  "idempotencyKey"?: string | null;
+}
+
+export interface RenameApplyRequest {
+  "items": Array<RenamePreviewRow>;
+  "provider"?: string | null;
+  "template"?: string | null;
+  "planId"?: string | null;
+  "planFingerprint"?: string | null;
   "idempotencyKey"?: string | null;
 }
 
@@ -481,12 +516,12 @@ export interface RenameBatchUndoResponse {
 }
 
 export interface RenamePreviewRequest {
-  "files": Array<MediaFileDto>;
-  "selectedPaths": Array<string>;
-  "template": string;
-  "provider"?: MetadataProvider | null;
-  "checkExistingFiles": boolean;
-  "expiresInSeconds": number;
+  "files": Array<MediaFileRow>;
+  "selectedResult": RenameSearchResult;
+  "provider"?: string | null;
+  "language"?: string | null;
+  "scopeKeys": Array<string>;
+  "template"?: string | null;
   "idempotencyKey"?: string | null;
 }
 
@@ -495,8 +530,9 @@ export interface RenamePreviewResponse {
   "summary": string;
   "scopes": Array<RenameScopeRow>;
   "status": string;
-  "planId"?: string | null;
-  "planFingerprint"?: string | null;
+  "planId": string | null;
+  "planFingerprint": string | null;
+  "idempotencyKey": string | null;
 }
 
 export interface RenamePreviewRow {
@@ -511,6 +547,11 @@ export interface RenamePreviewRow {
   "canApply": boolean;
 }
 
+export interface RenameProviderTestRequest {
+  "provider"?: string | null;
+  "language"?: string | null;
+}
+
 export interface RenameProviderTestResponse {
   "success": boolean;
   "status": string;
@@ -523,19 +564,19 @@ export interface RenameScopeRow {
 }
 
 export interface RenameScopesRequest {
-  "provider": MetadataProvider;
-  "mediaId": string;
+  "selectedResult": RenameSearchResult;
+  "provider"?: string | null;
   "language"?: string | null;
 }
 
 export interface RenameSearchRequest {
-  "provider": MetadataProvider;
   "query": string;
+  "provider"?: string | null;
   "language"?: string | null;
 }
 
 export interface RenameSearchResult {
-  "id": string;
+  "id": JsonValue;
   "name": string;
   "year": string;
   "overview": string;
@@ -781,11 +822,14 @@ export interface ContractTypes {
   MediaTrackDto: MediaTrackDto;
   MetadataProvider: MetadataProvider;
   MuxActionRow: MuxActionRow;
+  MuxApplyRequest: MuxApplyRequest;
   MuxPreviewRequest: MuxPreviewRequest;
   MuxPreviewResponse: MuxPreviewResponse;
   OperationJobResponse: OperationJobResponse;
   OperationLogEntry: OperationLogEntry;
+  OperationLogResponse: OperationLogResponse;
   PropEditActionRow: PropEditActionRow;
+  PropEditApplyRequest: PropEditApplyRequest;
   PropEditNoChangeRow: PropEditNoChangeRow;
   PropEditPreviewRequest: PropEditPreviewRequest;
   PropEditPreviewResponse: PropEditPreviewResponse;
@@ -795,6 +839,7 @@ export interface ContractTypes {
   PropEditTrackConfigRow: PropEditTrackConfigRow;
   RemuxMode: RemuxMode;
   RemuxPreviewRequest: RemuxPreviewRequest;
+  RenameApplyRequest: RenameApplyRequest;
   RenameApplyResponse: RenameApplyResponse;
   RenameBatchEntryDto: RenameBatchEntryDto;
   RenameBatchListRequest: RenameBatchListRequest;
@@ -806,6 +851,7 @@ export interface ContractTypes {
   RenamePreviewRequest: RenamePreviewRequest;
   RenamePreviewResponse: RenamePreviewResponse;
   RenamePreviewRow: RenamePreviewRow;
+  RenameProviderTestRequest: RenameProviderTestRequest;
   RenameProviderTestResponse: RenameProviderTestResponse;
   RenameScopeRow: RenameScopeRow;
   RenameScopesRequest: RenameScopesRequest;
@@ -874,7 +920,7 @@ export const contractSchemas: Record<ContractName, ContractSchema> = {
   JobSnapshot: { kind: "object", fields: { "id": { optional: false, schema: { kind: "string" } }, "kind": { optional: false, schema: { kind: "ref", name: "JobKind" } }, "status": { optional: false, schema: { kind: "ref", name: "JobStatus" } }, "correlationId": { optional: false, schema: { kind: "string" } }, "idempotencyKey": { optional: false, schema: { kind: "string" } }, "requestFingerprint": { optional: false, schema: { kind: "string" } }, "planId": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "createdUtc": { optional: false, schema: { kind: "string" } }, "startedUtc": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "completedUtc": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "completed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "failed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "skipped": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "total": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "currentFile": { optional: false, schema: { kind: "string" } }, "currentFilePercent": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "lines": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "result": { optional: true, schema: { kind: "union", variants: [{ kind: "unknown" }, { kind: "null" }] } }, "error": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "revision": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },
   JobStatus: { kind: "union", variants: [{ kind: "literal", value: "Queued" }, { kind: "literal", value: "WaitingForResources" }, { kind: "literal", value: "Running" }, { kind: "literal", value: "Canceling" }, { kind: "literal", value: "Completed" }, { kind: "literal", value: "Failed" }, { kind: "literal", value: "Skipped" }, { kind: "literal", value: "Canceled" }] },
   JobSummary: { kind: "object", fields: { "total": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "completed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "failed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "skipped": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "canceled": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "pending": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },
-  LibraryAuditRequest: { kind: "object", fields: { "root": { optional: false, schema: { kind: "string" } }, "ignoredFolderNames": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "includeUncached": { optional: false, schema: { kind: "boolean" } } }, flatten: [] },
+  LibraryAuditRequest: { kind: "object", fields: { "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileRow" } } } }, flatten: [] },
   LibraryAuditResponse: { kind: "object", fields: { "summary": { optional: false, schema: { kind: "ref", name: "LibraryAuditSummary" } }, "items": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "LibraryAuditRow" } } } }, flatten: [] },
   LibraryAuditRow: { kind: "object", fields: { "folderPath": { optional: false, schema: { kind: "string" } }, "folderName": { optional: false, schema: { kind: "string" } }, "fileCount": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "standardVideo": { optional: false, schema: { kind: "string" } }, "standardAudio": { optional: false, schema: { kind: "string" } }, "standardSubtitles": { optional: false, schema: { kind: "string" } }, "templateFilePath": { optional: false, schema: { kind: "string" } }, "templateFileName": { optional: false, schema: { kind: "string" } }, "hasIssues": { optional: false, schema: { kind: "boolean" } }, "issueSummary": { optional: false, schema: { kind: "string" } }, "issues": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "issueFilePaths": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "allFilePaths": { optional: false, schema: { kind: "array", item: { kind: "string" } } } }, flatten: [] },
   LibraryAuditSummary: { kind: "object", fields: { "groups": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "files": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "issueGroups": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "standardGroups": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },
@@ -884,7 +930,7 @@ export const contractSchemas: Record<ContractName, ContractSchema> = {
   MediaAttachmentDto: { kind: "object", fields: { "id": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "fileName": { optional: false, schema: { kind: "string" } }, "contentType": { optional: false, schema: { kind: "string" } }, "description": { optional: false, schema: { kind: "string" } }, "sizeBytes": { optional: true, schema: { kind: "union", variants: [{ kind: "number", integer: true, unsigned: true }, { kind: "null" }] } } }, flatten: [] },
   MediaFileDto: { kind: "object", fields: { "path": { optional: false, schema: { kind: "string" } }, "fileName": { optional: false, schema: { kind: "string" } }, "extension": { optional: false, schema: { kind: "string" } }, "status": { optional: false, schema: { kind: "ref", name: "MediaStatus" } }, "reader": { optional: false, schema: { kind: "string" } }, "containerTitle": { optional: false, schema: { kind: "string" } }, "codec": { optional: false, schema: { kind: "string" } }, "resolution": { optional: false, schema: { kind: "string" } }, "bitDepth": { optional: false, schema: { kind: "string" } }, "hdr": { optional: false, schema: { kind: "string" } }, "videoSummary": { optional: false, schema: { kind: "string" } }, "audioSummary": { optional: false, schema: { kind: "string" } }, "subtitleSummary": { optional: false, schema: { kind: "string" } }, "attachmentSummary": { optional: false, schema: { kind: "string" } }, "fingerprint": { optional: false, schema: { kind: "ref", name: "FileFingerprintDto" } }, "tracks": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaTrackDto" } } }, "attachments": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaAttachmentDto" } } } }, flatten: [] },
   MediaFileRow: { kind: "object", fields: { "path": { optional: false, schema: { kind: "string" } }, "fileName": { optional: false, schema: { kind: "string" } }, "extension": { optional: false, schema: { kind: "string" } }, "status": { optional: false, schema: { kind: "string" } }, "reader": { optional: false, schema: { kind: "string" } }, "codec": { optional: false, schema: { kind: "string" } }, "resolution": { optional: false, schema: { kind: "string" } }, "bitDepth": { optional: false, schema: { kind: "string" } }, "hdr": { optional: false, schema: { kind: "string" } }, "videoSummary": { optional: false, schema: { kind: "string" } }, "audioSummary": { optional: false, schema: { kind: "string" } }, "subtitleSummary": { optional: false, schema: { kind: "string" } }, "attachmentSummary": { optional: false, schema: { kind: "string" } }, "tracks": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "TrackRow" } } }, "attachments": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaAttachmentDto" } } } }, flatten: [] },
-  MediaServerConnectionRequest: { kind: "object", fields: { "id": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "name": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "kind": { optional: false, schema: { kind: "ref", name: "MediaServerKind" } }, "serverUrl": { optional: false, schema: { kind: "string" } }, "apiKey": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  MediaServerConnectionRequest: { kind: "object", fields: { "id": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "name": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "type": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "serverUrl": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "apiKey": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
   MediaServerKind: { kind: "union", variants: [{ kind: "literal", value: "emby" }, { kind: "literal", value: "jellyfin" }, { kind: "literal", value: "plex" }] },
   MediaServerSyncResponse: { kind: "object", fields: { "server": { optional: false, schema: { kind: "ref", name: "WebMediaServer" } }, "libraries": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "WebMediaServerLibraryPath" } } }, "status": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   MediaServerTestResponse: { kind: "object", fields: { "success": { optional: false, schema: { kind: "boolean" } }, "status": { optional: false, schema: { kind: "string" } }, "libraryCount": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },
@@ -892,20 +938,24 @@ export const contractSchemas: Record<ContractName, ContractSchema> = {
   MediaTrackDto: { kind: "object", fields: { "id": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "trackNumber": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "type": { optional: false, schema: { kind: "ref", name: "TrackKind" } }, "codec": { optional: false, schema: { kind: "string" } }, "language": { optional: false, schema: { kind: "string" } }, "name": { optional: false, schema: { kind: "string" } }, "default": { optional: false, schema: { kind: "boolean" } }, "forced": { optional: false, schema: { kind: "boolean" } } }, flatten: [] },
   MetadataProvider: { kind: "union", variants: [{ kind: "literal", value: "tvdb" }, { kind: "literal", value: "tmdb" }, { kind: "literal", value: "ani_db" }, { kind: "literal", value: "ani_list" }] },
   MuxActionRow: { kind: "object", fields: { "index": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "filePath": { optional: false, schema: { kind: "string" } }, "fileName": { optional: false, schema: { kind: "string" } }, "operation": { optional: false, schema: { kind: "string" } }, "toolName": { optional: false, schema: { kind: "string" } }, "description": { optional: false, schema: { kind: "string" } }, "command": { optional: false, schema: { kind: "string" } } }, flatten: [] },
-  MuxPreviewRequest: { kind: "object", fields: { "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileDto" } } }, "selectedPaths": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "removeUnwantedAudioLanguages": { optional: false, schema: { kind: "boolean" } }, "keepAudioLanguages": { optional: false, schema: { kind: "string" } }, "removeUnwantedSubtitleLanguages": { optional: false, schema: { kind: "boolean" } }, "keepSubtitleLanguages": { optional: false, schema: { kind: "string" } }, "removeUnwantedTrackIds": { optional: false, schema: { kind: "boolean" } }, "removeTrackIdsText": { optional: false, schema: { kind: "string" } }, "preserveChapters": { optional: false, schema: { kind: "boolean" } }, "preserveAttachments": { optional: false, schema: { kind: "boolean" } }, "muxMatchingExternalSubtitles": { optional: false, schema: { kind: "boolean" } }, "externalSubtitleLanguage": { optional: false, schema: { kind: "string" } }, "externalSubtitleFormats": { optional: false, schema: { kind: "string" } }, "preserveExternalSubtitleFiles": { optional: false, schema: { kind: "boolean" } }, "skipMuxIfSubtitleAlreadyExists": { optional: false, schema: { kind: "boolean" } }, "extractSubtitles": { optional: false, schema: { kind: "boolean" } }, "extractSubtitleLanguages": { optional: false, schema: { kind: "string" } }, "extractOverwriteExistingFiles": { optional: false, schema: { kind: "boolean" } }, "convertMp4ToMkv": { optional: false, schema: { kind: "boolean" } }, "deleteMp4AfterConvert": { optional: false, schema: { kind: "boolean" } }, "expiresInSeconds": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "idempotencyKey": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
-  MuxPreviewResponse: { kind: "object", fields: { "actions": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MuxActionRow" } } }, "noChangeFiles": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "summary": { optional: false, schema: { kind: "string" } }, "status": { optional: false, schema: { kind: "string" } }, "planId": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "planFingerprint": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
-  OperationJobResponse: { kind: "object", fields: { "muxResult": { optional: true, schema: { kind: "union", variants: [{ kind: "ref", name: "MuxPreviewResponse" }, { kind: "null" }] } }, "propEditResult": { optional: true, schema: { kind: "union", variants: [{ kind: "ref", name: "PropEditPreviewResponse" }, { kind: "null" }] } } }, flatten: [{ kind: "ref", name: "JobSnapshot" }] },
+  MuxApplyRequest: { kind: "ref", name: "MuxPreviewRequest" },
+  MuxPreviewRequest: { kind: "object", fields: { "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileRow" } } }, "selectedPaths": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "removeUnwantedAudioLanguages": { optional: false, schema: { kind: "boolean" } }, "keepAudioLanguages": { optional: false, schema: { kind: "string" } }, "removeUnwantedSubtitleLanguages": { optional: false, schema: { kind: "boolean" } }, "keepSubtitleLanguages": { optional: false, schema: { kind: "string" } }, "removeUnwantedTrackIds": { optional: false, schema: { kind: "boolean" } }, "removeTrackIdsText": { optional: false, schema: { kind: "string" } }, "preserveChapters": { optional: false, schema: { kind: "boolean" } }, "preserveAttachments": { optional: false, schema: { kind: "boolean" } }, "muxMatchingExternalSubtitles": { optional: false, schema: { kind: "boolean" } }, "externalSubtitleLanguage": { optional: false, schema: { kind: "string" } }, "externalSubtitleTrackName": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "externalSubtitleFormats": { optional: false, schema: { kind: "string" } }, "preserveExternalSubtitleFiles": { optional: false, schema: { kind: "boolean" } }, "skipMuxIfSubtitleAlreadyExists": { optional: false, schema: { kind: "boolean" } }, "extractSubtitles": { optional: false, schema: { kind: "boolean" } }, "extractSubtitleLanguages": { optional: false, schema: { kind: "string" } }, "extractOverwriteExistingFiles": { optional: false, schema: { kind: "boolean" } }, "convertMp4ToMkv": { optional: false, schema: { kind: "boolean" } }, "deleteMp4AfterConvert": { optional: false, schema: { kind: "boolean" } }, "planId": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "planFingerprint": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "idempotencyKey": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  MuxPreviewResponse: { kind: "object", fields: { "actions": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MuxActionRow" } } }, "noChangeFiles": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "summary": { optional: false, schema: { kind: "string" } }, "status": { optional: false, schema: { kind: "string" } }, "planId": { optional: false, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "planFingerprint": { optional: false, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "idempotencyKey": { optional: false, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  OperationJobResponse: { kind: "object", fields: { "id": { optional: false, schema: { kind: "string" } }, "kind": { optional: false, schema: { kind: "string" } }, "status": { optional: false, schema: { kind: "ref", name: "JobStatus" } }, "createdUtc": { optional: false, schema: { kind: "string" } }, "startedUtc": { optional: false, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "completedUtc": { optional: false, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "completed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "failed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "skipped": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "total": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "currentFile": { optional: false, schema: { kind: "string" } }, "currentFilePercent": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "lines": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "muxResult": { optional: false, schema: { kind: "union", variants: [{ kind: "ref", name: "MuxPreviewResponse" }, { kind: "null" }] } }, "propEditResult": { optional: false, schema: { kind: "union", variants: [{ kind: "ref", name: "PropEditPreviewResponse" }, { kind: "null" }] } }, "error": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   OperationLogEntry: { kind: "object", fields: { "timestampUtc": { optional: false, schema: { kind: "string" } }, "correlationId": { optional: false, schema: { kind: "string" } }, "area": { optional: false, schema: { kind: "string" } }, "level": { optional: false, schema: { kind: "ref", name: "LogLevel" } }, "message": { optional: false, schema: { kind: "string" } }, "detail": { optional: false, schema: { kind: "string" } } }, flatten: [] },
+  OperationLogResponse: { kind: "object", fields: { "entries": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "OperationLogEntry" } } } }, flatten: [] },
   PropEditActionRow: { kind: "object", fields: { "index": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "filePath": { optional: false, schema: { kind: "string" } }, "fileName": { optional: false, schema: { kind: "string" } }, "description": { optional: false, schema: { kind: "string" } }, "command": { optional: false, schema: { kind: "string" } } }, flatten: [] },
+  PropEditApplyRequest: { kind: "ref", name: "PropEditPreviewRequest" },
   PropEditNoChangeRow: { kind: "ref", name: "PropEditSkippedRow" },
-  PropEditPreviewRequest: { kind: "object", fields: { "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileDto" } } }, "selectedPaths": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "templatePath": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "containerTitleMode": { optional: false, schema: { kind: "ref", name: "TitleEditMode" } }, "customContainerTitle": { optional: false, schema: { kind: "string" } }, "videoTitleMode": { optional: false, schema: { kind: "ref", name: "TitleEditMode" } }, "customVideoTitle": { optional: false, schema: { kind: "string" } }, "audioTracks": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "PropEditTrackConfigRow" } } }, "subtitleTracks": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "PropEditTrackConfigRow" } } }, "selectedDefaultAudio": { optional: false, schema: { kind: "string" } }, "selectedForcedAudio": { optional: false, schema: { kind: "string" } }, "selectedDefaultSubtitle": { optional: false, schema: { kind: "string" } }, "selectedForcedSubtitle": { optional: false, schema: { kind: "string" } }, "expiresInSeconds": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "idempotencyKey": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
-  PropEditPreviewResponse: { kind: "object", fields: { "actions": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "PropEditActionRow" } } }, "skipped": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "PropEditSkippedRow" } } }, "noChange": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "PropEditNoChangeRow" } } }, "summary": { optional: false, schema: { kind: "string" } }, "status": { optional: false, schema: { kind: "string" } }, "planId": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "planFingerprint": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  PropEditPreviewRequest: { kind: "object", fields: { "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileRow" } } }, "selectedPaths": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "templatePath": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "containerTitleMode": { optional: false, schema: { kind: "ref", name: "TitleEditMode" } }, "customContainerTitle": { optional: false, schema: { kind: "string" } }, "videoTitleMode": { optional: false, schema: { kind: "ref", name: "TitleEditMode" } }, "customVideoTitle": { optional: false, schema: { kind: "string" } }, "audioTracks": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "PropEditTrackConfigRow" } } }, "subtitleTracks": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "PropEditTrackConfigRow" } } }, "selectedDefaultAudio": { optional: false, schema: { kind: "string" } }, "selectedForcedAudio": { optional: false, schema: { kind: "string" } }, "selectedDefaultSubtitle": { optional: false, schema: { kind: "string" } }, "selectedForcedSubtitle": { optional: false, schema: { kind: "string" } }, "planId": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "planFingerprint": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "idempotencyKey": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  PropEditPreviewResponse: { kind: "object", fields: { "actions": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "PropEditActionRow" } } }, "skipped": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "PropEditSkippedRow" } } }, "noChange": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "PropEditNoChangeRow" } } }, "summary": { optional: false, schema: { kind: "string" } }, "status": { optional: false, schema: { kind: "string" } }, "planId": { optional: false, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "planFingerprint": { optional: false, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "idempotencyKey": { optional: false, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
   PropEditSkippedRow: { kind: "object", fields: { "filePath": { optional: false, schema: { kind: "string" } }, "fileName": { optional: false, schema: { kind: "string" } }, "reason": { optional: false, schema: { kind: "string" } } }, flatten: [] },
-  PropEditTemplateRequest: { kind: "object", fields: { "templatePath": { optional: false, schema: { kind: "string" } } }, flatten: [] },
+  PropEditTemplateRequest: { kind: "object", fields: { "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileRow" } } }, "templatePath": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
   PropEditTemplateResponse: { kind: "object", fields: { "templatePath": { optional: false, schema: { kind: "string" } }, "templateFileName": { optional: false, schema: { kind: "string" } }, "audioTracks": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "PropEditTrackConfigRow" } } }, "subtitleTracks": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "PropEditTrackConfigRow" } } }, "defaultAudio": { optional: false, schema: { kind: "string" } }, "forcedAudio": { optional: false, schema: { kind: "string" } }, "defaultSubtitle": { optional: false, schema: { kind: "string" } }, "forcedSubtitle": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   PropEditTrackConfigRow: { kind: "object", fields: { "trackNumber": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "trackLabel": { optional: false, schema: { kind: "string" } }, "type": { optional: false, schema: { kind: "string" } }, "currentName": { optional: false, schema: { kind: "string" } }, "currentLanguage": { optional: false, schema: { kind: "string" } }, "currentDefault": { optional: false, schema: { kind: "boolean" } }, "editedName": { optional: false, schema: { kind: "string" } }, "editedLanguage": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   RemuxMode: { kind: "union", variants: [{ kind: "literal", value: "remux" }, { kind: "literal", value: "convert_to_mkv" }, { kind: "literal", value: "mux_subtitles" }, { kind: "literal", value: "extract_subtitles" }] },
   RemuxPreviewRequest: { kind: "object", fields: { "mode": { optional: false, schema: { kind: "ref", name: "RemuxMode" } }, "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileDto" } } }, "selectedPaths": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "keepAudioLanguages": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "keepSubtitleLanguages": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "removeTrackIds": { optional: false, schema: { kind: "array", item: { kind: "number", integer: true, unsigned: true } } }, "preserveChapters": { optional: false, schema: { kind: "boolean" } }, "preserveAttachments": { optional: false, schema: { kind: "boolean" } }, "deleteSourceAfterSuccess": { optional: false, schema: { kind: "boolean" } }, "expiresInSeconds": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "idempotencyKey": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  RenameApplyRequest: { kind: "object", fields: { "items": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "RenamePreviewRow" } } }, "provider": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "template": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "planId": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "planFingerprint": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "idempotencyKey": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
   RenameApplyResponse: { kind: "object", fields: { "items": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "RenamePreviewRow" } } }, "summary": { optional: false, schema: { kind: "string" } }, "status": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   RenameBatchEntryDto: { kind: "object", fields: { "originalPath": { optional: false, schema: { kind: "string" } }, "renamedPath": { optional: false, schema: { kind: "string" } }, "originalFileName": { optional: false, schema: { kind: "string" } }, "renamedFileName": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   RenameBatchListRequest: { kind: "object", fields: { "limit": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },
@@ -914,14 +964,15 @@ export const contractSchemas: Record<ContractName, ContractSchema> = {
   RenameBatchRestoreMove: { kind: "object", fields: { "originalPath": { optional: false, schema: { kind: "string" } }, "renamedPath": { optional: false, schema: { kind: "string" } }, "originalFileName": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   RenameBatchUndoPreviewResponse: { kind: "object", fields: { "restorable": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "skipped": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "lines": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "hasSkippedFiles": { optional: false, schema: { kind: "boolean" } } }, flatten: [] },
   RenameBatchUndoResponse: { kind: "object", fields: { "renamed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "skipped": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "lines": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "restored": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "RenameBatchRestoreMove" } } } }, flatten: [] },
-  RenamePreviewRequest: { kind: "object", fields: { "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileDto" } } }, "selectedPaths": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "template": { optional: false, schema: { kind: "string" } }, "provider": { optional: true, schema: { kind: "union", variants: [{ kind: "ref", name: "MetadataProvider" }, { kind: "null" }] } }, "checkExistingFiles": { optional: false, schema: { kind: "boolean" } }, "expiresInSeconds": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "idempotencyKey": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
-  RenamePreviewResponse: { kind: "object", fields: { "items": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "RenamePreviewRow" } } }, "summary": { optional: false, schema: { kind: "string" } }, "scopes": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "RenameScopeRow" } } }, "status": { optional: false, schema: { kind: "string" } }, "planId": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "planFingerprint": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  RenamePreviewRequest: { kind: "object", fields: { "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileRow" } } }, "selectedResult": { optional: false, schema: { kind: "ref", name: "RenameSearchResult" } }, "provider": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "language": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "scopeKeys": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "template": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "idempotencyKey": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  RenamePreviewResponse: { kind: "object", fields: { "items": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "RenamePreviewRow" } } }, "summary": { optional: false, schema: { kind: "string" } }, "scopes": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "RenameScopeRow" } } }, "status": { optional: false, schema: { kind: "string" } }, "planId": { optional: false, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "planFingerprint": { optional: false, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "idempotencyKey": { optional: false, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
   RenamePreviewRow: { kind: "object", fields: { "selected": { optional: false, schema: { kind: "boolean" } }, "sourcePath": { optional: false, schema: { kind: "string" } }, "currentFileName": { optional: false, schema: { kind: "string" } }, "detected": { optional: false, schema: { kind: "string" } }, "episodeName": { optional: false, schema: { kind: "string" } }, "newFileName": { optional: false, schema: { kind: "string" } }, "confidence": { optional: false, schema: { kind: "string" } }, "status": { optional: false, schema: { kind: "string" } }, "canApply": { optional: false, schema: { kind: "boolean" } } }, flatten: [] },
+  RenameProviderTestRequest: { kind: "object", fields: { "provider": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "language": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
   RenameProviderTestResponse: { kind: "object", fields: { "success": { optional: false, schema: { kind: "boolean" } }, "status": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   RenameScopeRow: { kind: "object", fields: { "key": { optional: false, schema: { kind: "string" } }, "label": { optional: false, schema: { kind: "string" } }, "isSelected": { optional: false, schema: { kind: "boolean" } } }, flatten: [] },
-  RenameScopesRequest: { kind: "object", fields: { "provider": { optional: false, schema: { kind: "ref", name: "MetadataProvider" } }, "mediaId": { optional: false, schema: { kind: "string" } }, "language": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
-  RenameSearchRequest: { kind: "object", fields: { "provider": { optional: false, schema: { kind: "ref", name: "MetadataProvider" } }, "query": { optional: false, schema: { kind: "string" } }, "language": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
-  RenameSearchResult: { kind: "object", fields: { "id": { optional: false, schema: { kind: "string" } }, "name": { optional: false, schema: { kind: "string" } }, "year": { optional: false, schema: { kind: "string" } }, "overview": { optional: false, schema: { kind: "string" } }, "provider": { optional: false, schema: { kind: "string" } }, "format": { optional: false, schema: { kind: "string" } }, "databaseUrl": { optional: false, schema: { kind: "string" } }, "displayName": { optional: false, schema: { kind: "string" } }, "providerDisplay": { optional: false, schema: { kind: "string" } } }, flatten: [] },
+  RenameScopesRequest: { kind: "object", fields: { "selectedResult": { optional: false, schema: { kind: "ref", name: "RenameSearchResult" } }, "provider": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "language": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  RenameSearchRequest: { kind: "object", fields: { "query": { optional: false, schema: { kind: "string" } }, "provider": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "language": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  RenameSearchResult: { kind: "object", fields: { "id": { optional: false, schema: { kind: "unknown" } }, "name": { optional: false, schema: { kind: "string" } }, "year": { optional: false, schema: { kind: "string" } }, "overview": { optional: false, schema: { kind: "string" } }, "provider": { optional: false, schema: { kind: "string" } }, "format": { optional: false, schema: { kind: "string" } }, "databaseUrl": { optional: false, schema: { kind: "string" } }, "displayName": { optional: false, schema: { kind: "string" } }, "providerDisplay": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   RenameUndoRequest: { kind: "object", fields: { "batchId": { optional: false, schema: { kind: "string" } }, "idempotencyKey": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   ScanJobResponse: { kind: "object", fields: { "id": { optional: false, schema: { kind: "string" } }, "status": { optional: false, schema: { kind: "ref", name: "JobStatus" } }, "createdUtc": { optional: false, schema: { kind: "string" } }, "startedUtc": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "completedUtc": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "currentSource": { optional: false, schema: { kind: "string" } }, "completed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "total": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileRow" } } }, "skipped": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "summary": { optional: false, schema: { kind: "ref", name: "ScanSummary" } }, "error": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   ScanRequest: { kind: "object", fields: { "sourcePath": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "sources": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "ignoredFolderNames": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "mkvMergePath": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "ffProbePath": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "forceRefresh": { optional: false, schema: { kind: "boolean" } }, "maxWorkers": { optional: true, schema: { kind: "union", variants: [{ kind: "number", integer: true, unsigned: true }, { kind: "null" }] } } }, flatten: [] },

@@ -4,8 +4,9 @@ import userEvent from "@testing-library/user-event";
 
 import { LogsPage } from "./LogsPage";
 import { renderWithBackend } from "../test/render";
+import type { OperationLogEntry } from "../api";
 
-const entry = {
+const entry: OperationLogEntry = {
   timestampUtc: "2026-08-05T21:00:00Z",
   correlationId: "019fd3cd-1837-70b2-ba2d-848462ae1718",
   area: "Scan",

@@ -26,6 +26,8 @@ function file(path: string, extension = ".mkv"): MediaFileRow {
   };
 }
 
+const emptySummary = { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 };
+
 function library() {
   return renderHook(() => useMediaLibrary(), { wrapper: MediaLibraryProvider });
 }
@@ -122,7 +124,7 @@ describe("working set persistence", () => {
     const setFileSelection = vi.fn().mockResolvedValue({
       updatedUtc: null,
       files: [],
-      summary: { total: 0, mkv: 0, mp4: 0, failed: 0 },
+      summary: { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 },
       selectedPaths: ["/media/a.mkv"]
     });
     setBackendClient(createMockBackendClient({ setFileSelection }));
@@ -140,7 +142,7 @@ describe("working set persistence", () => {
     const setFileSelection = vi.fn().mockResolvedValue({
       updatedUtc: null,
       files: [],
-      summary: { total: 0, mkv: 0, mp4: 0, failed: 0 },
+      summary: { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 },
       selectedPaths: []
     });
     setBackendClient(createMockBackendClient({ setFileSelection }));
@@ -174,6 +176,7 @@ describe("adopting the backend working set", () => {
 
     act(() =>
       result.current.syncFromBackend({
+        summary: emptySummary,
         updatedUtc: "2026-08-09T10:00:00Z",
         files: [file("/media/before.mkv")],
         selectedPaths: []
@@ -181,6 +184,7 @@ describe("adopting the backend working set", () => {
     );
     act(() =>
       result.current.syncFromBackend({
+        summary: emptySummary,
         updatedUtc: "2026-08-09T10:05:00Z",
         files: [file("/media/after.mkv")],
         selectedPaths: []
@@ -198,6 +202,7 @@ describe("adopting the backend working set", () => {
 
     act(() =>
       result.current.syncFromBackend({
+        summary: emptySummary,
         updatedUtc: "2026-08-09T10:00:00Z",
         files: [file("/media/show.mkv")],
         selectedPaths: []
@@ -205,6 +210,7 @@ describe("adopting the backend working set", () => {
     );
     act(() =>
       result.current.syncFromBackend({
+        summary: emptySummary,
         updatedUtc: "2026-08-09T10:05:00Z",
         files: [edited],
         selectedPaths: []
@@ -222,6 +228,7 @@ describe("adopting the backend working set", () => {
 
     act(() =>
       result.current.syncFromBackend({
+        summary: emptySummary,
         updatedUtc: stamp,
         files: [file("/media/first.mkv")],
         selectedPaths: []
@@ -229,6 +236,7 @@ describe("adopting the backend working set", () => {
     );
     act(() =>
       result.current.syncFromBackend({
+        summary: emptySummary,
         updatedUtc: stamp,
         files: [file("/media/second.mkv")],
         selectedPaths: []
@@ -245,6 +253,7 @@ describe("adopting the backend working set", () => {
 
     act(() =>
       result.current.syncFromBackend({
+        summary: emptySummary,
         updatedUtc: "2026-08-09T10:00:00Z",
         files: [file("/media/kept.mkv")],
         selectedPaths: []
@@ -252,6 +261,7 @@ describe("adopting the backend working set", () => {
     );
     act(() =>
       result.current.syncFromBackend({
+        summary: emptySummary,
         updatedUtc: "2026-08-09T10:05:00Z",
         files: [],
         selectedPaths: []

@@ -53,7 +53,7 @@ function renderRename(fileNames: string[]) {
         Promise.resolve({
           updatedUtc: null,
           files: [],
-          summary: { total: 0, mkv: 0, mp4: 0, failed: 0 },
+          summary: { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 },
           selectedPaths: []
         })
     }
@@ -98,7 +98,7 @@ async function searchReturning(format: "movie" | "series") {
         Promise.resolve({
           updatedUtc: null,
           files: [],
-          summary: { total: 0, mkv: 0, mp4: 0, failed: 0 },
+          summary: { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 },
           selectedPaths: []
         }),
       searchRenameMetadata: () => Promise.resolve({ results: [searchResult(format)] }),

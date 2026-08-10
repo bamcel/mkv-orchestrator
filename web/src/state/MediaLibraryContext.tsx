@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
-import { MediaFileRow, setFileSelection } from "../api";
+import { CurrentScanResponse, MediaFileRow, setFileSelection } from "../api";
 
 type MediaLibraryContextValue = {
   files: MediaFileRow[];
@@ -25,7 +25,7 @@ type MediaLibraryContextValue = {
    * which meant the very first scan won and every later change -- a rename, a
    * property edit -- was invisible until the app was restarted.
    */
-  syncFromBackend: (scan: { updatedUtc: string | null; files: MediaFileRow[]; selectedPaths: string[] }) => void;
+  syncFromBackend: (scan: CurrentScanResponse) => void;
   templateFilePath: string;
   setTemplateFilePath: (path: string) => void;
   updateFilesAfterRename: (renames: Array<{ oldPath: string; newPath: string; newFileName: string; status?: string }>) => void;
@@ -146,7 +146,7 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setAdoptedUpdatedUtc(scan.updatedUtc);
+      setAdoptedUpdatedUtc(scan.updatedUtc ?? null);
       setFilesState(scan.files);
       setSelectedPathsState(scan.selectedPaths);
       setTemplateFilePath((current) =>

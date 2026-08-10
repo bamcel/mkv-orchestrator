@@ -216,7 +216,9 @@ export function DashboardPage() {
     setScanJobId(null);
     scanStart.mutate({
       sources: activeSources,
-      ignoredFolderNames: ignoredFolders.split(/[\n,]/).map((item) => item.trim()).filter(Boolean)
+      ignoredFolderNames: ignoredFolders.split(/[\n,]/).map((item) => item.trim()).filter(Boolean),
+      // Trust the cache; Refresh is the deliberate way to re-probe.
+      forceRefresh: false
     });
   }
 

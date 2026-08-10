@@ -9,6 +9,15 @@ use syn::{
 };
 
 const CONTRACT_FILES: &[&str] = &["api.rs", "features.rs", "jobs.rs", "media.rs"];
+
+/// The compatibility DTOs the React app actually exchanges for renaming,
+/// track properties, mux/remux, and the library audit.
+///
+/// These live in the runtime rather than the contracts crate, and were left out
+/// of generation for that reason -- so the drift check passed while the two
+/// hand-written copies of `RenameSearchResult` disagreed about whether an id is
+/// a number. They are generated on the same terms as everything else now.
+const COMPATIBILITY_FILE: &str = "crates/mkvo-runtime/src/compat.rs";
 const DOMAIN_ENUM_FILES: &[(&str, &str)] = &[
     ("MediaServerKind", "settings.rs"),
     ("MetadataProvider", "media.rs"),
@@ -66,6 +75,7 @@ const STRING_WIRE_TYPES: &[&str] = &[
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Origin {
     Contract,
+    Compatibility,
     DomainDependency,
 }
 
@@ -204,6 +214,13 @@ fn generate(root: &Path) -> Result<GeneratedArtifacts> {
         )?;
     }
 
+    load_definitions(
+        &root.join(COMPATIBILITY_FILE),
+        Origin::Compatibility,
+        None,
+        &mut definitions,
+    )?;
+
     let domain_dir = root.join("crates/mkvo-domain/src");
     for (type_name, file_name) in DOMAIN_ENUM_FILES {
         load_definitions(
@@ -238,11 +255,19 @@ fn load_definitions(
         if only_name.is_some_and(|name| name != definition.name) {
             continue;
         }
-        if definitions
-            .insert(definition.name.clone(), definition)
-            .is_some()
+        // Fourteen names exist in both the contracts crate and the
+        // compatibility layer with different shapes. The hosts serialize the
+        // compatibility one, so that is the wire truth and it wins; generating
+        // the other would describe a payload nothing sends.
+        let replacing = definitions.insert(definition.name.clone(), definition);
+        if let Some(previous) = replacing
+            && !(previous.origin == Origin::Contract && origin == Origin::Compatibility)
         {
-            bail!("duplicate contract type while parsing {}", path.display());
+            bail!(
+                "duplicate contract type {} while parsing {}",
+                previous.name,
+                path.display()
+            );
         }
     }
     if let Some(name) = only_name
@@ -1327,10 +1352,50 @@ mod tests {
         let generated = generate(&workspace_root()).unwrap().typescript;
         assert!(generated.contains("\"mkvToolNixDirectory\": string | null;"));
         assert!(generated.contains("\"tvdbApiKey\"?: string | null;"));
-        assert!(generated.contains("export type OperationJobResponse = JobSnapshot & {"));
+        // The compatibility layer's OperationJobResponse is what the hosts
+        // return, so that is the shape generated; the contracts twin it
+        // shadows was the only `#[serde(flatten)]` in the emitted surface.
+        assert!(generated.contains("export interface OperationJobResponse {"));
+        assert!(
+            generated.contains("\"propEditResult\": PropEditPreviewResponse | null;"),
+            "the compatibility job response should carry its operation results"
+        );
         assert!(generated.contains("\"WaitingForResources\""));
         assert!(generated.contains("\"Skipped\""));
         assert!(generated.contains("export function validateContract"));
+    }
+
+    /// Flattening is still supported even though nothing in the emitted
+    /// surface uses it today, so the renderer is exercised directly rather
+    /// than through whichever contract happens to flatten this week.
+    #[test]
+    fn a_flattened_field_renders_as_an_intersection() {
+        let source = r#"
+            #[derive(Serialize)]
+            #[serde(rename_all = "camelCase")]
+            pub struct Inner { pub left: String }
+
+            #[derive(Serialize)]
+            #[serde(rename_all = "camelCase")]
+            pub struct Outer {
+                #[serde(flatten)]
+                pub inner: Inner,
+                pub right: String,
+            }
+        "#;
+        let mut definitions = BTreeMap::new();
+        for item in syn::parse_file(source).unwrap().items {
+            if let Some(definition) = parse_definition(item, Origin::Contract).unwrap() {
+                definitions.insert(definition.name.clone(), definition);
+            }
+        }
+
+        let rendered = render_typescript(&definitions).unwrap();
+        assert!(
+            rendered.contains("export type Outer = Inner & {"),
+            "flattened struct should render as an intersection:
+{rendered}"
+        );
     }
 
     #[test]
