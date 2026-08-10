@@ -8,7 +8,8 @@ mod watch;
 mod workflows;
 
 pub use composition::{
-    FileSecretStore, MemorySecretStore, MkvoRuntimeBuilder, RuntimeConfig, RuntimeDependencies,
+    FileSecretStore, KeyringSecretStore, MemorySecretStore, MkvoRuntimeBuilder, RuntimeConfig,
+    RuntimeDependencies,
 };
 pub use error::{RuntimeError, RuntimeResult};
 pub use runtime::{
