@@ -5,10 +5,10 @@ use axum::{
     extract::{Path, Query, State},
     http::{StatusCode, Uri, header},
     response::{IntoResponse, Sse, sse::Event},
-    routing::{any, get, post},
+    routing::{any, get, post, put},
 };
 use futures::stream;
-use mkvo_contracts::{ScanRequest, WebSettingsRequest};
+use mkvo_contracts::{FileSelectionRequest, ScanRequest, WebSettingsRequest};
 use mkvo_runtime::{
     RuntimeError,
     compat::{
@@ -56,6 +56,7 @@ pub(crate) fn api_router(state: AppState) -> Router {
             "/api/files/current",
             get(get_current_scan_files).delete(clear_current_scan_files),
         )
+        .route("/api/files/selection", put(set_file_selection))
         .route(
             "/api/settings",
             get(get_web_settings).put(save_web_settings),
@@ -157,6 +158,13 @@ async fn clear_current_scan_files(
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, HttpError> {
     Ok(Json(state.runtime.clear_current_scan_files().await?))
+}
+
+async fn set_file_selection(
+    State(state): State<AppState>,
+    Json(request): Json<FileSelectionRequest>,
+) -> Result<impl IntoResponse, HttpError> {
+    Ok(Json(state.runtime.set_file_selection(request).await?))
 }
 
 async fn get_web_settings(State(state): State<AppState>) -> Result<impl IntoResponse, HttpError> {

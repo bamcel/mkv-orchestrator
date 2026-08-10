@@ -114,6 +114,7 @@ export type CurrentScanResponse = {
   updatedUtc: string | null;
   files: MediaFileRow[];
   summary: ScanSummary;
+  selectedPaths: string[];
 };
 
 export type ScanJobResponse = {
@@ -490,6 +491,10 @@ export function cancelScan(id: string): Promise<ScanJobResponse> {
 
 export function getCurrentScanFiles(): Promise<CurrentScanResponse> {
   return getBackendClient().getCurrentScanFiles();
+}
+
+export function setFileSelection(paths: string[]): Promise<CurrentScanResponse> {
+  return getBackendClient().setFileSelection(paths);
 }
 
 export function clearCurrentScanFiles(): Promise<CurrentScanResponse> {

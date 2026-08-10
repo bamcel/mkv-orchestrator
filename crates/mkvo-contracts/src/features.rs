@@ -168,6 +168,22 @@ pub struct CurrentScanResponse {
     #[serde(default)]
     pub files: Vec<MediaFileRow>,
     pub summary: ScanSummary,
+    /// Paths the user has selected to operate on.
+    ///
+    /// Owned here rather than in the frontend so the selection survives a
+    /// reload, a restart, and a switch between the desktop and browser hosts,
+    /// and so an operation request cannot disagree with it.
+    #[serde(default)]
+    pub selected_paths: Vec<String>,
+}
+
+/// Replace the selected working set. Paths that are not in the current scan are
+/// rejected rather than stored, so a stale selection cannot reach an operation.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSelectionRequest {
+    #[serde(default)]
+    pub paths: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

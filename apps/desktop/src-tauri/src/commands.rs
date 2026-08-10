@@ -166,6 +166,11 @@ pub async fn clear_current_scan_files(runtime: State<'_, RuntimeState>) -> Comma
 }
 
 #[tauri::command]
+pub async fn set_file_selection(runtime: State<'_, RuntimeState>, request: Value) -> CommandResult {
+    encode_response(runtime.set_file_selection(decode_request(request)?).await)
+}
+
+#[tauri::command]
 pub async fn get_web_settings(runtime: State<'_, RuntimeState>) -> CommandResult {
     encode_response(runtime.get_web_settings().await)
 }

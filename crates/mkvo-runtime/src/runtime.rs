@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -55,6 +55,41 @@ struct CurrentScanState {
     updated_utc: Option<DateTime<Utc>>,
     files: Vec<MediaFile>,
     summary: ScanSummary,
+    /// Selected paths, stored by normalized key so a selection made against one
+    /// spelling of a path still matches the file it names.
+    selected: BTreeSet<String>,
+}
+
+impl CurrentScanState {
+    /// Drop selections whose file is no longer in the working set.
+    ///
+    /// A job that remuxes, converts, or renames changes which paths exist, and a
+    /// selection left pointing at a path that is gone would otherwise be handed
+    /// to the next operation.
+    fn reconcile_selection(&mut self) {
+        if self.files.is_empty() {
+            return;
+        }
+        let available: BTreeSet<String> = self
+            .files
+            .iter()
+            .map(|file| mkvo_application::paths::path_key(&file.path))
+            .collect();
+        self.selected.retain(|path| available.contains(path));
+    }
+
+    /// Selected paths rendered the way the UI shows them, ordered by the working
+    /// set so the list is stable between reads.
+    fn selected_display_paths(&self) -> Vec<String> {
+        self.files
+            .iter()
+            .filter(|file| {
+                self.selected
+                    .contains(&mkvo_application::paths::path_key(&file.path))
+            })
+            .map(|file| display_path(&file.path))
+            .collect()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -549,6 +584,10 @@ impl MkvoRuntime {
                     current.updated_utc = Some(Utc::now());
                     current.files.clone_from(&outcome.files);
                     current.summary = outcome.summary;
+                    // A rescan after a mutating job changes which paths exist,
+                    // so a selection naming a file that is gone is dropped here
+                    // rather than being handed to the next operation.
+                    current.reconcile_selection();
                 }
                 let summary = outcome.summary;
                 let detail = format!(
@@ -624,6 +663,50 @@ impl MkvoRuntime {
 
     pub async fn get_current_scan_files(&self) -> RuntimeResult<CurrentScanResponse> {
         let state = self.inner.current_scan.read().await;
+        Ok(current_scan_response(&state))
+    }
+
+    /// Replace the selected working set.
+    ///
+    /// Paths outside the current scan are rejected rather than stored: a
+    /// selection is only meaningful against files the backend actually knows
+    /// about, and accepting an unknown path would let a stale or crafted
+    /// request reach an operation.
+    ///
+    /// The selection lives exactly as long as the working set it refers to.
+    /// Both are in-memory, so a page reload keeps them and a host restart
+    /// clears them together — persisting the selection alone would restore a
+    /// set of paths with no files behind them.
+    pub async fn set_file_selection(
+        &self,
+        request: mkvo_contracts::FileSelectionRequest,
+    ) -> RuntimeResult<CurrentScanResponse> {
+        let mut state = self.inner.current_scan.write().await;
+        let available: BTreeSet<String> = state
+            .files
+            .iter()
+            .map(|file| mkvo_application::paths::path_key(&file.path))
+            .collect();
+
+        let mut selected = BTreeSet::new();
+        let mut unknown = Vec::new();
+        for path in &request.paths {
+            let key = mkvo_application::paths::path_key(std::path::Path::new(path));
+            if available.contains(&key) {
+                selected.insert(key);
+            } else {
+                unknown.push(path.clone());
+            }
+        }
+        if !unknown.is_empty() {
+            return Err(RuntimeError::invalid(format!(
+                "{} selected path(s) are not in the current scan: {}",
+                unknown.len(),
+                unknown.join(", ")
+            )));
+        }
+
+        state.selected = selected;
         Ok(current_scan_response(&state))
     }
 
@@ -1207,6 +1290,7 @@ fn current_scan_response(state: &CurrentScanState) -> CurrentScanResponse {
         updated_utc: state.updated_utc,
         files: state.files.iter().map(MediaFileRow::from).collect(),
         summary: state.summary,
+        selected_paths: state.selected_display_paths(),
     }
 }
 
@@ -1744,6 +1828,116 @@ async fn persist_compatibility_settings(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The working set is authoritative in Rust, so a selection naming a file
+    /// the backend does not have is refused rather than stored — otherwise a
+    /// stale frontend could hand an operation a path that no longer exists.
+    #[test]
+    fn unknown_paths_are_rejected_and_known_ones_normalize() {
+        let mut state = CurrentScanState {
+            files: vec![
+                media_at(r"\\?\C:\media\first.mkv"),
+                media_at(r"\\?\C:\media\second.mkv"),
+            ],
+            ..CurrentScanState::default()
+        };
+
+        let available: BTreeSet<String> = state
+            .files
+            .iter()
+            .map(|file| mkvo_application::paths::path_key(&file.path))
+            .collect();
+        // The working set holds canonicalized paths, but the UI is shown - and
+        // sends back - the plain spelling. Both must name the same file.
+        assert!(
+            available.contains(&mkvo_application::paths::path_key(Path::new(
+                r"C:\media\first.mkv"
+            )))
+        );
+        assert!(
+            !available.contains(&mkvo_application::paths::path_key(Path::new(
+                r"C:\media\gone.mkv"
+            )))
+        );
+
+        state
+            .selected
+            .insert(mkvo_application::paths::path_key(Path::new(
+                r"C:\media\first.mkv",
+            )));
+        assert_eq!(
+            state.selected_display_paths(),
+            vec![r"C:\media\first.mkv".to_owned()]
+        );
+    }
+
+    /// A job that consumes or renames a file changes which paths exist.
+    #[test]
+    fn reconciliation_drops_selections_whose_file_is_gone() {
+        let mut state = CurrentScanState {
+            files: vec![media_at("/media/a.mkv"), media_at("/media/b.mkv")],
+            ..CurrentScanState::default()
+        };
+        for path in ["/media/a.mkv", "/media/b.mkv"] {
+            state
+                .selected
+                .insert(mkvo_application::paths::path_key(std::path::Path::new(
+                    path,
+                )));
+        }
+
+        state.files = vec![media_at("/media/a.mkv"), media_at("/media/c.mkv")];
+        state.reconcile_selection();
+
+        assert_eq!(
+            state.selected_display_paths(),
+            vec!["/media/a.mkv".to_owned()]
+        );
+    }
+
+    /// Clearing the working set is a transient step on the way to replacing it,
+    /// so it must not be read as "the user deselected everything".
+    #[test]
+    fn an_empty_working_set_does_not_clear_the_selection() {
+        let mut state = CurrentScanState {
+            files: vec![media_at("/media/a.mkv")],
+            ..CurrentScanState::default()
+        };
+        state
+            .selected
+            .insert(mkvo_application::paths::path_key(std::path::Path::new(
+                "/media/a.mkv",
+            )));
+
+        state.files.clear();
+        state.reconcile_selection();
+        assert_eq!(state.selected.len(), 1);
+
+        state.files = vec![media_at("/media/a.mkv")];
+        state.reconcile_selection();
+        assert_eq!(state.selected_display_paths().len(), 1);
+    }
+
+    fn media_at(path: &str) -> MediaFile {
+        MediaFile {
+            path: PathBuf::from(path),
+            original_file_name: None,
+            watch_root: None,
+            relative_path: None,
+            fingerprint: mkvo_domain::FileFingerprint {
+                path: PathBuf::from(path),
+                size_bytes: 1,
+                modified_at: Utc::now(),
+                quick_hash: None,
+            },
+            container: mkvo_domain::ContainerMetadata::default(),
+            tracks: Vec::new(),
+            attachments: Vec::new(),
+            episode: None,
+            provider_match: None,
+            status: mkvo_domain::MediaStatus::Ready,
+        }
+    }
 
     /// Authorized roots are canonicalized, so on Windows every path the UI shows
     /// arrives in the extended-length form. `\\?\C:\Users\me\Videos` is not a

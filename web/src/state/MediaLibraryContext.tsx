@@ -1,17 +1,22 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
-import { MediaFileRow } from "../api";
+import { MediaFileRow, setFileSelection } from "../api";
 
 type MediaLibraryContextValue = {
   files: MediaFileRow[];
   setFiles: (files: MediaFileRow[]) => void;
   /**
-   * Paths the user has selected to operate on, shared by every page so a
-   * selection made on the Dashboard carries into Mux/Remux and Track
-   * Properties, and survives a reload.
+   * Paths the user has selected to operate on.
+   *
+   * Rust owns this: it is pushed to the backend on every change and hydrated
+   * from `getCurrentScanFiles`, so it is the same on the desktop and in the
+   * browser and cannot disagree with the working set an operation runs against.
+   * The local copy is a cache that keeps the UI responsive.
    */
   selectedPaths: string[];
   setSelectedPaths: (paths: string[]) => void;
   toggleSelectedPath: (path: string) => void;
+  /** Adopt the selection the backend reports, without echoing it back. */
+  hydrateSelection: (paths: string[]) => void;
   templateFilePath: string;
   setTemplateFilePath: (path: string) => void;
   updateFilesAfterRename: (renames: Array<{ oldPath: string; newPath: string; newFileName: string; status?: string }>) => void;
@@ -43,6 +48,19 @@ function write(storage: Storage, key: string, value: unknown): void {
 
 function pathKey(path: string): string {
   return path.replace(/\\/g, "/").toLowerCase();
+}
+
+/**
+ * Send the selection to the backend, which owns it.
+ *
+ * A rejected push is logged rather than surfaced: the backend rejects paths it
+ * does not know about, and the next `getCurrentScanFiles` hydrates the UI back
+ * to the authoritative answer anyway.
+ */
+function pushSelection(paths: string[]): void {
+  void setFileSelection(paths).catch((error: unknown) => {
+    console.warn("selection could not be saved", error);
+  });
 }
 
 export function MediaLibraryProvider({ children }: { children: ReactNode }) {
@@ -93,14 +111,20 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
       }
     },
     selectedPaths,
-    setSelectedPaths: setSelectedPathsState,
-    toggleSelectedPath: (path) => {
-      setSelectedPathsState((current) =>
-        current.some((selected) => pathKey(selected) === pathKey(path))
-          ? current.filter((selected) => pathKey(selected) !== pathKey(path))
-          : [...current, path]
-      );
+    setSelectedPaths: (paths) => {
+      setSelectedPathsState(paths);
+      pushSelection(paths);
     },
+    toggleSelectedPath: (path) => {
+      setSelectedPathsState((current) => {
+        const next = current.some((selected) => pathKey(selected) === pathKey(path))
+          ? current.filter((selected) => pathKey(selected) !== pathKey(path))
+          : [...current, path];
+        pushSelection(next);
+        return next;
+      });
+    },
+    hydrateSelection: (paths) => setSelectedPathsState(paths),
     templateFilePath,
     setTemplateFilePath,
     updateFilesAfterRename: (renames) => {

@@ -46,6 +46,7 @@ export interface CurrentScanResponse {
   "updatedUtc"?: string | null;
   "files": Array<MediaFileRow>;
   "summary": ScanSummary;
+  "selectedPaths": Array<string>;
 }
 
 export interface ExecutionSummary {
@@ -61,6 +62,10 @@ export interface FileFingerprintDto {
   "sizeBytes": number;
   "modifiedUtc": string;
   "quickHash"?: string | null;
+}
+
+export interface FileSelectionRequest {
+  "paths": Array<string>;
 }
 
 export interface FileSystemEntry {
@@ -743,6 +748,7 @@ export interface ContractTypes {
   CurrentScanResponse: CurrentScanResponse;
   ExecutionSummary: ExecutionSummary;
   FileFingerprintDto: FileFingerprintDto;
+  FileSelectionRequest: FileSelectionRequest;
   FileSystemEntry: FileSystemEntry;
   FileSystemEntryKind: FileSystemEntryKind;
   FileSystemResponse: FileSystemResponse;
@@ -850,9 +856,10 @@ export const contractSchemas: Record<ContractName, ContractSchema> = {
   AppStatus: { kind: "object", fields: { "name": { optional: false, schema: { kind: "string" } }, "version": { optional: false, schema: { kind: "string" } }, "mediaRoot": { optional: false, schema: { kind: "string" } }, "configRoot": { optional: false, schema: { kind: "string" } }, "sourceRoots": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "SourceRoot" } } }, "tools": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "ToolStatus" } } }, "contractVersion": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },
   ApplyPlanRequest: { kind: "object", fields: { "planId": { optional: false, schema: { kind: "string" } }, "fingerprint": { optional: false, schema: { kind: "string" } }, "idempotencyKey": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   BrowseFileSystemRequest: { kind: "object", fields: { "path": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "includeFiles": { optional: false, schema: { kind: "boolean" } } }, flatten: [] },
-  CurrentScanResponse: { kind: "object", fields: { "updatedUtc": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileRow" } } }, "summary": { optional: false, schema: { kind: "ref", name: "ScanSummary" } } }, flatten: [] },
+  CurrentScanResponse: { kind: "object", fields: { "updatedUtc": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileRow" } } }, "summary": { optional: false, schema: { kind: "ref", name: "ScanSummary" } }, "selectedPaths": { optional: false, schema: { kind: "array", item: { kind: "string" } } } }, flatten: [] },
   ExecutionSummary: { kind: "object", fields: { "workflow": { optional: false, schema: { kind: "ref", name: "JobKind" } }, "startedUtc": { optional: false, schema: { kind: "string" } }, "completedUtc": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "counts": { optional: false, schema: { kind: "ref", name: "JobSummary" } }, "jobs": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "JobSnapshot" } } } }, flatten: [] },
   FileFingerprintDto: { kind: "object", fields: { "path": { optional: false, schema: { kind: "string" } }, "sizeBytes": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "modifiedUtc": { optional: false, schema: { kind: "string" } }, "quickHash": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  FileSelectionRequest: { kind: "object", fields: { "paths": { optional: false, schema: { kind: "array", item: { kind: "string" } } } }, flatten: [] },
   FileSystemEntry: { kind: "object", fields: { "name": { optional: false, schema: { kind: "string" } }, "path": { optional: false, schema: { kind: "string" } }, "kind": { optional: false, schema: { kind: "ref", name: "FileSystemEntryKind" } }, "sizeBytes": { optional: true, schema: { kind: "union", variants: [{ kind: "number", integer: true, unsigned: true }, { kind: "null" }] } }, "modifiedUtc": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   FileSystemEntryKind: { kind: "union", variants: [{ kind: "literal", value: "folder" }, { kind: "literal", value: "file" }] },
   FileSystemResponse: { kind: "object", fields: { "path": { optional: false, schema: { kind: "string" } }, "parentPath": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "entries": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "FileSystemEntry" } } } }, flatten: [] },

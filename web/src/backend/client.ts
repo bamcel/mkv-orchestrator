@@ -115,6 +115,7 @@ export interface BackendClient {
   cancelScan(id: string): Promise<ScanJobResponse>;
   getCurrentScanFiles(): Promise<CurrentScanResponse>;
   clearCurrentScanFiles(): Promise<CurrentScanResponse>;
+  setFileSelection(paths: string[]): Promise<CurrentScanResponse>;
 
   getWebSettings(): Promise<WebSettings>;
   saveWebSettings(request: WebSettingsRequest): Promise<WebSettings>;
