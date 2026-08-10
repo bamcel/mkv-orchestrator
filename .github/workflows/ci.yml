@@ -36,6 +36,8 @@ jobs:
         run: npm ci
       - name: Type-check and build
         run: npm run build
+      - name: Test web UI
+        run: npm test
 
   rust-core:
     name: Build and test (Rust core/server)
