@@ -73,6 +73,72 @@ async function searchTitleField() {
   return (await screen.findAllByRole("textbox"))[0];
 }
 
+const searchResult = (format: "movie" | "series") => ({
+  id: format === "movie" ? "movie:12345" : "12345",
+  name: "Obsession",
+  year: "2026",
+  overview: "",
+  provider: "tmdb",
+  format,
+  databaseUrl: "",
+  displayName: "Obsession (2026)",
+  providerDisplay: "TMDB"
+});
+
+/** Renders the page and runs a search that returns one result of this kind. */
+async function searchReturning(format: "movie" | "series") {
+  const user = userEvent.setup();
+  renderWithBackend(
+    <MediaLibraryProvider>
+      <Scan fileNames={["Obsession (Bluray) 2026.mkv"]} />
+      <RenamePage />
+    </MediaLibraryProvider>,
+    {
+      getCurrentScanFiles: () =>
+        Promise.resolve({
+          updatedUtc: null,
+          files: [],
+          summary: { total: 0, mkv: 0, mp4: 0, failed: 0 },
+          selectedPaths: []
+        }),
+      searchRenameMetadata: () => Promise.resolve({ results: [searchResult(format)] }),
+      loadRenameScopes: () =>
+        Promise.resolve({ scopes: [{ key: "all", label: "All episodes (78)", isSelected: false }] })
+    }
+  );
+
+  const title = (await screen.findAllByRole("textbox"))[0];
+  await user.type(title, "Obsession");
+  await user.click(screen.getByRole("button", { name: /^search$/i }));
+  return user;
+}
+
+describe("rename episode scope", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  /// A film has no seasons to pick between, so offering the list as though a
+  /// choice were pending is misleading.
+  it("greys the episode list out for a movie", async () => {
+    await searchReturning("movie");
+
+    await waitFor(() =>
+      expect(screen.getByText(/not applicable to a movie/i)).toBeInTheDocument()
+    );
+    const scope = screen.getByText(/not applicable to a movie/i).parentElement;
+    expect(scope).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("keeps the episode list usable for a series", async () => {
+    await searchReturning("series");
+
+    await waitFor(() => expect(screen.getByText("All episodes (78)")).toBeInTheDocument());
+    expect(screen.queryByText(/not applicable to a movie/i)).not.toBeInTheDocument();
+  });
+});
+
 describe("rename search title", () => {
   beforeEach(() => {
     window.localStorage.clear();

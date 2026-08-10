@@ -204,7 +204,12 @@ export type MediaServerSyncResponse = {
 };
 
 export type RenameSearchResult = {
-  id: number;
+  /**
+   * A series id is a number; a film's is the string `movie:<id>`, which is how
+   * the host carries the media kind through to the episode lookup. Declaring
+   * this as a number was wrong for every film.
+   */
+  id: number | string;
   name: string;
   year: string;
   overview: string;
