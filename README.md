@@ -259,8 +259,13 @@ Exit codes: `0` success, `1` error, `2` ran fine but found nothing to do, `130`
 canceled. The `2` is what lets a script skip a follow-up step.
 
 Settings come from `--config`, then `MKVO_CONFIG_DIR`, then the OS
-configuration directory -- the same store the other hosts use, so provider keys
-and the metadata cache are shared with them.
+configuration directory (`mkv-orchestrator`).
+
+That is **not** the desktop app's store. The desktop keeps its configuration
+under its Tauri identifier (`com.mkvorchestrator.desktop`) and its provider keys
+in the OS credential store, while the CLI uses a protected file. Point both at
+one directory with `--config` if you want a shared cache; the secrets still
+differ, so provider keys have to be configured for each.
 
 What is not shared is the working set: the list of files a running app has on
 screen is that process's own state, so `mkvo scan` will not populate the
