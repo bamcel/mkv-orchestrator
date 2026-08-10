@@ -101,6 +101,7 @@ impl ToolRegistryBuilder {
                 explicit: self.explicit,
                 search_directories: self.search_directories,
             })),
+            versions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -111,9 +112,36 @@ struct ToolRegistryConfiguration {
     search_directories: Vec<PathBuf>,
 }
 
+/// What a cached version answer was measured against.
+///
+/// Path and modification time together: repointing a tool at a different
+/// install changes the path, and upgrading one in place changes the timestamp,
+/// so neither can serve a stale version.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ToolIdentity {
+    path: PathBuf,
+    modified: Option<std::time::SystemTime>,
+}
+
+fn tool_identity(path: &Path) -> ToolIdentity {
+    ToolIdentity {
+        path: path.to_path_buf(),
+        modified: std::fs::metadata(path)
+            .and_then(|data| data.modified())
+            .ok(),
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ToolRegistry {
     configuration: Arc<RwLock<ToolRegistryConfiguration>>,
+    /// Version answers already paid for.
+    ///
+    /// Reading a tool's version means spawning it, which costs roughly half a
+    /// second per tool on Windows. Six tools are checked before every preview
+    /// and every apply, and the answer only changes when the binary does -- so
+    /// it is measured once per binary rather than once per operation.
+    versions: Arc<RwLock<HashMap<ToolKind, (ToolIdentity, ToolStatus)>>>,
 }
 
 impl ToolRegistry {
@@ -164,6 +192,26 @@ impl ToolRegistry {
         find_on_path(&executable).map(|path| ResolvedTool { kind, path })
     }
 
+    /// A cached version answer for this exact binary, if one was measured.
+    fn cached_status(&self, kind: ToolKind, identity: &ToolIdentity) -> Option<ToolStatus> {
+        let versions = self
+            .versions
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        versions
+            .get(&kind)
+            .filter(|(cached, _)| cached == identity)
+            .map(|(_, status)| status.clone())
+    }
+
+    fn remember_status(&self, kind: ToolKind, identity: ToolIdentity, status: &ToolStatus) {
+        let mut versions = self
+            .versions
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        versions.insert(kind, (identity, status.clone()));
+    }
+
     pub async fn status(&self, kind: ToolKind, runner: &ProcessRunner) -> ToolStatus {
         let Some(resolved) = self.resolve(kind) else {
             return ToolStatus {
@@ -175,11 +223,18 @@ impl ToolRegistry {
             };
         };
 
+        // Spawning the tool is the expensive part, so an answer already
+        // measured against this exact binary is reused.
+        let identity = tool_identity(&resolved.path);
+        if let Some(cached) = self.cached_status(kind, &identity) {
+            return cached;
+        }
+
         let spec = ProcessSpec::new(&resolved.path)
             .arg(kind.version_argument())
             .timeout(Duration::from_secs(10))
             .output_limit(64 * 1024);
-        match runner.run(spec, CancellationToken::new()).await {
+        let status = match runner.run(spec, CancellationToken::new()).await {
             Ok(output) if output.success() => {
                 let version = output
                     .stdout
@@ -212,7 +267,13 @@ impl ToolRegistry {
                 version: None,
                 error: Some(error.to_string()),
             },
-        }
+        };
+
+        // Failures are remembered too: a tool that will not run costs the same
+        // half second to discover that again, and the identity check re-probes
+        // as soon as the binary changes.
+        self.remember_status(kind, identity, &status);
+        status
     }
 }
 
@@ -346,5 +407,92 @@ mod tests {
         for reader in readers {
             assert_eq!(reader.join().expect("reader thread"), expected);
         }
+    }
+}
+
+#[cfg(test)]
+mod version_cache_tests {
+    use super::*;
+
+    fn status_for(path: &Path, version: &str) -> ToolStatus {
+        ToolStatus {
+            kind: ToolKind::MkvMerge,
+            path: Some(path.to_path_buf()),
+            available: true,
+            version: Some(version.to_owned()),
+            error: None,
+        }
+    }
+
+    /// Reading a version costs a process spawn, and it is asked for before
+    /// every preview and every apply. A hit here is what makes that free.
+    #[test]
+    fn the_same_binary_is_answered_from_cache() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        let tool = directory.path().join("mkvmerge");
+        std::fs::write(&tool, b"binary").expect("write tool");
+
+        let registry = ToolRegistry::default();
+        let identity = tool_identity(&tool);
+        registry.remember_status(
+            ToolKind::MkvMerge,
+            identity.clone(),
+            &status_for(&tool, "1.0"),
+        );
+
+        assert_eq!(
+            registry.cached_status(ToolKind::MkvMerge, &identity),
+            Some(status_for(&tool, "1.0"))
+        );
+    }
+
+    /// Upgrading a tool keeps its path, so the timestamp is what stops the old
+    /// version being reported for the rest of the session.
+    #[test]
+    fn replacing_the_binary_invalidates_the_answer() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        let tool = directory.path().join("mkvmerge");
+        std::fs::write(&tool, b"old").expect("write tool");
+
+        let registry = ToolRegistry::default();
+        registry.remember_status(
+            ToolKind::MkvMerge,
+            tool_identity(&tool),
+            &status_for(&tool, "1.0"),
+        );
+
+        // Filesystem timestamps are coarse, so the write has to be separated
+        // from the first one to register as a change.
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        std::fs::write(&tool, b"new").expect("replace tool");
+
+        assert_eq!(
+            registry.cached_status(ToolKind::MkvMerge, &tool_identity(&tool)),
+            None,
+            "a replaced binary must be measured again"
+        );
+    }
+
+    /// Pointing settings at a different install is a different path, so the
+    /// answer for the old one cannot be served for it.
+    #[test]
+    fn a_different_install_is_not_a_hit() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        let first = directory.path().join("a-mkvmerge");
+        let second = directory.path().join("b-mkvmerge");
+        std::fs::write(&first, b"binary").expect("write first");
+        std::fs::write(&second, b"binary").expect("write second");
+
+        let registry = ToolRegistry::default();
+        registry.remember_status(
+            ToolKind::MkvMerge,
+            tool_identity(&first),
+            &status_for(&first, "1.0"),
+        );
+
+        assert_eq!(
+            registry.cached_status(ToolKind::MkvMerge, &tool_identity(&second)),
+            None
+        );
     }
 }

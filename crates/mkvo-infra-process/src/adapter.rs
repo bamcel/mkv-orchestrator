@@ -173,11 +173,13 @@ impl ToolRegistryPort for ToolRegistry {
     }
 
     async fn all_statuses(&self) -> Result<Vec<ContractToolStatus>, PortError> {
-        let mut statuses = Vec::with_capacity(ToolKind::ALL.len());
-        for kind in ToolKind::ALL {
-            statuses.push(ToolRegistryPort::status(self, kind.command_name()).await?);
-        }
-        Ok(statuses)
+        // Each of these spawns the tool to read its version, and they do not
+        // depend on one another, so the cold cost is one spawn rather than six
+        // in a row. Order is preserved because the results are joined by index.
+        let probes = ToolKind::ALL
+            .into_iter()
+            .map(|kind| ToolRegistryPort::status(self, kind.command_name()));
+        futures::future::try_join_all(probes).await
     }
 }
 
