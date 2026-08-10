@@ -1,8 +1,9 @@
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronUp, Copy, FileCheck, FileVideo, Folder, FolderOpen, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
-import { browseFileSystem, cancelScan, FileSystemEntry, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, startScan } from "../api";
+import { authorizeBrowsedRoot, cancelScan, FileSystemEntry, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, startScan } from "../api";
 import { SectionHeader } from "../components/SectionHeader";
+import { FileBrowser } from "../components/FileBrowser";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
 const lastBrowsePathStorageKey = "mkvo.web.lastBrowsePath";
@@ -13,8 +14,6 @@ export function DashboardPage() {
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const [sources, setSources] = useState<string[]>([]);
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
-  const [browsePath, setBrowsePath] = useState("");
-  const [browsePathInput, setBrowsePathInput] = useState("");
   const [lastBrowsePath, setLastBrowsePath] = useState(() => {
     try {
       return window.localStorage.getItem(lastBrowsePathStorageKey) ?? "";
@@ -32,11 +31,6 @@ export function DashboardPage() {
   const [selectedFilePath, setSelectedFilePath] = useState<string>("");
   const [actionStatus, setActionStatus] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; path: string } | null>(null);
-  const browser = useQuery({
-    queryKey: ["filesystem", browsePath],
-    queryFn: () => browseFileSystem(browsePath || status.data?.mediaRoot || "/media"),
-    enabled: isBrowseOpen
-  });
   const scanStart = useMutation({
     mutationFn: startScan,
     onSuccess: (job) => {
@@ -137,11 +131,6 @@ export function DashboardPage() {
   }, [currentScanJob]);
 
   useEffect(() => {
-    if (!isBrowseOpen) return;
-    setBrowsePathInput(browser.data?.path ?? browsePath);
-  }, [isBrowseOpen, browser.data?.path, browsePath]);
-
-  useEffect(() => {
     if (files.length > 0 || !currentScan.data?.files.length) return;
     setFiles(currentScan.data.files);
     // Rust owns the selection, so adopt what it reports rather than keeping
@@ -194,41 +183,23 @@ export function DashboardPage() {
   }
 
   function openBrowse() {
-    const nextPath = lastBrowsePath || sources[0] || defaultSourcePath;
-    setBrowsePath(nextPath);
-    setBrowsePathInput(nextPath);
     setIsBrowseOpen(true);
   }
 
-  function navigateBrowsePath(path: string, remember = true) {
-    const cleanPath = path.trim();
-    if (!cleanPath) return;
-
-    setBrowsePath(cleanPath);
-    setBrowsePathInput(cleanPath);
-    if (remember) rememberBrowsePath(cleanPath);
-  }
-
-  function goBrowseParent() {
-    const parent = browser.data?.parentPath || getParentPath(browsePath);
-    if (!parent) return;
-    navigateBrowsePath(parent);
-  }
-
-  function addBrowsePath(path: string, kind: FileSystemEntry["kind"] = "folder") {
-    addSource(path);
-    rememberBrowsePath(kind === "file" ? browser.data?.path ?? browsePath : path);
-    setIsBrowseOpen(false);
-  }
-
-  function openEntry(entry: FileSystemEntry) {
-    if (entry.kind === "folder") {
-      setBrowsePath(entry.path);
-      rememberBrowsePath(entry.path);
+  async function addBrowsePath(path: string, kind: FileSystemEntry["kind"] = "folder") {
+    // Browsing may range wider than the authorized roots, so the chosen folder
+    // is not usable as a scan source until the backend grants it. Choosing it
+    // is the user's explicit act; the backend still validates the path.
+    const folder = kind === "file" ? getParentPath(path) : path;
+    try {
+      await authorizeBrowsedRoot(folder || path);
+    } catch (error) {
+      setActionStatus(error instanceof Error ? error.message : "That folder could not be authorized.");
       return;
     }
-
-    addBrowsePath(entry.path, "file");
+    addSource(path);
+    rememberBrowsePath(folder || path);
+    setIsBrowseOpen(false);
   }
 
   function useSelectedAsTemplate() {
@@ -563,166 +534,12 @@ export function DashboardPage() {
       </div>
 
       {isBrowseOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
-          <section className="flex h-[80vh] min-h-[560px] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-            <div className="flex h-[76px] shrink-0 items-center justify-between border-b border-border px-6 py-4">
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold">Browse Media Sources</h2>
-                <div className="mt-1 text-xs text-subtle">Choose a folder or an individual media file to add as a scan source.</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsBrowseOpen(false)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted transition hover:bg-button-hover hover:text-text"
-                aria-label="Close browser"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="shrink-0 space-y-3 border-b border-border bg-panel/40 px-5 py-4">
-              <div>
-                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-subtle">Current location</div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={goBrowseParent}
-                    disabled={!browser.data?.parentPath && !getParentPath(browsePath)}
-                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
-                    title="Go to parent folder"
-                  >
-                    <ChevronUp size={15} />
-                    Up
-                  </button>
-                  <input
-                    value={browsePathInput}
-                    onChange={(event) => setBrowsePathInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") navigateBrowsePath(browsePathInput);
-                    }}
-                    className="h-10 min-w-0 flex-1 rounded-md border border-border bg-input px-3 font-mono text-sm text-text outline-none transition focus:border-accent"
-                    aria-label="Current folder path"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => navigateBrowsePath(browsePathInput)}
-                    className="h-10 shrink-0 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-                  >
-                    Go
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => browser.refetch()}
-                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-button text-muted transition hover:bg-button-hover hover:text-text"
-                    title="Refresh current folder"
-                    aria-label="Refresh current folder"
-                  >
-                    <RefreshCw size={15} />
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-subtle">Libraries</div>
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  {browseRootOptions.map((root) => {
-                    const activeRoot = normalizeCompareValue(root.path) === normalizeCompareValue(browser.data?.path ?? browsePath);
-                    return (
-                      <button
-                        key={root.path}
-                        type="button"
-                        onClick={() => navigateBrowsePath(root.path)}
-                        className={[
-                          "inline-flex h-9 shrink-0 items-center gap-2 rounded-md border px-3 text-sm font-semibold transition",
-                          activeRoot
-                            ? "border-accent bg-selected text-text"
-                            : "border-border bg-button text-muted hover:bg-button-hover hover:text-text"
-                        ].join(" ")}
-                        title={root.path}
-                      >
-                        <FolderOpen size={14} />
-                        {root.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
-              <div className="mb-3 flex min-w-0 items-center justify-between gap-3">
-                <div className="min-w-0 truncate font-mono text-xs text-muted" title={browser.data?.path ?? browsePath}>
-                  {browser.data?.path ?? browsePath}
-                </div>
-                <div className="shrink-0 text-xs text-subtle">
-                  {browser.data?.entries.length ?? 0} item(s)
-                </div>
-              </div>
-              {browser.isLoading ? (
-                <div className="flex h-full items-center justify-center text-sm text-muted">loading directory</div>
-              ) : browser.error ? (
-                <div className="rounded-md border border-warning bg-input p-3 text-sm text-warning">{String(browser.error.message)}</div>
-              ) : (browser.data?.entries.length ?? 0) === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-muted">No folders or media files found.</div>
-              ) : (
-                <div className="overflow-hidden rounded-lg border border-border">
-                  <table className="w-full table-fixed border-collapse text-left text-sm">
-                    <tbody>
-                      {browser.data?.entries.map((entry) => (
-                        <tr key={entry.path} className="bg-card hover:bg-selected">
-                          <td className="min-w-0 border-b border-border px-3 py-2">
-                            <button
-                              type="button"
-                              onClick={() => openEntry(entry)}
-                              className="flex w-full items-center gap-3 text-left text-text"
-                            >
-                              {entry.kind === "folder"
-                                ? <Folder size={16} className="shrink-0 text-accent" />
-                                : <FileVideo size={16} className="shrink-0 text-muted" />}
-                              <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-                            </button>
-                          </td>
-                          <td className="w-24 border-b border-border px-3 py-3 text-xs uppercase tracking-wide text-subtle">
-                            {entry.kind}
-                          </td>
-                          <td className="w-24 border-b border-border px-3 py-2 text-right">
-                            <button
-                              type="button"
-                              onClick={() => addBrowsePath(entry.path, entry.kind)}
-                              className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-                            >
-                              Add
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-            <div className="flex h-[64px] shrink-0 items-center justify-between gap-4 border-t border-border bg-panel/40 px-5">
-              <div className="min-w-0 truncate text-xs text-subtle">Add the current folder, or use Add beside an individual item.</div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsBrowseOpen(false)}
-                  className="h-9 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => addBrowsePath(browser.data?.path ?? browsePath, "folder")}
-                  className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-window transition hover:bg-accent-hover"
-                >
-                  <Plus size={14} />
-                  Add Current Folder
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
+        <FileBrowser
+          initialPath={lastBrowsePath || sources[0] || defaultSourcePath}
+          roots={browseRootOptions}
+          onCancel={() => setIsBrowseOpen(false)}
+          onSelect={addBrowsePath}
+        />
       ) : null}
       {contextMenu ? (
         <FileContextMenu

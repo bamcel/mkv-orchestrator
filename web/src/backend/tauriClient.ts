@@ -104,6 +104,10 @@ export class TauriBackendClient implements BackendClient {
     return this.invoke<CurrentScanResponse>("set_file_selection", { request: { paths } });
   }
 
+  async authorizeBrowsedRoot(path: string): Promise<void> {
+    await this.invoke<unknown>("authorize_browsed_root", { path });
+  }
+
   getWebSettings(): Promise<WebSettings> {
     return this.invoke<WebSettings>("get_web_settings");
   }

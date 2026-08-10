@@ -123,6 +123,9 @@ describe("Dashboard ignored folders", () => {
       getWebSettings: () => Promise.resolve(settings({ ignoredScanFolderNames: ["Extras", "Samples"] })),
       browseFileSystem: () =>
         Promise.resolve({ path: "/media", parentPath: null, entries: [] }),
+      // Browsing can range outside the authorized roots, so the chosen folder
+      // is granted before it is used as a scan source.
+      authorizeBrowsedRoot: () => Promise.resolve(),
       startScan,
       getScanJob: () =>
         Promise.resolve({
@@ -146,7 +149,7 @@ describe("Dashboard ignored folders", () => {
     );
 
     await user.click(await screen.findByRole("button", { name: /browse/i }));
-    await user.click(await screen.findByRole("button", { name: /add current folder/i }));
+    await user.click(await screen.findByRole("button", { name: /select this folder/i }));
     await user.click(await screen.findByRole("button", { name: /^scan$/i }));
 
     await waitFor(() => expect(startScan).toHaveBeenCalled());

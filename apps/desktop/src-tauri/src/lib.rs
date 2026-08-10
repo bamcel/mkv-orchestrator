@@ -50,6 +50,7 @@ pub fn run() {
             commands::get_current_scan_files,
             commands::clear_current_scan_files,
             commands::set_file_selection,
+            commands::authorize_browsed_root,
             commands::get_web_settings,
             commands::save_web_settings,
             commands::test_media_server_connection,

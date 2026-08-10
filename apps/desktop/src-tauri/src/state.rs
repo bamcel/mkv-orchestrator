@@ -20,7 +20,11 @@ pub fn compose_runtime<R: Runtime>(
     let mut builder = MkvoRuntimeBuilder::new(&media_root, &app_data_root)
         .app_name("MKV Orchestrator")
         .version(app.package_info().version.to_string())
-        .tool_directory(tools_root);
+        .tool_directory(tools_root)
+        // The desktop user already has full filesystem access through their
+        // own file manager, so confining the in-app browser only prevents them
+        // reaching their own library.
+        .unrestricted_browsing();
 
     // Provider API keys belong in the OS credential store on desktop rather than
     // a plaintext file. A Linux desktop with no running Secret Service, or a

@@ -493,6 +493,10 @@ export function getCurrentScanFiles(): Promise<CurrentScanResponse> {
   return getBackendClient().getCurrentScanFiles();
 }
 
+export function authorizeBrowsedRoot(path: string): Promise<void> {
+  return getBackendClient().authorizeBrowsedRoot(path);
+}
+
 export function setFileSelection(paths: string[]): Promise<CurrentScanResponse> {
   return getBackendClient().setFileSelection(paths);
 }

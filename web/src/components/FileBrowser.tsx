@@ -1,0 +1,497 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  Check,
+  ChevronRight,
+  Folder,
+  FileVideo,
+  HardDrive,
+  Monitor,
+  RefreshCw,
+  Search,
+  Star,
+  X
+} from "lucide-react";
+
+import { browseFileSystem, FileSystemEntry } from "../api";
+
+export type FileBrowserRoot = {
+  name: string;
+  path: string;
+};
+
+type FileBrowserProps = {
+  /** Where to start. Empty string opens the volume list. */
+  initialPath: string;
+  /** Configured libraries, shown under Quick access. */
+  roots: FileBrowserRoot[];
+  onCancel: () => void;
+  /** Called with the chosen folder or media file. */
+  onSelect: (path: string, kind: "folder" | "file") => void;
+};
+
+type SortColumn = "name" | "modified" | "type" | "size";
+type SortDirection = "asc" | "desc";
+
+/** Compare paths the way the host does: separators and case do not distinguish. */
+function samePath(left: string, right: string): boolean {
+  return left.replace(/\\/g, "/").toLowerCase() === right.replace(/\\/g, "/").toLowerCase();
+}
+
+function parentOf(path: string): string {
+  const trimmed = path.replace(/[\\/]+$/, "");
+  const cut = Math.max(trimmed.lastIndexOf("\\"), trimmed.lastIndexOf("/"));
+  // Above a drive root is the volume list, which is addressed as "".
+  if (cut <= 0) return "";
+  const parent = trimmed.slice(0, cut);
+  return /^[A-Za-z]:$/.test(parent) ? `${parent}\\` : parent;
+}
+
+/** Path split into clickable segments, each carrying the path it navigates to. */
+function breadcrumbs(path: string): Array<{ label: string; path: string }> {
+  if (!path) return [];
+  const separator = path.includes("\\") ? "\\" : "/";
+  const isUnc = path.startsWith("\\\\");
+  const parts = path.split(/[\\/]+/).filter(Boolean);
+
+  const crumbs: Array<{ label: string; path: string }> = [];
+  let accumulated = "";
+  parts.forEach((part, index) => {
+    if (index === 0) {
+      accumulated = isUnc ? `\\\\${part}` : /^[A-Za-z]:$/.test(part) ? `${part}\\` : `${separator}${part}`;
+    } else {
+      accumulated = accumulated.endsWith(separator)
+        ? `${accumulated}${part}`
+        : `${accumulated}${separator}${part}`;
+    }
+    crumbs.push({ label: part, path: accumulated });
+  });
+  return crumbs;
+}
+
+function formatSize(bytes: number | null): string {
+  if (bytes === null || bytes === undefined) return "";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value >= 10 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+}
+
+function formatModified(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function describeType(entry: FileSystemEntry): string {
+  if (entry.kind === "folder") return "File folder";
+  const extension = entry.name.includes(".") ? entry.name.split(".").pop() ?? "" : "";
+  return extension ? `${extension.toUpperCase()} file` : "File";
+}
+
+export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrowserProps) {
+  // A single history array with a cursor gives Back and Forward the same
+  // meaning they have in a file manager, including forward being discarded
+  // once you navigate somewhere new.
+  const [history, setHistory] = useState<string[]>([initialPath]);
+  const [cursor, setCursor] = useState(0);
+  const path = history[cursor] ?? "";
+
+  const [editingPath, setEditingPath] = useState(false);
+  const [pathDraft, setPathDraft] = useState(path);
+  const [filter, setFilter] = useState("");
+  const [selected, setSelected] = useState<FileSystemEntry | null>(null);
+  const [sortColumn, setSortColumn] = useState<SortColumn>("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  const listing = useQuery({
+    queryKey: ["file-browser", path],
+    queryFn: () => browseFileSystem(path)
+  });
+
+  const volumes = useQuery({
+    queryKey: ["file-browser", "volumes"],
+    queryFn: () => browseFileSystem(""),
+    staleTime: 60_000
+  });
+  // Only a host that allows unrestricted browsing answers the empty path with
+  // the volume list; a confined one falls back to its configured root. The
+  // empty response path is what distinguishes them, so "This PC" is shown only
+  // where it is real rather than mislabelling a fallback listing.
+  const hasVolumeList = volumes.data?.path === "";
+
+  const navigate = useCallback((next: string) => {
+    setHistory((current) => [...current.slice(0, cursor + 1), next]);
+    setCursor((current) => current + 1);
+    setSelected(null);
+    setFilter("");
+    setEditingPath(false);
+  }, [cursor]);
+
+  const goUp = useCallback(() => {
+    const parent = listing.data?.parentPath ?? parentOf(path);
+    if (parent !== path) navigate(parent);
+  }, [listing.data?.parentPath, navigate, path]);
+
+  useEffect(() => setPathDraft(listing.data?.path ?? path), [listing.data?.path, path]);
+
+  const entries = useMemo(() => {
+    const all = listing.data?.entries ?? [];
+    const needle = filter.trim().toLowerCase();
+    const visible = needle ? all.filter((entry) => entry.name.toLowerCase().includes(needle)) : all;
+
+    const direction = sortDirection === "asc" ? 1 : -1;
+    return [...visible].sort((left, right) => {
+      // Folders lead regardless of sort, as they do in a file manager.
+      if (left.kind !== right.kind) return left.kind === "folder" ? -1 : 1;
+      switch (sortColumn) {
+        case "modified":
+          return direction * (Date.parse(left.modifiedUtc) - Date.parse(right.modifiedUtc));
+        case "size":
+          return direction * ((left.sizeBytes ?? -1) - (right.sizeBytes ?? -1));
+        case "type":
+          return direction * describeType(left).localeCompare(describeType(right));
+        default:
+          return direction * left.name.localeCompare(right.name, undefined, { numeric: true });
+      }
+    });
+  }, [filter, listing.data?.entries, sortColumn, sortDirection]);
+
+  function toggleSort(column: SortColumn) {
+    if (column === sortColumn) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  }
+
+  function open(entry: FileSystemEntry) {
+    if (entry.kind === "folder") navigate(entry.path);
+    else onSelect(entry.path, "file");
+  }
+
+  function onListKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "Backspace") {
+      event.preventDefault();
+      goUp();
+      return;
+    }
+    if (!entries.length) return;
+    const index = selected ? entries.findIndex((entry) => samePath(entry.path, selected.path)) : -1;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSelected(entries[Math.min(index + 1, entries.length - 1)]);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setSelected(entries[Math.max(index - 1, 0)]);
+    } else if (event.key === "Enter" && selected) {
+      event.preventDefault();
+      open(selected);
+    }
+  }
+
+  const currentPath = listing.data?.path ?? path;
+  const crumbs = breadcrumbs(currentPath);
+  const chosen = selected ?? { path: currentPath, kind: "folder" as const, name: "", sizeBytes: null, modifiedUtc: "" };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
+      <section
+        className="flex h-[82vh] min-h-[560px] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+        role="dialog"
+        aria-label="Select media source"
+      >
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
+          <h2 className="text-sm font-semibold">Select Media Source</h2>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition hover:bg-button-hover hover:text-text"
+            aria-label="Close browser"
+          >
+            <X size={16} />
+          </button>
+        </header>
+
+        <div className="flex h-12 shrink-0 items-center gap-1.5 border-b border-border bg-panel/40 px-3">
+          <button
+            type="button"
+            onClick={() => setCursor((current) => Math.max(0, current - 1))}
+            disabled={cursor === 0}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition hover:bg-button-hover hover:text-text disabled:text-disabled disabled:hover:bg-transparent"
+            aria-label="Back"
+            title="Back"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setCursor((current) => Math.min(history.length - 1, current + 1))}
+            disabled={cursor >= history.length - 1}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition hover:bg-button-hover hover:text-text disabled:text-disabled disabled:hover:bg-transparent"
+            aria-label="Forward"
+            title="Forward"
+          >
+            <ArrowRight size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={goUp}
+            disabled={!currentPath || (!hasVolumeList && !listing.data?.parentPath)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition hover:bg-button-hover hover:text-text disabled:text-disabled disabled:hover:bg-transparent"
+            aria-label="Up one level"
+            title="Up one level"
+          >
+            <ArrowUp size={16} />
+          </button>
+
+          {/* Clicking the breadcrumb's empty space swaps to a typable path, the
+              way an address bar behaves in a file manager. */}
+          {editingPath ? (
+            <input
+              autoFocus
+              value={pathDraft}
+              onChange={(event) => setPathDraft(event.target.value)}
+              onBlur={() => setEditingPath(false)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") navigate(pathDraft.trim());
+                if (event.key === "Escape") setEditingPath(false);
+              }}
+              className="h-8 min-w-0 flex-1 rounded-md border border-accent bg-input px-2 font-mono text-xs text-text outline-none"
+              aria-label="Path"
+            />
+          ) : (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setEditingPath(true)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") setEditingPath(true);
+              }}
+              className="flex h-8 min-w-0 flex-1 cursor-text items-center gap-0.5 overflow-x-auto rounded-md border border-border bg-input px-2 text-xs"
+              title="Click to type a path"
+            >
+              {hasVolumeList ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    navigate("");
+                  }}
+                  className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-1 text-muted transition hover:bg-button-hover hover:text-text"
+                >
+                  <Monitor size={13} />
+                  This PC
+                </button>
+              ) : null}
+              {crumbs.map((crumb) => (
+                <span key={crumb.path} className="flex shrink-0 items-center">
+                  <ChevronRight size={12} className="text-subtle" />
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      navigate(crumb.path);
+                    }}
+                    className="rounded px-1.5 py-1 text-muted transition hover:bg-button-hover hover:text-text"
+                  >
+                    {crumb.label}
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="relative shrink-0">
+            <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-subtle" />
+            <input
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder="Filter"
+              className="h-8 w-40 rounded-md border border-border bg-input pl-7 pr-2 text-xs text-text outline-none transition placeholder:text-subtle focus:border-accent"
+              aria-label="Filter this folder"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => listing.refetch()}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition hover:bg-button-hover hover:text-text"
+            aria-label="Refresh"
+            title="Refresh"
+          >
+            <RefreshCw size={14} />
+          </button>
+        </div>
+
+        <div className="flex min-h-0 flex-1">
+          <nav className="w-52 shrink-0 overflow-y-auto border-r border-border bg-sidebar/60 py-3">
+            {roots.length > 0 ? (
+              <>
+                <div className="px-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-subtle">
+                  Quick access
+                </div>
+                {roots.map((root) => (
+                  <button
+                    key={root.path}
+                    type="button"
+                    onClick={() => navigate(root.path)}
+                    className={[
+                      "flex w-full items-center gap-2 px-4 py-1.5 text-left text-xs transition",
+                      samePath(root.path, currentPath)
+                        ? "bg-selected text-text"
+                        : "text-muted hover:bg-button-hover hover:text-text"
+                    ].join(" ")}
+                    title={root.path}
+                  >
+                    <Star size={13} className="shrink-0 text-accent" />
+                    <span className="truncate">{root.name}</span>
+                  </button>
+                ))}
+              </>
+            ) : null}
+
+            {hasVolumeList ? (
+              <div className="px-4 pb-1.5 pt-4 text-[10px] font-semibold uppercase tracking-wider text-subtle">
+                This PC
+              </div>
+            ) : null}
+            {(hasVolumeList ? volumes.data?.entries ?? [] : []).map((volume) => (
+              <button
+                key={volume.path}
+                type="button"
+                onClick={() => navigate(volume.path)}
+                className={[
+                  "flex w-full items-center gap-2 px-4 py-1.5 text-left text-xs transition",
+                  samePath(volume.path, currentPath)
+                    ? "bg-selected text-text"
+                    : "text-muted hover:bg-button-hover hover:text-text"
+                ].join(" ")}
+                title={volume.path}
+              >
+                <HardDrive size={13} className="shrink-0 text-subtle" />
+                <span className="truncate">{volume.name}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div
+            ref={listRef}
+            tabIndex={0}
+            onKeyDown={onListKeyDown}
+            className="min-w-0 flex-1 overflow-auto outline-none"
+          >
+            <table className="w-full table-fixed border-collapse text-left text-xs">
+              <thead className="sticky top-0 z-10 bg-panel">
+                <tr className="text-subtle">
+                  {([
+                    ["name", "Name", ""],
+                    ["modified", "Date modified", "w-40"],
+                    ["type", "Type", "w-28"],
+                    ["size", "Size", "w-20"]
+                  ] as Array<[SortColumn, string, string]>).map(([column, label, width]) => (
+                    <th key={column} className={`border-b border-border font-medium ${width}`}>
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(column)}
+                        className="flex w-full items-center gap-1 px-3 py-2 text-left transition hover:text-text"
+                      >
+                        <span className="flex-1">{label}</span>
+                        {sortColumn === column ? (
+                          <span aria-hidden className="text-accent">{sortDirection === "asc" ? "▲" : "▼"}</span>
+                        ) : null}
+                      </button>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry) => {
+                  const isSelected = selected ? samePath(selected.path, entry.path) : false;
+                  return (
+                    <tr
+                      key={entry.path}
+                      onClick={() => setSelected(entry)}
+                      onDoubleClick={() => open(entry)}
+                      className={[
+                        "cursor-default select-none",
+                        isSelected ? "bg-selected text-text" : "text-muted hover:bg-input-hover"
+                      ].join(" ")}
+                    >
+                      <td className="min-w-0 px-3 py-1.5">
+                        <span className="flex items-center gap-2">
+                          {entry.kind === "folder" ? (
+                            <Folder size={15} className="shrink-0 text-accent" />
+                          ) : (
+                            <FileVideo size={15} className="shrink-0 text-subtle" />
+                          )}
+                          <span className="truncate">{entry.name}</span>
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-subtle">{formatModified(entry.modifiedUtc)}</td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-subtle">{describeType(entry)}</td>
+                      <td className="whitespace-nowrap px-3 py-1.5 text-right text-subtle">{formatSize(entry.sizeBytes)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {listing.isLoading ? (
+              <div className="p-6 text-center text-xs text-muted">Loading…</div>
+            ) : listing.error ? (
+              <div className="m-3 rounded-md border border-warning bg-input p-3 text-xs text-warning">
+                {listing.error instanceof Error ? listing.error.message : "This folder could not be read."}
+              </div>
+            ) : entries.length === 0 ? (
+              <div className="p-6 text-center text-xs text-muted">
+                {filter ? "Nothing matches that filter." : "This folder is empty."}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <footer className="flex h-14 shrink-0 items-center justify-between gap-4 border-t border-border bg-panel/40 px-4">
+          <div className="min-w-0 truncate text-xs text-subtle">
+            {entries.length} item{entries.length === 1 ? "" : "s"}
+            {selected ? ` · ${selected.name} selected` : ""}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="h-8 rounded-md border border-border bg-button px-4 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => onSelect(chosen.path, chosen.kind)}
+              disabled={!chosen.path}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent px-4 text-xs font-semibold text-window transition hover:bg-accent-hover disabled:bg-button disabled:text-disabled"
+            >
+              <Check size={14} />
+              {selected
+                ? selected.kind === "folder" ? "Select Folder" : "Select File"
+                : "Select This Folder"}
+            </button>
+          </div>
+        </footer>
+      </section>
+    </div>
+  );
+}

@@ -39,7 +39,7 @@ use crate::compat::{
     MediaServerConnectionRequest, OperationJobResponse, OperationLogResponse,
     RenameProviderTestRequest, RenameScopesRequest, RenameSearchRequest, RenameSearchResult,
 };
-use crate::{RuntimeConfig, RuntimeDependencies, RuntimeError, RuntimeResult};
+use crate::{BrowseScope, RuntimeConfig, RuntimeDependencies, RuntimeError, RuntimeResult};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -479,25 +479,35 @@ impl MkvoRuntime {
         &self,
         path: Option<String>,
     ) -> RuntimeResult<FileSystemResponse> {
+        // An explicitly empty path means "the top" — the volume list — and is
+        // distinct from no path at all, which means "wherever the host starts".
+        // Collapsing the two would make the volume list unreachable, since the
+        // media root would answer for both.
+        let unrestricted = self.inner.config.browse_scope == BrowseScope::Unrestricted;
+        if unrestricted && path.as_deref().is_some_and(|value| value.trim().is_empty()) {
+            return Ok(volume_listing());
+        }
+
         let requested = path
             .filter(|value| !value.trim().is_empty())
             .map_or_else(|| self.inner.config.media_root.clone(), PathBuf::from);
-        let authorized = self
-            .inner
-            .dependencies
-            .paths
-            .authorize_read(&requested)
-            .await?;
-        if !self
-            .inner
-            .dependencies
-            .file_system
-            .is_directory(&authorized)
-            .await?
-        {
+        // Listing is read-only. An unrestricted host still validates every
+        // mutation against the authorized roots, so widening what the browser
+        // may *show* does not widen what it may change.
+        let authorized = if unrestricted {
+            requested.clone()
+        } else {
+            self.inner
+                .dependencies
+                .paths
+                .authorize_read(&requested)
+                .await?
+        };
+
+        if !authorized.is_dir() {
             return Err(RuntimeError::invalid(format!(
                 "browse path is not a directory: {}",
-                authorized.display()
+                display_path(&authorized)
             )));
         }
 
@@ -530,14 +540,23 @@ impl MkvoRuntime {
                 .cmp(&left_folder)
                 .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
         });
-        let parent_path = authorized.parent().and_then(|parent| {
-            self.inner
-                .config
-                .authorized_roots
-                .iter()
-                .any(|(root, _)| parent.starts_with(root))
-                .then(|| display_path(parent))
-        });
+        let parent_path = match self.inner.config.browse_scope {
+            // Confined hosts stop at their roots: offering a parent the caller
+            // cannot then list would be a dead end.
+            BrowseScope::AuthorizedRootsOnly => authorized.parent().and_then(|parent| {
+                self.inner
+                    .config
+                    .authorized_roots
+                    .iter()
+                    .any(|(root, _)| parent.starts_with(root))
+                    .then(|| display_path(parent))
+            }),
+            // Above a volume root is the volume list, addressed as the empty
+            // path, so the user can always navigate all the way out.
+            BrowseScope::Unrestricted => {
+                Some(authorized.parent().map_or_else(String::new, display_path))
+            }
+        };
         Ok(FileSystemResponse {
             path: display_path(&authorized),
             parent_path,
@@ -1174,6 +1193,26 @@ impl MkvoRuntime {
 
     pub(crate) fn config(&self) -> &RuntimeConfig {
         &self.inner.config
+    }
+
+    /// Authorize a folder the user picked in the browser.
+    ///
+    /// Browsing may range wider than the authorized roots, so a folder found
+    /// that way is not yet usable as a scan source. Choosing it is the user's
+    /// own explicit act and carries the same weight as the native folder
+    /// picker, but it still goes through the same canonicalization and
+    /// validation as any other grant — the path is not trusted for having come
+    /// from the browser.
+    ///
+    /// Hosts that confine browsing refuse this: on a network service the caller
+    /// is not necessarily the machine's owner.
+    pub fn authorize_browsed_root(&self, path: &str) -> RuntimeResult<AuthorizedRootGrant> {
+        if self.inner.config.browse_scope != BrowseScope::Unrestricted {
+            return Err(RuntimeError::invalid(
+                "this host only allows sources inside its configured roots",
+            ));
+        }
+        self.grant_authorized_root(Path::new(path), true)
     }
 
     /// Grant the roots a saved settings revision just made authoritative.
@@ -1825,6 +1864,57 @@ async fn persist_compatibility_settings(
     Ok(())
 }
 
+/// The volume list shown above every drive root.
+///
+/// Windows has no single filesystem root, so "up" from `C:\` is this list
+/// rather than a directory. Unix does have one, but presenting `/` the same way
+/// keeps the browser's navigation model identical on both.
+fn volume_listing() -> FileSystemResponse {
+    let mut entries = Vec::new();
+
+    #[cfg(windows)]
+    {
+        for letter in b'A'..=b'Z' {
+            let root = format!("{}:\\", letter as char);
+            let path = std::path::Path::new(&root);
+            if !path.is_dir() {
+                continue;
+            }
+            entries.push(FileSystemEntry {
+                name: format!("{}:", letter as char),
+                path: root.clone(),
+                kind: FileSystemEntryKind::Folder,
+                size_bytes: None,
+                modified_utc: std::fs::metadata(path)
+                    .and_then(|metadata| metadata.modified())
+                    .unwrap_or(SystemTime::UNIX_EPOCH)
+                    .into(),
+            });
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        entries.push(FileSystemEntry {
+            name: "/".to_owned(),
+            path: "/".to_owned(),
+            kind: FileSystemEntryKind::Folder,
+            size_bytes: None,
+            modified_utc: std::fs::metadata("/")
+                .and_then(|metadata| metadata.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH)
+                .into(),
+        });
+    }
+
+    FileSystemResponse {
+        path: String::new(),
+        // Already at the top.
+        parent_path: None,
+        entries,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1937,6 +2027,36 @@ mod tests {
             provider_match: None,
             status: mkvo_domain::MediaStatus::Ready,
         }
+    }
+
+    /// The desktop must reach a library anywhere on the machine; a network
+    /// service must not. The scope is the only thing that differs, and it
+    /// governs listing alone.
+    #[test]
+    fn browse_scope_defaults_to_confined() {
+        let config = RuntimeConfig::new("/media", "/config");
+        assert_eq!(config.browse_scope, BrowseScope::AuthorizedRootsOnly);
+    }
+
+    /// Above a volume root is the volume list, addressed as the empty path, so
+    /// an unrestricted browser can always navigate all the way out.
+    #[test]
+    fn the_volume_list_is_the_top_of_an_unrestricted_browser() {
+        let listing = volume_listing();
+        assert!(listing.path.is_empty());
+        assert!(
+            listing.parent_path.is_none(),
+            "the volume list has no parent"
+        );
+        assert!(
+            listing
+                .entries
+                .iter()
+                .all(|entry| entry.kind == FileSystemEntryKind::Folder),
+            "volumes are navigable"
+        );
+        // Every host this runs on has at least one readable volume.
+        assert!(!listing.entries.is_empty());
     }
 
     /// Authorized roots are canonicalized, so on Windows every path the UI shows
