@@ -908,7 +908,7 @@ impl MkvoRuntime {
         self.get_logs().await
     }
 
-    fn settings_service(&self) -> SettingsService {
+    pub(crate) fn settings_service(&self) -> SettingsService {
         SettingsService::new(
             Arc::clone(&self.inner.dependencies.settings),
             Arc::clone(&self.inner.dependencies.secrets),
@@ -1169,16 +1169,7 @@ fn classify_recovery(
 /// user is wrong: it is not what they typed and not what they can paste back.
 /// It is only removed when doing so still yields a valid path.
 fn display_path(path: &Path) -> String {
-    let text = path.to_string_lossy();
-    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
-        return format!(r"\\{rest}");
-    }
-    if let Some(rest) = text.strip_prefix(r"\\?\")
-        && rest.as_bytes().get(1) == Some(&b':')
-    {
-        return rest.to_owned();
-    }
-    text.into_owned()
+    mkvo_domain::normalized_path_text(path)
 }
 
 fn parse_job_id(value: &str) -> RuntimeResult<JobId> {

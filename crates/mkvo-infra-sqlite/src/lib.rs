@@ -895,8 +895,11 @@ fn load_rename_entries(
         .map_err(StoreError::from)
 }
 
+/// Cache rows are keyed by path, and the same file arrives spelled differently
+/// from a canonicalized scan than from a filesystem-watch event. Both must
+/// resolve to one row or lookups and deletions silently miss.
 fn path_text(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
+    mkvo_domain::normalized_path_text(path)
 }
 
 fn escape_like(value: &str) -> String {
@@ -980,6 +983,54 @@ mod tests {
 
         let stale = fingerprint("library/a.mkv", 11);
         assert!(store.get_valid_media(&stale).expect("read stale").is_none());
+        assert_eq!(store.cache_count().expect("count"), 0);
+    }
+
+    /// A scan writes canonicalized paths (`\\?\C:\...` on Windows) while
+    /// filesystem-watch events report the plain form. If those are two keys, a
+    /// deletion never matches a cache row and pruning silently does nothing,
+    /// leaving the cache advertising files that no longer exist.
+    #[test]
+    fn cache_rows_are_reachable_by_either_windows_path_spelling() {
+        let store = SqliteStore::open_in_memory().expect("open store");
+        let media = CachedMedia {
+            fingerprint: fingerprint(r"\\?\C:\media\Show\a.mkv", 10),
+            scanned_at_ms: 1,
+            payload: json!({"tracks": 2}),
+        };
+        store.upsert_media(&media).expect("upsert");
+        assert_eq!(store.cache_count().expect("count"), 1);
+
+        // The watcher reports the plain spelling of the same file.
+        assert!(
+            store
+                .remove_media(Path::new(r"C:\media\Show\a.mkv"))
+                .expect("remove"),
+            "a plain-form path must match the canonical row it was stored under"
+        );
+        assert_eq!(store.cache_count().expect("count"), 0);
+    }
+
+    /// Subtree pruning has the same two-spelling problem: a deleted folder is
+    /// reported plainly but its rows were written canonically.
+    #[test]
+    fn subtree_pruning_matches_either_windows_path_spelling() {
+        let store = SqliteStore::open_in_memory().expect("open store");
+        for name in ["a.mkv", "b.mkv"] {
+            store
+                .upsert_media(&CachedMedia {
+                    fingerprint: fingerprint(&format!(r"\\?\C:\media\Show\{name}"), 10),
+                    scanned_at_ms: 1,
+                    payload: json!({"tracks": 1}),
+                })
+                .expect("upsert");
+        }
+        assert_eq!(store.cache_count().expect("count"), 2);
+
+        let removed = store
+            .remove_media_under(Path::new(r"C:\media\Show"))
+            .expect("remove under");
+        assert_eq!(removed, 2);
         assert_eq!(store.cache_count().expect("count"), 0);
     }
 

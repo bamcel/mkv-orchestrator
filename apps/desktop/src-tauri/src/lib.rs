@@ -20,6 +20,23 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             let runtime = state::compose_runtime(app.handle())?;
+            // Watching is started off the setup path: it enumerates configured
+            // roots, which on a network share can block, and the window must
+            // not wait on it. A watcher that cannot start is logged, never fatal.
+            let watch_runtime = std::sync::Arc::clone(&runtime);
+            tauri::async_runtime::spawn(async move {
+                match watch_runtime.start_watchers().await {
+                    Ok(report) if report.started => {
+                        tracing::info!(roots = report.roots.len(), "watch folders active");
+                    }
+                    Ok(report) => {
+                        if let Some(error) = report.error {
+                            tracing::warn!(%error, "watch folders inactive");
+                        }
+                    }
+                    Err(error) => tracing::warn!(%error, "watch folders could not be started"),
+                }
+            });
             app.manage(runtime);
             Ok(())
         })
@@ -52,6 +69,7 @@ pub fn run() {
             commands::build_propedit_preview,
             commands::apply_propedit_preview,
             commands::run_library_audit,
+            commands::get_watch_health,
             commands::get_logs,
             commands::clear_logs,
         ])
