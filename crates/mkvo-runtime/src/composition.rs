@@ -115,6 +115,99 @@ pub struct RuntimeDependencies {
     pub authorized_roots: Option<AuthorizedRoots>,
 }
 
+/// Secret storage backed by the operating system credential facility.
+///
+/// This is the desktop default: Windows Credential Manager, macOS Keychain, or
+/// the Linux Secret Service. Container hosts keep [`FileSecretStore`] because
+/// no such facility exists there.
+///
+/// Keyring calls block, so each one runs on a blocking thread rather than
+/// stalling the async runtime.
+pub struct KeyringSecretStore {
+    service: String,
+}
+
+impl KeyringSecretStore {
+    #[must_use]
+    pub fn new(service: impl Into<String>) -> Self {
+        Self {
+            service: service.into(),
+        }
+    }
+
+    /// Verify the platform credential store actually works before committing to
+    /// it. A Linux desktop without a running Secret Service, or a locked
+    /// keychain, fails here — and silently losing the user's API keys at save
+    /// time would be worse than using the file store from the start.
+    pub fn is_usable(&self) -> bool {
+        let probe = "mkvo.keyring.probe";
+        let Ok(entry) = keyring::Entry::new(&self.service, probe) else {
+            return false;
+        };
+        if entry.set_password("probe").is_err() {
+            return false;
+        }
+        let readable = entry.get_password().is_ok_and(|value| value == "probe");
+        let _ = entry.delete_credential();
+        readable
+    }
+
+    fn entry(&self, key: &str) -> Result<keyring::Entry, mkvo_application::PortError> {
+        keyring::Entry::new(&self.service, key).map_err(|error| {
+            mkvo_application::PortError::Other(format!("credential store unavailable: {error}"))
+        })
+    }
+}
+
+#[async_trait]
+impl SecretStore for KeyringSecretStore {
+    async fn get(&self, key: &str) -> Result<Option<String>, mkvo_application::PortError> {
+        let entry = self.entry(key)?;
+        tokio::task::spawn_blocking(move || match entry.get_password() {
+            Ok(value) => Ok(Some(value)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(error) => Err(mkvo_application::PortError::Other(format!(
+                "credential could not be read: {error}"
+            ))),
+        })
+        .await
+        .map_err(|error| {
+            mkvo_application::PortError::Other(format!("credential read task failed: {error}"))
+        })?
+    }
+
+    async fn set(&self, key: &str, value: &str) -> Result<(), mkvo_application::PortError> {
+        let entry = self.entry(key)?;
+        let value = value.to_owned();
+        tokio::task::spawn_blocking(move || {
+            entry.set_password(&value).map_err(|error| {
+                mkvo_application::PortError::Other(format!(
+                    "credential could not be stored: {error}"
+                ))
+            })
+        })
+        .await
+        .map_err(|error| {
+            mkvo_application::PortError::Other(format!("credential write task failed: {error}"))
+        })?
+    }
+
+    async fn remove(&self, key: &str) -> Result<(), mkvo_application::PortError> {
+        let entry = self.entry(key)?;
+        tokio::task::spawn_blocking(move || match entry.delete_credential() {
+            // Removing an absent secret is the desired end state, not a failure.
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(error) => Err(mkvo_application::PortError::Other(format!(
+                "credential could not be removed: {error}"
+            ))),
+        })
+        .await
+        .map_err(|error| {
+            mkvo_application::PortError::Other(format!("credential delete task failed: {error}"))
+        })?
+    }
+}
+
 /// Process-local secret storage intended for tests and development hosts.
 /// Production hosts should inject an OS-keychain or protected-file adapter.
 #[derive(Default)]
@@ -619,4 +712,42 @@ pub(crate) fn tool_configuration(
     directories.sort();
     directories.dedup();
     (explicit, directories)
+}
+
+#[cfg(test)]
+mod secret_store_tests {
+    use super::*;
+
+    /// Exercises the real platform credential facility. Skips rather than fails
+    /// where none is available (headless CI, no Secret Service), because the
+    /// production code takes the same fallback in that situation.
+    #[tokio::test]
+    async fn os_credential_store_round_trips_a_secret() {
+        let service = format!("MKVO Test {}", std::process::id());
+        let store = KeyringSecretStore::new(&service);
+        if !store.is_usable() {
+            eprintln!("skipping: no usable OS credential store on this host");
+            return;
+        }
+
+        let key = "provider.test.api_key";
+        assert_eq!(store.get(key).await.expect("absent read"), None);
+
+        store.set(key, "s3cret").await.expect("write");
+        assert_eq!(
+            store.get(key).await.expect("read"),
+            Some("s3cret".to_owned())
+        );
+
+        store.set(key, "rotated").await.expect("rotate");
+        assert_eq!(
+            store.get(key).await.expect("read"),
+            Some("rotated".to_owned())
+        );
+
+        store.remove(key).await.expect("remove");
+        assert_eq!(store.get(key).await.expect("read after remove"), None);
+        // Removing an absent secret is the desired end state, not an error.
+        store.remove(key).await.expect("idempotent remove");
+    }
 }

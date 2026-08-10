@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 async-trait.workspace = true
 chrono.workspace = true
+keyring.workspace = true
 mkvo-application = { path = "../mkvo-application" }
 mkvo-contracts = { path = "../mkvo-contracts" }
 mkvo-domain = { path = "../mkvo-domain" }
