@@ -1974,6 +1974,15 @@ fn media_server_client(
 }
 
 fn rename_search_result(value: mkvo_domain::ProviderSearchResult) -> RenameSearchResult {
+    // The provider's media kind survives as a prefix on the id, which is how
+    // the episode lookup knows to ask for a film. Reporting every result as a
+    // series threw that away at the last step, so a film was renamed as though
+    // it had a season and an episode.
+    let format = if value.id.starts_with("movie:") {
+        "movie"
+    } else {
+        "series"
+    };
     let id = value.id.parse::<u64>().map_or_else(
         |_| serde_json::Value::String(value.id),
         serde_json::Value::from,
@@ -1991,7 +2000,7 @@ fn rename_search_result(value: mkvo_domain::ProviderSearchResult) -> RenameSearc
         year,
         overview: value.overview.unwrap_or_default(),
         provider: provider.clone(),
-        format: "series".to_owned(),
+        format: format.to_owned(),
         database_url: String::new(),
         provider_display: provider.to_ascii_uppercase(),
     }
@@ -2722,5 +2731,40 @@ mod working_set_rename_tests {
             state.selected_display_paths(),
             vec![display_path(Path::new(r"C:\media\keep.mkv"))]
         );
+    }
+}
+
+#[cfg(test)]
+mod search_result_format_tests {
+    use super::*;
+
+    fn provider_result(id: &str) -> mkvo_domain::ProviderSearchResult {
+        mkvo_domain::ProviderSearchResult {
+            provider: mkvo_domain::MetadataProvider::Tmdb,
+            id: id.to_owned(),
+            title: "Obsession".to_owned(),
+            year: Some(2026),
+            overview: None,
+        }
+    }
+
+    /// Every result was reported as a series, which is what made a film rename
+    /// as though it had a season and an episode.
+    #[test]
+    fn a_film_is_reported_as_a_film() {
+        let result = rename_search_result(provider_result("movie:12345"));
+
+        assert_eq!(result.format, "movie");
+        // The prefix has to survive: the episode lookup reads it back to know
+        // which endpoint to ask.
+        assert_eq!(result.media_id(), "movie:12345");
+    }
+
+    #[test]
+    fn a_series_is_still_reported_as_a_series() {
+        let result = rename_search_result(provider_result("12345"));
+
+        assert_eq!(result.format, "series");
+        assert_eq!(result.media_id(), "12345");
     }
 }
