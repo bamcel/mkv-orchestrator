@@ -1,3 +1,4 @@
+import type { LogExport } from "./client";
 import type {
   AppStatus,
   CurrentScanResponse,
@@ -263,6 +264,10 @@ export class HttpBackendClient implements BackendClient {
 
   clearOperationLogs(): Promise<{ entries: OperationLogEntry[] }> {
     return this.json<{ entries: OperationLogEntry[] }>("/api/logs", "DELETE");
+  }
+
+  exportOperationLogs(): Promise<LogExport> {
+    return this.request<LogExport>("/api/logs/export");
   }
 
   async subscribeJobProgress(

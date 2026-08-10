@@ -1,3 +1,4 @@
+import type { LogExport } from "./client";
 import type {
   AppStatus,
   CurrentScanResponse,
@@ -189,6 +190,10 @@ export class TauriBackendClient implements BackendClient {
 
   clearOperationLogs(): Promise<{ entries: OperationLogEntry[] }> {
     return this.invoke<{ entries: OperationLogEntry[] }>("clear_logs");
+  }
+
+  exportOperationLogs(): Promise<LogExport> {
+    return this.invoke<LogExport>("export_logs");
   }
 
   async subscribeJobProgress(

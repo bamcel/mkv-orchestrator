@@ -180,7 +180,7 @@ pub enum LogLevel {
     Error,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogQuery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -193,4 +193,39 @@ pub struct LogQuery {
 
 const fn default_log_limit() -> usize {
     500
+}
+
+/// Hand-written so `LogQuery::default()` agrees with the serde default. A
+/// derived `Default` gives `limit: 0`, which silently returns no rows — the
+/// serde attribute only applies when deserializing, not to `Default`.
+impl Default for LogQuery {
+    fn default() -> Self {
+        Self {
+            area: None,
+            minimum_level: None,
+            limit: default_log_limit(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `#[serde(default = "...")]` applies only when deserializing. A derived
+    /// `Default` left `limit` at 0, so every caller using `LogQuery::default()`
+    /// asked the store for zero rows and the Logs page was always empty.
+    #[test]
+    fn default_log_query_requests_rows() {
+        assert_eq!(LogQuery::default().limit, default_log_limit());
+        assert!(LogQuery::default().limit > 0);
+    }
+
+    /// The two defaults must agree, or a query built in Rust behaves
+    /// differently from the identical query arriving over the wire.
+    #[test]
+    fn rust_and_wire_defaults_agree() {
+        let from_wire: LogQuery = serde_json::from_str("{}").expect("empty query");
+        assert_eq!(from_wire, LogQuery::default());
+    }
 }

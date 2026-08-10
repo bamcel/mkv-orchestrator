@@ -30,6 +30,12 @@ import type { ApiError } from "./error";
 
 export type BackendTransport = "http" | "tauri" | "mock";
 
+export type LogExport = {
+  fileName: string;
+  entryCount: number;
+  content: string;
+};
+
 export type MediaServerConnectionRequest = {
   id?: string;
   name?: string;
@@ -137,6 +143,7 @@ export interface BackendClient {
   buildLibraryAudit(files: MediaFileRow[]): Promise<LibraryAuditResponse>;
   getOperationLogs(): Promise<{ entries: OperationLogEntry[] }>;
   clearOperationLogs(): Promise<{ entries: OperationLogEntry[] }>;
+  exportOperationLogs(): Promise<LogExport>;
 
   subscribeJobProgress(
     subscription: JobProgressSubscription,

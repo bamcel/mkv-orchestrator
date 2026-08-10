@@ -186,6 +186,7 @@ impl JobSupervisor {
         };
         let (events, _) = broadcast::channel(256);
         let live = Arc::new(LiveJob {
+            correlation_id,
             snapshot: Mutex::new(snapshot.clone()),
             cancel: CancellationToken::new(),
             events,
@@ -331,6 +332,9 @@ impl JobSupervisor {
 }
 
 struct LiveJob {
+    /// Duplicated from the snapshot so a running task can correlate its log
+    /// entries without taking the snapshot lock on every write.
+    correlation_id: CorrelationId,
     snapshot: Mutex<JobSnapshot>,
     cancel: CancellationToken,
     events: broadcast::Sender<JobEventEnvelope>,
@@ -455,6 +459,13 @@ pub struct JobContext {
 }
 
 impl JobContext {
+    /// Correlation identifier for this job, so work it performs can be traced
+    /// back to the request that started it across logs, events, and errors.
+    #[must_use]
+    pub fn correlation_id(&self) -> CorrelationId {
+        self.live.correlation_id
+    }
+
     #[must_use]
     pub fn cancellation_token(&self) -> CancellationToken {
         self.live.cancel.clone()

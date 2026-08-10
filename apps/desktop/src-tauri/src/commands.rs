@@ -349,6 +349,48 @@ pub async fn run_library_audit(runtime: State<'_, RuntimeState>, request: Value)
     encode_response(runtime.run_library_audit(decode_request(request)?).await)
 }
 
+/// Open the OS folder picker and authorize whatever the user chooses.
+///
+/// A picked folder is an explicit user act, so it earns an authorized-root
+/// grant — but the grant still goes through the same validation as any other
+/// root. The picker result is never trusted as a path on its own.
+#[tauri::command]
+pub async fn select_source_folder(
+    app: AppHandle,
+    runtime: State<'_, RuntimeState>,
+) -> CommandResult {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_folder(move |picked| {
+        let _ = sender.send(picked);
+    });
+    let Ok(Some(picked)) = receiver.await else {
+        // A cancelled picker is a normal outcome, not an error.
+        return Ok(serde_json::json!({ "cancelled": true }));
+    };
+    let path = picked.into_path().map_err(|error| {
+        CommandError::from(mkvo_runtime::RuntimeError::invalid(error.to_string()))
+    })?;
+    let grant = runtime
+        .grant_authorized_root(&path, true)
+        .map_err(CommandError::from)?;
+    Ok(serde_json::json!({ "cancelled": false, "root": grant }))
+}
+
+#[tauri::command]
+pub async fn list_recent_jobs(
+    runtime: State<'_, RuntimeState>,
+    limit: Option<usize>,
+) -> CommandResult {
+    encode_response(runtime.list_recent_jobs(limit).await)
+}
+
+#[tauri::command]
+pub async fn export_logs(runtime: State<'_, RuntimeState>) -> CommandResult {
+    encode_response(runtime.export_logs().await)
+}
+
 #[tauri::command]
 pub async fn get_watch_health(runtime: State<'_, RuntimeState>) -> CommandResult {
     encode_response(runtime.watch_health().await)

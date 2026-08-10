@@ -12,8 +12,8 @@ pub use composition::{
 };
 pub use error::{RuntimeError, RuntimeResult};
 pub use runtime::{
-    LegacyMigrationReport, LegacyMigrationStatus, MkvoRuntime, RecoveryDisposition,
-    StartupRecoveryItem, StartupRecoveryReport,
+    LegacyMigrationReport, LegacyMigrationStatus, LogExport, MkvoRuntime, RecentJobsResponse,
+    RecoveryDisposition, StartupRecoveryItem, StartupRecoveryReport,
 };
 pub use watch::WatchStartReport;
 
