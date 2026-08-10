@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Copy, Download, RefreshCw, Trash2 } from "lucide-react";
-import { clearOperationLogs, getOperationLogs, OperationLogEntry } from "../api";
+import { Copy, Download, FileDown, RefreshCw, Trash2 } from "lucide-react";
+import { clearOperationLogs, exportOperationLogs, getOperationLogs, OperationLogEntry } from "../api";
 import { SectionHeader } from "../components/SectionHeader";
 
 export function LogsPage() {
@@ -32,6 +32,20 @@ export function LogsPage() {
     setStatusText("Selected log output copied.");
   }
 
+  // The whole log is rendered by the backend so the export matches what the
+  // server actually recorded, not just the entries this page has fetched.
+  async function exportAllLogs() {
+    const exported = await exportOperationLogs();
+    const blob = new Blob([exported.content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = exported.fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setStatusText(`Exported ${exported.entryCount} log entr${exported.entryCount === 1 ? "y" : "ies"}.`);
+  }
+
   function downloadSelectedOutput() {
     if (!selected) return;
 
@@ -55,6 +69,9 @@ export function LogsPage() {
             <div className="flex gap-2">
               <button onClick={() => logs.refetch()} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-button text-muted hover:bg-button-hover hover:text-text" title="Refresh">
                 <RefreshCw size={15} />
+              </button>
+              <button onClick={exportAllLogs} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-button text-muted hover:bg-button-hover hover:text-text" title="Export all logs">
+                <FileDown size={15} />
               </button>
               <button onClick={() => clear.mutate()} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-button text-muted hover:bg-button-hover hover:text-text" title="Clear">
                 <Trash2 size={15} />

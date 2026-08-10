@@ -615,6 +615,10 @@ export function getOperationLogs(): Promise<{ entries: OperationLogEntry[] }> {
   return getBackendClient().getOperationLogs();
 }
 
+export function exportOperationLogs() {
+  return getBackendClient().exportOperationLogs();
+}
+
 export function clearOperationLogs(): Promise<{ entries: OperationLogEntry[] }> {
   return getBackendClient().clearOperationLogs();
 }

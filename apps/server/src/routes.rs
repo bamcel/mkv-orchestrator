@@ -95,6 +95,8 @@ pub(crate) fn api_router(state: AppState) -> Router {
         .route("/api/operations/{id}/events", get(job_events))
         .route("/api/library/audit", post(run_library_audit))
         .route("/api/watch/health", get(get_watch_health))
+        .route("/api/jobs/recent", get(list_recent_jobs))
+        .route("/api/logs/export", get(export_logs))
         .route("/api/logs", get(get_logs).delete(clear_logs))
         // This must be a route rather than the SPA fallback: unknown API paths
         // are JSON errors and must never receive index.html.
@@ -344,6 +346,25 @@ async fn job_events(
 
 async fn get_watch_health(State(state): State<AppState>) -> Result<impl IntoResponse, HttpError> {
     Ok(Json(state.runtime.watch_health().await?))
+}
+
+#[derive(Default, Deserialize)]
+struct RecentJobsQuery {
+    limit: Option<usize>,
+}
+
+async fn list_recent_jobs(
+    State(state): State<AppState>,
+    Query(query): Query<RecentJobsQuery>,
+) -> Result<impl IntoResponse, HttpError> {
+    Ok(Json(state.runtime.list_recent_jobs(query.limit).await?))
+}
+
+/// Returns the rendered log plus a suggested filename as JSON. The host saves
+/// it: a browser builds a download from the body, the desktop writes a file.
+/// Keeping this uniform with every other route avoids a second response shape.
+async fn export_logs(State(state): State<AppState>) -> Result<impl IntoResponse, HttpError> {
+    Ok(Json(state.runtime.export_logs().await?))
 }
 
 async fn get_logs(State(state): State<AppState>) -> Result<impl IntoResponse, HttpError> {

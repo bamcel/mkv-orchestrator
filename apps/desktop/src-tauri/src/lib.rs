@@ -18,6 +18,7 @@ pub fn run() {
         .try_init();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let runtime = state::compose_runtime(app.handle())?;
             // Watching is started off the setup path: it enumerates configured
@@ -69,7 +70,10 @@ pub fn run() {
             commands::build_propedit_preview,
             commands::apply_propedit_preview,
             commands::run_library_audit,
+            commands::select_source_folder,
             commands::get_watch_health,
+            commands::list_recent_jobs,
+            commands::export_logs,
             commands::get_logs,
             commands::clear_logs,
         ])

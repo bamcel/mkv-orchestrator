@@ -177,6 +177,20 @@ pub struct StartupRecoveryReport {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LogExport {
+    pub file_name: String,
+    pub entry_count: usize,
+    pub content: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentJobsResponse {
+    pub jobs: Vec<JobSnapshot>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AuthorizedRootGrant {
     pub path: String,
     pub writable: bool,
@@ -506,6 +520,9 @@ impl MkvoRuntime {
         let scan = Arc::clone(&self.inner.scan);
         let current = Arc::clone(&self.inner.current_scan);
         let results = Arc::clone(&self.inner.scan_results);
+        // Scanning is the most-run operation, so it has to reach the operation
+        // log too; otherwise the Logs page stays empty through normal use.
+        let logs = Arc::clone(&self.inner.dependencies.logs);
         let (result_sender, result_receiver) = oneshot::channel();
         let spec = JobSpec {
             kind: JobKind::Scan,
@@ -532,6 +549,28 @@ impl MkvoRuntime {
                     current.updated_utc = Some(Utc::now());
                     current.files.clone_from(&outcome.files);
                     current.summary = outcome.summary;
+                }
+                let summary = outcome.summary;
+                let detail = format!(
+                    "{} file(s): {} MKV, {} MP4, {} cached, {} failed",
+                    summary.total, summary.mkv, summary.mp4, summary.cached, summary.failed
+                );
+                if let Err(error) = logs
+                    .append(&mkvo_contracts::OperationLogEntry {
+                        timestamp_utc: Utc::now(),
+                        correlation_id: context.correlation_id(),
+                        area: "Scan".to_owned(),
+                        level: if summary.failed > 0 {
+                            mkvo_contracts::LogLevel::Warning
+                        } else {
+                            mkvo_contracts::LogLevel::Information
+                        },
+                        message: "Scan completed".to_owned(),
+                        detail,
+                    })
+                    .await
+                {
+                    tracing::warn!(%error, "scan completion could not be logged");
                 }
                 let persisted_state = state.clone();
                 let _ = result_sender.send(state);
@@ -915,6 +954,52 @@ impl MkvoRuntime {
     pub async fn clear_logs(&self) -> RuntimeResult<OperationLogResponse> {
         self.inner.dependencies.logs.clear().await?;
         self.get_logs().await
+    }
+
+    /// Render the operation log as plain text for download.
+    ///
+    /// The host writes the file, so this returns the content and a suggested
+    /// name rather than touching the filesystem itself — the browser and the
+    /// desktop save it in different ways.
+    pub async fn export_logs(&self) -> RuntimeResult<LogExport> {
+        let entries = self
+            .inner
+            .dependencies
+            .logs
+            .query(&LogQuery::default())
+            .await?;
+        let mut content = String::new();
+        for entry in &entries {
+            content.push_str(&format!(
+                "{timestamp}\t{level:?}\t{area}\t{correlation}\t{message}",
+                timestamp = entry.timestamp_utc.to_rfc3339(),
+                level = entry.level,
+                area = entry.area,
+                correlation = entry.correlation_id,
+                message = entry.message,
+            ));
+            if !entry.detail.trim().is_empty() {
+                // Keep one entry on one line so the export stays greppable.
+                content.push('\t');
+                content.push_str(&entry.detail.replace(['\r', '\n'], " "));
+            }
+            content.push('\n');
+        }
+        Ok(LogExport {
+            file_name: format!("mkvo-logs-{}.txt", Utc::now().format("%Y%m%d-%H%M%S")),
+            entry_count: entries.len(),
+            content,
+        })
+    }
+
+    /// Recent jobs across kinds, newest first, for the Logs and Jobs views.
+    pub async fn list_recent_jobs(
+        &self,
+        limit: Option<usize>,
+    ) -> RuntimeResult<RecentJobsResponse> {
+        let limit = limit.unwrap_or(50).clamp(1, 500);
+        let jobs = self.inner.dependencies.jobs.list_recent(limit).await?;
+        Ok(RecentJobsResponse { jobs })
     }
 
     pub(crate) fn settings_service(&self) -> SettingsService {
