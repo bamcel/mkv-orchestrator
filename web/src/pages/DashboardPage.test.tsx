@@ -64,6 +64,35 @@ function renderDashboard(overrides: Parameters<typeof renderWithBackend>[1]) {
   );
 }
 
+describe("Dashboard empty state", () => {
+  /// The desktop browses the whole machine. Telling it to mount a volume is
+  /// instructions for a container the user is not running.
+  it("tells a desktop user to browse rather than to mount a volume", async () => {
+    renderDashboard({
+      transport: "tauri",
+      getStatus: () => Promise.resolve({ ...emptyStatus, mediaRoot: "C:\\media" }),
+      getCurrentScanFiles: () => Promise.resolve(emptyScan),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    expect(await screen.findByText(/browse for a folder or file/i)).toBeInTheDocument();
+    expect(screen.queryByText(/mount media to/i)).not.toBeInTheDocument();
+  });
+
+  /// The served build really is reached through a bind mount, so the original
+  /// guidance is still the right guidance there.
+  it("keeps the mount guidance when served over HTTP", async () => {
+    renderDashboard({
+      transport: "http",
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve(emptyScan),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    expect(await screen.findByText(/mount media to \/media/i)).toBeInTheDocument();
+  });
+});
+
 describe("Dashboard ignored folders", () => {
   /// The ignored list is sent with every scan request, so seeding it from a
   /// local constant silently overrode whatever the user configured in Settings.

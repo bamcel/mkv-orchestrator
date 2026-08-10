@@ -1,7 +1,7 @@
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronUp, Copy, FileCheck, FileVideo, Folder, FolderOpen, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
-import { authorizeBrowsedRoot, cancelScan, FileSystemEntry, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, startScan } from "../api";
+import { authorizeBrowsedRoot, cancelScan, FileSystemEntry, getBackendTransport, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, startScan } from "../api";
 import { SectionHeader } from "../components/SectionHeader";
 import { FileBrowser } from "../components/FileBrowser";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
@@ -54,6 +54,9 @@ export function DashboardPage() {
     setIgnoredFolders(configuredIgnoredFolders.join(", "));
   }, [configuredIgnoredFolders, ignoredFoldersEdited]);
 
+  // A container has a mount to point at; a desktop has the whole machine, so
+  // guidance that names /media is wrong there.
+  const isDesktop = getBackendTransport() === "tauri";
   const defaultSourcePath = status.data?.mediaRoot || "/media";
   const browseRootOptions = useMemo(() => {
     const roots = [
@@ -406,7 +409,14 @@ export function DashboardPage() {
             {files.length === 0 ? (
               <div className="flex h-full min-h-[220px] flex-col items-center justify-center text-center">
                 <div className="text-xl font-semibold">No files scanned yet</div>
-                <div className="mt-2 text-sm text-subtle">Mount media to /media, then scan.</div>
+                {/* The desktop browses the whole machine, so telling it to
+                    mount something is advice for a container the user is not
+                    running. */}
+                <div className="mt-2 text-sm text-subtle">
+                  {isDesktop
+                    ? "Browse for a folder or file, then scan."
+                    : "Mount media to /media, then scan."}
+                </div>
               </div>
             ) : (
               <div className="h-full overflow-auto">
