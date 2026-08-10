@@ -68,6 +68,29 @@ impl CurrentScanState {
     /// A job that remuxes, converts, or renames changes which paths exist, and a
     /// selection left pointing at a path that is gone would otherwise be handed
     /// to the next operation.
+    /// Move the working set with the files a rename just moved.
+    ///
+    /// The working set is authoritative -- operations run against what Rust
+    /// holds, not what a page happens to be showing -- so a rename that is not
+    /// reflected here leaves every later operation pointed at paths that no
+    /// longer exist. The selection follows each file to its new path, because
+    /// a renamed file is still the file the user picked.
+    fn apply_renames(&mut self, renames: &[(PathBuf, PathBuf)]) {
+        for (source, target) in renames {
+            let source_key = mkvo_application::paths::path_key(source);
+            for file in &mut self.files {
+                if mkvo_application::paths::path_key(&file.path) == source_key {
+                    file.path = target.clone();
+                }
+            }
+            if self.selected.remove(&source_key) {
+                self.selected
+                    .insert(mkvo_application::paths::path_key(target));
+            }
+        }
+        self.files.sort_by(|left, right| left.path.cmp(&right.path));
+    }
+
     fn reconcile_selection(&mut self) {
         if self.files.is_empty() {
             return;
@@ -817,6 +840,17 @@ impl MkvoRuntime {
 
         state.selected = selected;
         Ok(current_scan_response(&state))
+    }
+
+    /// Move the working set with files a rename just moved on disk.
+    ///
+    /// Without this the set still names paths that no longer exist, so the next
+    /// operation resolves nothing and the dashboard shows the old names until a
+    /// rescan.
+    pub(crate) async fn apply_renames_to_working_set(&self, renames: &[(PathBuf, PathBuf)]) {
+        let mut state = self.inner.current_scan.write().await;
+        state.apply_renames(renames);
+        state.updated_utc = Some(Utc::now());
     }
 
     pub async fn clear_current_scan_files(&self) -> RuntimeResult<CurrentScanResponse> {
@@ -2395,7 +2429,7 @@ mod tests {
         assert_eq!(state.selected_display_paths().len(), 1);
     }
 
-    fn media_at(path: &str) -> MediaFile {
+    pub(super) fn media_at(path: &str) -> MediaFile {
         MediaFile {
             path: PathBuf::from(path),
             original_file_name: None,
@@ -2608,5 +2642,85 @@ mod tests {
         assert_eq!(settings.workers.max_scan_workers, 1);
         assert_eq!(settings.workers.max_edit_workers, 6);
         assert_eq!(settings.workers.max_remux_workers, 2);
+    }
+}
+
+#[cfg(test)]
+mod working_set_rename_tests {
+    use super::tests::media_at;
+    use super::*;
+
+    fn state_with(paths: &[&str], selected: &[&str]) -> CurrentScanState {
+        CurrentScanState {
+            files: paths.iter().map(|path| media_at(path)).collect(),
+            selected: selected
+                .iter()
+                .map(|path| mkvo_application::paths::path_key(Path::new(path)))
+                .collect(),
+            ..CurrentScanState::default()
+        }
+    }
+
+    /// The working set is what later operations run against. Leaving it on the
+    /// old paths means the next operation resolves nothing, and the dashboard
+    /// keeps showing names that are gone until a rescan.
+    #[test]
+    fn the_working_set_moves_with_a_renamed_file() {
+        let mut state = state_with(&[r"C:\media\old.mkv", r"C:\media\other.mkv"], &[]);
+
+        state.apply_renames(&[(
+            PathBuf::from(r"C:\media\old.mkv"),
+            PathBuf::from(r"C:\media\new.mkv"),
+        )]);
+
+        let paths: Vec<String> = state
+            .files
+            .iter()
+            .map(|file| file.path.display().to_string())
+            .collect();
+        assert!(
+            paths.iter().any(|path| path.ends_with("new.mkv")),
+            "{paths:?}"
+        );
+        assert!(
+            !paths.iter().any(|path| path.ends_with("old.mkv")),
+            "{paths:?}"
+        );
+    }
+
+    /// A renamed file is still the file the user picked, so the selection
+    /// follows it rather than being silently dropped.
+    #[test]
+    fn a_selection_follows_the_rename() {
+        let mut state = state_with(&[r"C:\media\old.mkv"], &[r"C:\media\old.mkv"]);
+
+        state.apply_renames(&[(
+            PathBuf::from(r"C:\media\old.mkv"),
+            PathBuf::from(r"C:\media\new.mkv"),
+        )]);
+
+        assert_eq!(
+            state.selected_display_paths(),
+            vec![display_path(Path::new(r"C:\media\new.mkv"))]
+        );
+    }
+
+    /// Renaming one file must not disturb the selection of another.
+    #[test]
+    fn an_unrelated_selection_is_untouched() {
+        let mut state = state_with(
+            &[r"C:\media\old.mkv", r"C:\media\keep.mkv"],
+            &[r"C:\media\keep.mkv"],
+        );
+
+        state.apply_renames(&[(
+            PathBuf::from(r"C:\media\old.mkv"),
+            PathBuf::from(r"C:\media\new.mkv"),
+        )]);
+
+        assert_eq!(
+            state.selected_display_paths(),
+            vec![display_path(Path::new(r"C:\media\keep.mkv"))]
+        );
     }
 }

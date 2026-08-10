@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, ExternalLink, RefreshCw, RotateCcw, Search, Trash2, Wand2, X } from "lucide-react";
 import {
   applyRenamePreview,
@@ -58,6 +58,17 @@ export function RenamePage() {
   const { files, setFiles, updateFilesAfterRename } = useMediaLibrary();
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
+  const queryClient = useQueryClient();
+  /**
+   * Every page reads the working set through this query, so a rename that only
+   * patched this page's copy left the others showing names that no longer
+   * exist. Rust moves its own set with the files; this makes the rest of the
+   * app re-read it.
+   */
+  const refreshAfterRename = () => {
+    void queryClient.invalidateQueries({ queryKey: ["current-scan-files"] });
+    void queryClient.invalidateQueries({ queryKey: ["propedit-template"] });
+  };
   const [storedRenameState] = useState<StoredRenameState>(() => loadRenameState());
   const [provider, setProvider] = useState(storedRenameState.provider || "TVDB");
   const [language, setLanguage] = useState(storedRenameState.language || "eng");
@@ -251,6 +262,7 @@ export function RenamePage() {
       });
 
       updateFilesAfterRename(renames);
+      refreshAfterRename();
       setPreviewRows(response.items);
       setPreviewSummary(response.summary);
       setStatusText(response.status);
@@ -269,6 +281,7 @@ export function RenamePage() {
       }));
 
       updateFilesAfterRename(restoreMoves);
+      refreshAfterRename();
       setPreviewRows((current) => current.map((row) => {
         const move = restoreMoves.find((item) => item.oldPath.toLowerCase() === row.sourcePath.toLowerCase());
         return move
@@ -670,21 +683,24 @@ export function RenamePage() {
                   </thead>
                   <tbody>
                     {previewRows.map((row) => {
+                      // Only the destination is coloured, and only when it
+                      // actually differs: green has to mean "this name is
+                      // changing", not "this row exists".
                       const changedTextClass = hasFilenameChange(row) ? "text-success" : "";
                       const statusDisplay = getRenameStatusDisplay(row.status);
 
                       return compactPreview ? (
-                        <tr key={row.sourcePath} className={["bg-card hover:bg-selected", changedTextClass].join(" ")}>
+                        <tr key={row.sourcePath} className="bg-card hover:bg-selected">
                           <td className="truncate border-b border-border px-3 py-2" title={row.sourcePath}>
                             <div className="flex min-w-0 items-center gap-3">
                               <input type="checkbox" checked={row.selected} disabled={!row.canApply} onChange={() => toggleRow(row)} />
                               <span className="truncate">{row.currentFileName}</span>
                             </div>
                           </td>
-                          <td className="truncate border-b border-border px-3 py-2" title={row.newFileName}>{row.newFileName || "-"}</td>
+                          <td className={["truncate border-b border-border px-3 py-2", changedTextClass].join(" ")} title={row.newFileName}>{row.newFileName || "-"}</td>
                         </tr>
                       ) : (
-                        <tr key={row.sourcePath} className={["bg-card hover:bg-selected", changedTextClass].join(" ")}>
+                        <tr key={row.sourcePath} className="bg-card hover:bg-selected">
                           <td className="max-w-[17.5rem] truncate border-b border-border px-3 py-2" title={row.sourcePath}>
                             <div className="flex min-w-0 items-center gap-3">
                               <input type="checkbox" checked={row.selected} disabled={!row.canApply} onChange={() => toggleRow(row)} />
@@ -693,7 +709,7 @@ export function RenamePage() {
                           </td>
                           <td className="truncate whitespace-nowrap border-b border-border px-3 py-2" title={row.detected}>{row.detected}</td>
                           <td className="max-w-[15rem] truncate border-b border-border px-3 py-2" title={row.episodeName}>{row.episodeName || "-"}</td>
-                          <td className="max-w-[21.25rem] truncate border-b border-border px-3 py-2" title={row.newFileName}>{row.newFileName || "-"}</td>
+                          <td className={["max-w-[21.25rem] truncate border-b border-border px-3 py-2", changedTextClass].join(" ")} title={row.newFileName}>{row.newFileName || "-"}</td>
                           <td className="truncate whitespace-nowrap border-b border-border px-3 py-2" title={row.confidence}>{row.confidence}</td>
                           <td className={["truncate whitespace-nowrap border-b border-border px-3 py-2", changedTextClass || "text-muted"].join(" ")} title={row.status}>{statusDisplay}</td>
                         </tr>

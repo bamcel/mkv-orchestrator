@@ -290,6 +290,21 @@ impl MkvoRuntime {
                 }
             })
             .await?;
+
+        // The working set is what later operations run against, so it moves
+        // with the files. A replay renamed nothing this time round, but the
+        // paths it describes are still the ones that now exist.
+        let moves: Vec<_> = plan
+            .payload
+            .items
+            .iter()
+            .filter(|item| item.can_apply())
+            .map(|item| (item.source.clone(), item.target.clone()))
+            .collect();
+        if !moves.is_empty() {
+            self.apply_renames_to_working_set(&moves).await;
+        }
+
         Ok(rename_apply_response(&plan, replay))
     }
 
