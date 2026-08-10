@@ -30,8 +30,8 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "../../../src/MKVOrchestrator.App/Assets/MKVO_icon.png",
-      "../../../src/MKVOrchestrator.App/Assets/MKVO_icon.ico"
+      "icons/icon.png",
+      "icons/icon.ico"
     ],
     "shortDescription": "Inspect, rename, remux, and maintain MKV media libraries"
   }
