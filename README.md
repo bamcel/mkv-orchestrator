@@ -223,8 +223,7 @@ desktop host together, and must be run from the repository root -- that is where
 the Tauri CLI finds `apps/desktop/src-tauri/tauri.conf.json`:
 
 ```powershell
-.\web
-ode_modules\.bin	auri.cmd dev
+.\web\node_modules\.bin\tauri.cmd dev
 ```
 
 Run the tests:
