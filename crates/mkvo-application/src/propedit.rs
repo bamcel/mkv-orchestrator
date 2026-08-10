@@ -9,7 +9,7 @@ use mkvo_domain::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{ApplicationError, ApplicationResult, paths::path_contains};
+use crate::{ApplicationError, ApplicationResult, FileAccessState, paths::path_contains};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +21,10 @@ pub struct PropertyEditPlanRequest {
     pub track_edits: Vec<TrackEditIntent>,
     #[serde(default)]
     pub authorized_roots: Vec<PathBuf>,
+    /// Access state of each source file, keyed by portable path. Gathered by
+    /// the host; an absent entry means "not probed" and never blocks.
+    #[serde(default)]
+    pub source_access: BTreeMap<String, FileAccessState>,
     pub settings_fingerprint: String,
     #[serde(default)]
     pub tool_fingerprints: ToolFingerprints,
@@ -153,6 +157,15 @@ fn build_item(
             "File is outside the authorized roots",
             Some(file.path.clone()),
         ));
+    }
+    // mkvpropedit rewrites the file in place, so it needs write access.
+    if let Some(conflict) = crate::rename::access_conflict(
+        request
+            .source_access
+            .get(&crate::paths::path_key(&file.path)),
+        &file.path,
+    ) {
+        conflicts.push(conflict);
     }
 
     let file_stem = file
@@ -372,6 +385,7 @@ mod tests {
     #[test]
     fn creates_type_specific_track_mutations() {
         let request = PropertyEditPlanRequest {
+            source_access: BTreeMap::new(),
             files: vec![media()],
             container_title: TextEdit::FromFileName,
             video_track_name: TextEdit::Keep,

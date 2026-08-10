@@ -9,8 +9,9 @@ use std::{
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use mkvo_application::{
-    AuthorizedPathPolicy, FileSystem, MediaCatalog, MediaEnumerationRequest, PortError,
-    WatchBackend, WatchBackendKind, WatchChange, WatchChangeKind, WatchHealth,
+    AuthorizedPathPolicy, FileAccessState, FileSystem, MediaCatalog, MediaEnumerationRequest,
+    PortError, RequiredAccess, WatchBackend, WatchBackendKind, WatchChange, WatchChangeKind,
+    WatchHealth,
 };
 use mkvo_domain::FileFingerprint;
 use tokio::{
@@ -183,6 +184,30 @@ impl FileSystem for LocalFileSystem {
             .await
             .map_err(|error| PortError::Other(format!("fingerprint task failed: {error}")))?
             .map_err(|error| PortError::Other(error.to_string()))
+    }
+
+    async fn probe_access(
+        &self,
+        path: &Path,
+        access: RequiredAccess,
+    ) -> Result<FileAccessState, PortError> {
+        let mode = match access {
+            RequiredAccess::Read => AccessMode::Read,
+            RequiredAccess::ReadWrite => AccessMode::Write,
+        };
+        let authorized = match self.authorized_roots.authorize_existing(path, mode) {
+            Ok(path) => path.into_path_buf(),
+            // A path that cannot be authorized is reported by the caller's own
+            // authorization check; here it simply is not reachable.
+            Err(crate::PathAuthorizationError::Canonicalize { .. }) => {
+                return Ok(FileAccessState::Missing);
+            }
+            Err(error) => return Err(path_port_error(error)),
+        };
+
+        tokio::task::spawn_blocking(move || probe_file_access(&authorized, access))
+            .await
+            .map_err(|error| PortError::Other(format!("access probe task failed: {error}")))
     }
 
     async fn move_file(&self, source: &Path, target: &Path) -> Result<(), PortError> {
@@ -463,5 +488,134 @@ mod tests {
 
         service.stop().await.expect("stop watcher");
         let _ = std::fs::remove_dir_all(root);
+    }
+}
+
+/// Open the file the way a mutation would, and report why that fails.
+///
+/// The open is exclusive on Windows (`share_mode(0)`), matching what the .NET
+/// implementation did: a media file that a media server or player currently has
+/// open is exactly the case worth catching, and a shared open would not detect
+/// it. Unix has no mandatory locking, so there the probe reports permissions
+/// only. The handle is closed immediately.
+fn probe_file_access(path: &Path, access: RequiredAccess) -> FileAccessState {
+    if !path.exists() {
+        return FileAccessState::Missing;
+    }
+
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    if access == RequiredAccess::ReadWrite {
+        options.write(true);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.share_mode(0);
+    }
+
+    match options.open(path) {
+        Ok(_) => FileAccessState::Available,
+        Err(error) => match error.kind() {
+            std::io::ErrorKind::PermissionDenied => FileAccessState::ReadOnly,
+            std::io::ErrorKind::NotFound => FileAccessState::Missing,
+            // Windows reports a sharing violation as os error 32; other kinds
+            // that reach here mean the file cannot be opened right now, which
+            // is the same practical outcome as being locked.
+            _ => FileAccessState::Busy,
+        },
+    }
+}
+
+#[cfg(test)]
+mod access_probe_tests {
+    use super::*;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "mkvo-access-{}-{name}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&path).expect("temp dir");
+        path
+    }
+
+    #[test]
+    fn an_ordinary_file_is_available_for_writing() {
+        let directory = temp_dir("plain");
+        let file = directory.join("a.mkv");
+        std::fs::write(&file, b"data").expect("write");
+
+        assert_eq!(
+            probe_file_access(&file, RequiredAccess::ReadWrite),
+            FileAccessState::Available
+        );
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn a_missing_file_is_reported_as_missing_not_busy() {
+        let directory = temp_dir("missing");
+        assert_eq!(
+            probe_file_access(&directory.join("nope.mkv"), RequiredAccess::ReadWrite),
+            FileAccessState::Missing
+        );
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    /// A read-only file passes every other precondition, so without this the
+    /// failure only appears once an external tool is already running.
+    #[test]
+    fn a_read_only_file_blocks_write_access_but_allows_read() {
+        let directory = temp_dir("readonly");
+        let file = directory.join("a.mkv");
+        std::fs::write(&file, b"data").expect("write");
+        let mut permissions = std::fs::metadata(&file).expect("metadata").permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&file, permissions).expect("set readonly");
+
+        assert_eq!(
+            probe_file_access(&file, RequiredAccess::ReadWrite),
+            FileAccessState::ReadOnly
+        );
+        assert_eq!(
+            probe_file_access(&file, RequiredAccess::Read),
+            FileAccessState::Available,
+            "a read-only file is still readable"
+        );
+
+        let mut permissions = std::fs::metadata(&file).expect("metadata").permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        let _ = std::fs::set_permissions(&file, permissions);
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    /// The case this exists for: a media server or player holding the file open
+    /// while MKVO plans a mutation against it.
+    #[cfg(windows)]
+    #[test]
+    fn a_file_held_open_by_another_handle_is_busy() {
+        let directory = temp_dir("busy");
+        let file = directory.join("a.mkv");
+        std::fs::write(&file, b"data").expect("write");
+
+        let holder = std::fs::File::open(&file).expect("hold open");
+        assert_eq!(
+            probe_file_access(&file, RequiredAccess::ReadWrite),
+            FileAccessState::Busy
+        );
+
+        drop(holder);
+        assert_eq!(
+            probe_file_access(&file, RequiredAccess::ReadWrite),
+            FileAccessState::Available,
+            "the file is usable again once the other handle closes"
+        );
+        let _ = std::fs::remove_dir_all(&directory);
     }
 }

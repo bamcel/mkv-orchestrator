@@ -63,6 +63,39 @@ pub trait FileSystem: Send + Sync {
     async fn fingerprint(&self, path: &Path) -> Result<FileFingerprint, PortError>;
     async fn move_file(&self, source: &Path, target: &Path) -> Result<(), PortError>;
     async fn remove_file(&self, path: &Path) -> Result<(), PortError>;
+
+    /// Report whether a file can actually be opened for the access a mutation
+    /// needs.
+    ///
+    /// Existence is not enough: a media file being read by a media server, or
+    /// one marked read-only, passes every other precondition and then fails
+    /// partway through an external tool run. Checking during preview turns that
+    /// into a blocked row with a reason the user can act on.
+    async fn probe_access(
+        &self,
+        path: &Path,
+        access: RequiredAccess,
+    ) -> Result<FileAccessState, PortError>;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RequiredAccess {
+    Read,
+    ReadWrite,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FileAccessState {
+    /// Open succeeded with the requested access.
+    Available,
+    /// The path does not exist.
+    Missing,
+    /// Permissions deny the requested access.
+    ReadOnly,
+    /// Another process holds the file.
+    Busy,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

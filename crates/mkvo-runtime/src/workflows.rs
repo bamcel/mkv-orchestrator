@@ -3,9 +3,9 @@ use std::path::{Path, PathBuf};
 
 use chrono::{Duration, Utc};
 use mkvo_application::{
-    ApplicationError, JobSpec, LibraryAuditService, PropertyEditPlanRequest, PropertyEditPlanner,
-    RemuxOptions, RemuxPlanRequest, RemuxPlanner, RenamePlanRequest, RenamePlanner, TextEdit,
-    ToolInvocation, TrackEditIntent, parse_episode_number,
+    ApplicationError, FileAccessState, JobSpec, LibraryAuditService, PropertyEditPlanRequest,
+    PropertyEditPlanner, RemuxOptions, RemuxPlanRequest, RemuxPlanner, RenamePlanRequest,
+    RenamePlanner, RequiredAccess, TextEdit, ToolInvocation, TrackEditIntent, parse_episode_number,
 };
 use mkvo_contracts::{
     JobCompletion, JobKind, JobLogLevel, LibraryAuditResponse, LibraryAuditRow,
@@ -93,6 +93,7 @@ impl MkvoRuntime {
         let key = request
             .idempotency_key
             .unwrap_or_else(IdempotencyKey::generate);
+        let files_for_access = files.clone();
         let plan = RenamePlanner.build_plan(RenamePlanRequest {
             files,
             template: request
@@ -101,6 +102,10 @@ impl MkvoRuntime {
             provider: Some(provider),
             check_existing_files: true,
             existing_paths: self.current_existing_paths().await,
+            source_access: self
+                .probe_source_access(&files_for_access, RequiredAccess::ReadWrite)
+                .await,
+            existing_parents: self.existing_parents(&files_for_access).await,
             authorized_roots: self.authorized_root_paths(),
             settings_fingerprint,
             expires_in_seconds: 900,
@@ -109,6 +114,58 @@ impl MkvoRuntime {
         self.persist_plan(&plan).await?;
         let scopes = scope_rows(&episodes);
         Ok(rename_preview_response(&plan, scopes, key))
+    }
+
+    /// Probe every source file so the planner can block on read-only, locked,
+    /// or vanished files during preview rather than failing mid-apply.
+    ///
+    /// A probe that errors is omitted rather than treated as a conflict: a host
+    /// whose filesystem port cannot answer must not be worse off than one that
+    /// never asked.
+    async fn probe_source_access(
+        &self,
+        files: &[MediaFile],
+        access: RequiredAccess,
+    ) -> BTreeMap<String, FileAccessState> {
+        let mut probed = BTreeMap::new();
+        for file in files {
+            match self
+                .dependencies()
+                .file_system
+                .probe_access(&file.path, access)
+                .await
+            {
+                Ok(state) => {
+                    probed.insert(mkvo_application::paths::path_key(&file.path), state);
+                }
+                Err(error) => {
+                    tracing::debug!(
+                        path = %file.path.display(),
+                        %error,
+                        "source access could not be probed"
+                    );
+                }
+            }
+        }
+        probed
+    }
+
+    /// Target parent directories that exist, so a rename into a missing folder
+    /// is blocked at preview instead of failing at apply.
+    async fn existing_parents(&self, files: &[MediaFile]) -> BTreeSet<String> {
+        let mut parents = BTreeSet::new();
+        for parent in files.iter().filter_map(|file| file.path.parent()) {
+            if self
+                .dependencies()
+                .file_system
+                .is_directory(parent)
+                .await
+                .unwrap_or(false)
+            {
+                parents.insert(mkvo_application::paths::path_key(parent));
+            }
+        }
+        parents
     }
 
     pub async fn apply_rename_preview(
@@ -627,10 +684,18 @@ impl MkvoRuntime {
             .idempotency_key
             .clone()
             .unwrap_or_else(IdempotencyKey::generate);
+        // Extraction only reads the source; every other mode rewrites it.
+        let required = if mode == RemuxMode::ExtractSubtitles {
+            RequiredAccess::Read
+        } else {
+            RequiredAccess::ReadWrite
+        };
+        let source_access = self.probe_source_access(&files, required).await;
         let base = RemuxPlanner
             .build_plan(RemuxPlanRequest {
                 mode,
                 files,
+                source_access,
                 options: RemuxOptions {
                     filter_audio_languages: request.remove_unwanted_audio_languages,
                     keep_audio_languages: split_strings(&request.keep_audio_languages),
@@ -723,9 +788,14 @@ impl MkvoRuntime {
             .idempotency_key
             .clone()
             .unwrap_or_else(IdempotencyKey::generate);
+        // mkvpropedit rewrites the file in place.
+        let source_access = self
+            .probe_source_access(&files, RequiredAccess::ReadWrite)
+            .await;
         PropertyEditPlanner
             .build_plan(PropertyEditPlanRequest {
                 files,
+                source_access,
                 container_title: title_edit(
                     request.container_title_mode,
                     &request.custom_container_title,
@@ -2395,6 +2465,14 @@ mod tests {
                 .ok_or_else(|| PortError::NotFound(path.display().to_string()))
         }
 
+        async fn probe_access(
+            &self,
+            _path: &Path,
+            _access: RequiredAccess,
+        ) -> Result<FileAccessState, PortError> {
+            Ok(FileAccessState::Available)
+        }
+
         async fn move_file(&self, source: &Path, target: &Path) -> Result<(), PortError> {
             self.moves.fetch_add(1, Ordering::SeqCst);
             let mut files = self.files.write().await;
@@ -2565,6 +2643,7 @@ mod tests {
         let settings = AppSettings::default();
         RemuxPlanner
             .build_plan(RemuxPlanRequest {
+                source_access: BTreeMap::new(),
                 mode: RemuxMode::ConvertToMkv,
                 files: vec![media(path)],
                 options: RemuxOptions::default(),
@@ -2608,6 +2687,8 @@ mod tests {
         let settings_fingerprint = stable_fingerprint(&AppSettings::default()).expect("settings");
         let plan = RenamePlanner
             .build_plan(RenamePlanRequest {
+                source_access: BTreeMap::new(),
+                existing_parents: BTreeSet::new(),
                 files: vec![source],
                 template: "Renamed".to_owned(),
                 provider: None,
