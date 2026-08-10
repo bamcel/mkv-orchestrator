@@ -10,7 +10,7 @@ async-trait.workspace = true
 blake3.workspace = true
 mkvo-application = { path = "../mkvo-application" }
 mkvo-domain = { path = "../mkvo-domain" }
-quick-xml = { version = "0.38", features = ["serialize"] }
+quick-xml = { version = "0.41", features = ["serialize"] }
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
