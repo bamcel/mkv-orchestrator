@@ -13,6 +13,8 @@ use crate::{ApplicationError, ApplicationResult, FileAccessState};
 
 pub const DEFAULT_SERIES_TEMPLATE: &str = "{series} - S{season:00}E{episode:00} - {episodeTitle}";
 pub const DEFAULT_MOVIE_TEMPLATE: &str = "{title} ({year})";
+/// Used when the provider knows the film but not its year.
+pub const DEFAULT_MOVIE_TITLE_ONLY_TEMPLATE: &str = "{title}";
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -309,7 +311,13 @@ pub fn build_file_name(file: &MediaFile, template: &str) -> String {
     // A template that asks for neither is left alone: someone who wrote their
     // own movie template meant it.
     if is_movie && mentions_episode_position(active) {
-        active = DEFAULT_MOVIE_TEMPLATE;
+        // Without a year the parenthesised form renders as "Title ()", so the
+        // year is only asked for when the provider supplied one.
+        active = if tokens.year.is_some() {
+            DEFAULT_MOVIE_TEMPLATE
+        } else {
+            DEFAULT_MOVIE_TITLE_ONLY_TEMPLATE
+        };
     }
 
     let mut rendered = active.to_owned();
@@ -592,6 +600,22 @@ mod tests {
         let name = build_file_name(&file, "S{season:00}E{episode:00} - {episodeTitle}");
 
         assert_eq!(name, "Obsession (2026).mkv");
+    }
+
+    /// A film whose year the provider does not know must not be renamed
+    /// "Obsession ()".
+    #[test]
+    fn a_film_without_a_year_is_named_by_title_alone() {
+        let mut file = media("Obsession (Bluray).mkv", 1);
+        let episode = file.episode.as_mut().expect("episode");
+        episode.is_movie = true;
+        episode.series_title = Some("Obsession".to_owned());
+        episode.episode_title = Some("Obsession".to_owned());
+        episode.year = None;
+
+        let name = build_file_name(&file, DEFAULT_SERIES_TEMPLATE);
+
+        assert_eq!(name, "Obsession.mkv");
     }
 
     /// Someone who wrote a movie template meant it, so it is left alone.
