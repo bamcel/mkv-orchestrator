@@ -186,3 +186,66 @@ describe("Dashboard ignored folders", () => {
     expect(startScan.mock.calls[0][0].ignoredFolderNames).toEqual(["Extras", "Samples"]);
   });
 });
+
+describe("Dashboard detail panels", () => {
+  /// They used to appear only once a file was selected, so the dashboard
+  /// reflowed as scans came and went and an empty page gave no hint of what
+  /// these panels are for.
+  it("keeps Media Info and Track Info in place with nothing scanned", async () => {
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve(emptyScan),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    expect(await screen.findByText("Media Info")).toBeInTheDocument();
+    expect(screen.getByText("Track Info")).toBeInTheDocument();
+
+    // The labels stay so the panel says what it will show.
+    for (const label of ["File", "Codec", "Resolution", "Bit Depth", "HDR", "Status"]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
+    expect(screen.getByText(/scan a folder, then select a file/i)).toBeInTheDocument();
+  });
+
+  it("fills the panels once a file is scanned", async () => {
+    const file = {
+      path: "/media/Show/Ep01.mkv",
+      fileName: "Ep01.mkv",
+      extension: ".mkv",
+      status: "Scanned",
+      reader: "mkvmerge",
+      codec: "HEVC/H.265",
+      resolution: "1920x1080",
+      bitDepth: "",
+      hdr: "",
+      videoSummary: "HEVC/H.265 | 1920x1080",
+      audioSummary: "eng x1",
+      subtitleSummary: "eng x1",
+      attachmentSummary: "None",
+      tracks: [
+        {
+          id: 0,
+          trackNumber: 1,
+          type: "video",
+          codec: "HEVC/H.265",
+          language: "und",
+          name: "",
+          default: true,
+          forced: false
+        }
+      ],
+      attachments: []
+    };
+
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () =>
+        Promise.resolve({ ...emptyScan, files: [file], summary: { total: 1, mkv: 1, mp4: 0, failed: 0 } }),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    await waitFor(() => expect(screen.getAllByText("HEVC/H.265").length).toBeGreaterThan(0));
+    expect(screen.queryByText(/scan a folder, then select a file/i)).not.toBeInTheDocument();
+  });
+});
