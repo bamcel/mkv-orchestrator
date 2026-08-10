@@ -57,7 +57,7 @@ function loadRenameState(): StoredRenameState {
 }
 
 export function RenamePage() {
-  const { files, setFiles, updateFilesAfterRename } = useMediaLibrary();
+  const { files, setFiles, updateFilesAfterRename, syncFromBackend } = useMediaLibrary();
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const queryClient = useQueryClient();
@@ -157,12 +157,12 @@ export function RenamePage() {
   }, [provider, language, searchTitle, autoFilledTitle, template, selectedIndex, scopeKeys, previewRows, previewSummary, statusText, searchResults, scopeRows]);
 
   useEffect(() => {
-    if (files.length > 0 || !currentScan.data?.files.length) return;
-    setFiles(currentScan.data.files);
-    if (storedRenameState.statusText === undefined) {
+    if (!currentScan.data) return;
+    syncFromBackend(currentScan.data);
+    if (currentScan.data.files.length > 0 && storedRenameState.statusText === undefined) {
       setStatusText(`Loaded ${currentScan.data.files.length} scanned file(s) from Dashboard.`);
     }
-  }, [currentScan.data, files.length, setFiles, storedRenameState.statusText]);
+  }, [currentScan.data, storedRenameState.statusText]);
 
   // Follow the scan. This used to fire only into an empty field, and the field
   // is persisted, so the title from the first scan stuck for the whole session
@@ -175,8 +175,11 @@ export function RenamePage() {
     if (files.length === 0) return;
     const guessed = guessSearchTitle(files.map((file) => file.fileName));
     if (!guessed || guessed === searchTitle) return;
-    if (searchTitle && searchTitle !== autoFilledTitle) return;
 
+    // A new scan replaces the title outright, including one typed by hand.
+    // Keeping the old one meant scanning a second film and searching for the
+    // first, which is never what was wanted; the field is still editable
+    // afterwards, and nothing is searched until Search is pressed.
     setSearchTitle(guessed);
     setAutoFilledTitle(guessed);
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -17,6 +17,15 @@ type MediaLibraryContextValue = {
   toggleSelectedPath: (path: string) => void;
   /** Adopt the selection the backend reports, without echoing it back. */
   hydrateSelection: (paths: string[]) => void;
+  /**
+   * Adopt the backend's working set when it is newer than what is held.
+   *
+   * Rust owns the working set and updates it as operations land, so pages read
+   * it rather than guessing. They used to adopt it only while holding nothing,
+   * which meant the very first scan won and every later change -- a rename, a
+   * property edit -- was invisible until the app was restarted.
+   */
+  syncFromBackend: (scan: { updatedUtc: string | null; files: MediaFileRow[]; selectedPaths: string[] }) => void;
   templateFilePath: string;
   setTemplateFilePath: (path: string) => void;
   updateFilesAfterRename: (renames: Array<{ oldPath: string; newPath: string; newFileName: string; status?: string }>) => void;
@@ -70,6 +79,9 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
   const [selectedPaths, setSelectedPathsState] = useState<string[]>(() =>
     readStored<string[]>(localStorage, selectionStorageKey, [])
   );
+  // What the adopted set was stamped with, so a repeat of the same answer does
+  // not keep replacing local state on every refetch.
+  const [adoptedUpdatedUtc, setAdoptedUpdatedUtc] = useState<string | null>(null);
   const [templateFilePath, setTemplateFilePath] = useState(() => {
     try {
       return sessionStorage.getItem(templateStorageKey) ?? "";
@@ -125,6 +137,22 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
       });
     },
     hydrateSelection: (paths) => setSelectedPathsState(paths),
+    syncFromBackend: (scan) => {
+      if (scan.files.length === 0) return;
+      // An unstamped response is the pre-scan default, not news.
+      if (!scan.updatedUtc) {
+        if (files.length > 0) return;
+      } else if (adoptedUpdatedUtc && scan.updatedUtc <= adoptedUpdatedUtc) {
+        return;
+      }
+
+      setAdoptedUpdatedUtc(scan.updatedUtc);
+      setFilesState(scan.files);
+      setSelectedPathsState(scan.selectedPaths);
+      setTemplateFilePath((current) =>
+        current && scan.files.some((file) => file.path === current) ? current : scan.files[0].path
+      );
+    },
     templateFilePath,
     setTemplateFilePath,
     updateFilesAfterRename: (renames) => {
@@ -150,7 +178,7 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
         return rename ? rename.newPath : current;
       });
     }
-  }), [files, selectedPaths, templateFilePath]);
+  }), [files, selectedPaths, templateFilePath, adoptedUpdatedUtc]);
 
   return (
     <MediaLibraryContext.Provider value={value}>

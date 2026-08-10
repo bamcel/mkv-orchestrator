@@ -162,8 +162,9 @@ describe("rename search title", () => {
     await waitFor(async () => expect(await searchTitleField()).toHaveValue("Cowboy Bebop"));
   });
 
-  /// A title the user typed is theirs; a scan must not overwrite it.
-  it("leaves a typed title alone when a new scan arrives", async () => {
+  /// Scanning a second film while the first film's title sat in the box meant
+  /// searching for the wrong one, so a scan replaces whatever is there.
+  it("replaces a typed title when a new scan arrives", async () => {
     const user = userEvent.setup();
     const { rerender } = renderRename(["Justified.S01E01.mkv"]);
     const field = await searchTitleField();
@@ -175,7 +176,6 @@ describe("rename search title", () => {
     rerenderWith(rerender, ["Cowboy.Bebop.S01E01.mkv"]);
 
     // Give the effect a chance to fire before concluding it did not.
-    await waitFor(() => expect(screen.getByText(/scanned file\(s\)/i)).toBeInTheDocument());
-    expect(await searchTitleField()).toHaveValue("My Own Search");
+    await waitFor(async () => expect(await searchTitleField()).toHaveValue("Cowboy Bebop"));
   });
 });

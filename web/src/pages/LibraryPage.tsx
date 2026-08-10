@@ -15,7 +15,7 @@ import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
 export function LibraryPage() {
-  const { files, setFiles, setTemplateFilePath } = useMediaLibrary();
+  const { files, setFiles, setTemplateFilePath, syncFromBackend } = useMediaLibrary();
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const [auditResult, setAuditResult] = useState<LibraryAuditResponse | null>(null);
@@ -46,9 +46,9 @@ export function LibraryPage() {
   }, [selectedSource, sourceOptions]);
 
   useEffect(() => {
-    if (files.length > 0 || !currentScan.data?.files.length) return;
-    setFiles(currentScan.data.files);
-  }, [currentScan.data, files.length, setFiles]);
+    if (!currentScan.data) return;
+    syncFromBackend(currentScan.data);
+  }, [currentScan.data]);
 
   const audit = useMutation({
     mutationFn: buildLibraryAudit,

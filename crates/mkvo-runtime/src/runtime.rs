@@ -853,6 +853,50 @@ impl MkvoRuntime {
         state.updated_utc = Some(Utc::now());
     }
 
+    /// Re-read files an operation just changed, so the working set describes
+    /// them as they are now rather than as they were when scanned.
+    ///
+    /// A property edit rewrites track names and languages in place: the paths
+    /// are unchanged, so nothing else would notice, and the app would keep
+    /// showing the old metadata until the user scanned again by hand. A file
+    /// that can no longer be read is left as it was rather than dropped --
+    /// a transient failure should not empty someone's working set.
+    pub(crate) async fn refresh_working_set(&self, paths: &[PathBuf]) {
+        if paths.is_empty() {
+            return;
+        }
+
+        let mut probed = Vec::with_capacity(paths.len());
+        for path in paths {
+            match self
+                .inner
+                .dependencies
+                .probe
+                .inspect(path, CancellationToken::new())
+                .await
+            {
+                Ok(file) => probed.push(file),
+                Err(error) => tracing::debug!(
+                    path = %path.display(),
+                    %error,
+                    "file could not be re-read after an operation"
+                ),
+            }
+        }
+
+        let mut state = self.inner.current_scan.write().await;
+        for file in probed {
+            if let Some(existing) = state
+                .files
+                .iter_mut()
+                .find(|candidate| same_path(&candidate.path, &file.path))
+            {
+                *existing = file;
+            }
+        }
+        state.updated_utc = Some(Utc::now());
+    }
+
     pub async fn clear_current_scan_files(&self) -> RuntimeResult<CurrentScanResponse> {
         let mut state = self.inner.current_scan.write().await;
         *state = CurrentScanState::default();
