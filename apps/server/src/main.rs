@@ -14,6 +14,22 @@ async fn main() -> Result<()> {
 
     let config = Arc::new(ServerConfig::from_env()?);
     let runtime = Arc::new(build_runtime(&config)?);
+
+    // Watchers are started before the listener so a container that boots with
+    // watching enabled is already observing its roots when the first request
+    // arrives. A watcher that cannot start is logged, never fatal.
+    match runtime.start_watchers().await {
+        Ok(report) if report.started => {
+            info!(roots = report.roots.len(), "watch folders active");
+        }
+        Ok(report) => {
+            if let Some(error) = report.error {
+                warn!(%error, "watch folders inactive");
+            }
+        }
+        Err(error) => warn!(%error, "watch folders could not be started"),
+    }
+
     let bind = config.bind;
     let app = build_router(Arc::clone(&config), runtime);
     let listener = TcpListener::bind(bind)

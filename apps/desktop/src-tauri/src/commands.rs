@@ -350,6 +350,11 @@ pub async fn run_library_audit(runtime: State<'_, RuntimeState>, request: Value)
 }
 
 #[tauri::command]
+pub async fn get_watch_health(runtime: State<'_, RuntimeState>) -> CommandResult {
+    encode_response(runtime.watch_health().await)
+}
+
+#[tauri::command]
 pub async fn get_logs(runtime: State<'_, RuntimeState>) -> CommandResult {
     encode_response(runtime.get_logs().await)
 }

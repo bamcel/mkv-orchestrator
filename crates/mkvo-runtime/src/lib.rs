@@ -4,6 +4,7 @@ pub mod compat;
 mod composition;
 mod error;
 mod runtime;
+mod watch;
 mod workflows;
 
 pub use composition::{
@@ -14,6 +15,7 @@ pub use runtime::{
     LegacyMigrationReport, LegacyMigrationStatus, MkvoRuntime, RecoveryDisposition,
     StartupRecoveryItem, StartupRecoveryReport,
 };
+pub use watch::WatchStartReport;
 
 /// Canonical shared DTOs for hosts that do not need the legacy projections.
 pub use mkvo_contracts as contracts;
