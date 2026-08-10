@@ -49,6 +49,8 @@ impl ProviderCredentials {
 pub enum ProviderKind {
     Tvdb,
     Tmdb,
+    AniDb,
+    AniList,
 }
 
 impl fmt::Display for ProviderKind {
@@ -56,6 +58,8 @@ impl fmt::Display for ProviderKind {
         formatter.write_str(match self {
             Self::Tvdb => "TVDB",
             Self::Tmdb => "TMDB",
+            Self::AniDb => "AniDB",
+            Self::AniList => "AniList",
         })
     }
 }

@@ -23,6 +23,7 @@ use mkvo_infra_media_servers::{
     ConfiguredMediaServerClient, MediaServerDiscoveryClient, MediaServerPathMapping,
 };
 use mkvo_infra_providers::{
+    AniDbClient, AniListClient, ConfiguredAniDbProvider, ConfiguredAniListProvider,
     ConfiguredTmdbProvider, ConfiguredTvdbProvider, ProviderCredentials, SecretString, TmdbClient,
     TvdbClient,
 };
@@ -631,6 +632,10 @@ impl MkvoRuntime {
             .secret_alias(&["provider.tmdb.api_key", "tmdbApiKey"])
             .await?
             .is_some();
+        view.has_anidb_client = self
+            .secret_alias(&["provider.anidb.client", "anidbClient"])
+            .await?
+            .is_some();
         Ok(view)
     }
 
@@ -666,6 +671,10 @@ impl MkvoRuntime {
             .is_some();
         view.has_tmdb_api_key = self
             .secret_alias(&["provider.tmdb.api_key", "tmdbApiKey"])
+            .await?
+            .is_some();
+        view.has_anidb_client = self
+            .secret_alias(&["provider.anidb.client", "anidbClient"])
             .await?
             .is_some();
         Ok(view)
@@ -960,9 +969,26 @@ impl MkvoRuntime {
                     language,
                 )))
             }
-            MetadataProvider::AniDb | MetadataProvider::AniList => Err(RuntimeError::invalid(
-                "This metadata provider is not available in the current migration stage",
-            )),
+            // AniList is a public GraphQL API and needs no credentials.
+            MetadataProvider::AniList => Ok(Arc::new(ConfiguredAniListProvider::new(
+                AniListClient::new(),
+                language,
+            ))),
+            // AniDB identifies callers by a registered client name rather than a
+            // key, stored as `name/version`. Searching only reads the public
+            // title dump, so a missing client name is reported by the episode
+            // call rather than blocking search.
+            MetadataProvider::AniDb => {
+                let client = self
+                    .secret_alias(&["provider.anidb.client", "anidbClient"])
+                    .await?
+                    .unwrap_or_default();
+                Ok(Arc::new(ConfiguredAniDbProvider::new(
+                    AniDbClient::new(),
+                    ProviderCredentials::api_key(client),
+                    language,
+                )))
+            }
         }
     }
 
@@ -1232,6 +1258,7 @@ fn web_settings(
         has_tvdb_api_key: configured("tvdbApiKey"),
         has_tvdb_pin: configured("tvdbPin"),
         has_tmdb_api_key: configured("tmdbApiKey"),
+        has_anidb_client: configured("anidbClient"),
         tvdb_language: settings.rename.language.clone(),
         rename_lookup_provider: provider_name(settings.rename.provider).to_owned(),
         rename_template: settings.rename.template.clone(),
@@ -1300,6 +1327,7 @@ fn apply_web_settings_request(
         ("provider.tvdb.api_key", "tvdbApiKey", request.tvdb_api_key),
         ("provider.tvdb.pin", "tvdbPin", request.tvdb_pin),
         ("provider.tmdb.api_key", "tmdbApiKey", request.tmdb_api_key),
+        ("provider.anidb.client", "anidbClient", request.anidb_client),
     ] {
         if let Some(value) = value {
             for key in [primary, alias] {
