@@ -6,23 +6,21 @@ services:
     image: mkvo:local
     container_name: mkvo
     ports:
-      - "8886:8080"
+      - "8887:8080"
     environment:
-      ASPNETCORE_URLS: "http://+:8080"
+      MKVO_BIND: "0.0.0.0:8080"
       MKVO_MEDIA_ROOT: "/media"
       MKVO_SOURCE_ROOTS: "${MKVO_SOURCE_ROOTS:-downloads=/downloads}"
-      HOME: "/config"
-      XDG_CONFIG_HOME: "/config"
-      XDG_DATA_HOME: "/config/.local/share"
-      # Optional: run as a specific user so files on mounted shares are not root-owned.
+      MKVO_CONFIG_DIR: "/config"
+      MKVO_UI_DIR: "/app/web"
+      MKVO_AUTH_USERNAME: "${MKVO_AUTH_USERNAME:-}"
+      MKVO_AUTH_PASSWORD: "${MKVO_AUTH_PASSWORD:-}"
       PUID: "${PUID:-0}"
       PGID: "${PGID:-0}"
       UMASK: "${UMASK:-}"
-      # Optional: require HTTP basic auth for the web UI and API.
-      MKVO_AUTH_USERNAME: "${MKVO_AUTH_USERNAME:-}"
-      MKVO_AUTH_PASSWORD: "${MKVO_AUTH_PASSWORD:-}"
     volumes:
       - ${MKVO_MEDIA_PATH:-./tmp/docker-media}:/media
       - ${MKVO_DOWNLOADS_PATH:-./tmp/docker-downloads}:/downloads
       - ${MKVO_CONFIG_PATH:-./tmp/docker-config}:/config
     restart: unless-stopped
+

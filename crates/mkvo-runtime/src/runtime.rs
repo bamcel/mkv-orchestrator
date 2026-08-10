@@ -485,8 +485,7 @@ impl MkvoRuntime {
             .collect();
         for root in &library_roots {
             let path = display_path(&root.path);
-            source_roots
-                .retain(|existing| !same_path(Path::new(&existing.path), Path::new(&path)));
+            source_roots.retain(|existing| !same_path(Path::new(&existing.path), Path::new(&path)));
             source_roots.push(SourceRoot {
                 name: root.name.clone(),
                 path,

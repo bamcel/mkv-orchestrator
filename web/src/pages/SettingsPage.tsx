@@ -27,9 +27,35 @@ import {
 import type { SourceRoot, WebMediaServer, WebMediaServerPathMapping, WebSettings } from "../api";
 import { FileBrowser } from "../components/FileBrowser";
 import { SectionHeader } from "../components/SectionHeader";
+import ffmpegLogo from "../assets/logos/ffmpeg.png";
+import mkvtoolnixLogo from "../assets/logos/mkvtoolnix.png";
+import tmdbLogo from "../assets/logos/tmdb.png";
+import tvdbLogo from "../assets/logos/tvdb.png";
 import { applyWebTheme, getAllWebThemes, getStoredWebThemeName, getWebTheme, removeCustomWebTheme, saveCustomWebTheme } from "../theme";
 
 const settingsTabStorageKey = "mkvo.web.settingsTab";
+
+/**
+ * Third-party notices shown in About.
+ *
+ * The TMDB wording is prescribed by their API terms rather than chosen, so it
+ * is reproduced verbatim; the rest match docs/ATTRIBUTION_AND_LOGOS.md.
+ */
+const attributions = [
+  {
+    name: "TMDB",
+    logo: tmdbLogo,
+    notice: "This product uses the TMDB API but is not endorsed or certified by TMDB."
+  },
+  { name: "TheTVDB", logo: tvdbLogo, notice: "Metadata provided by TheTVDB." },
+  {
+    name: "MKVToolNix",
+    logo: mkvtoolnixLogo,
+    notice:
+      "MKVToolNix tools are used for MKV remuxing, metadata editing, extraction, and analysis."
+  },
+  { name: "FFmpeg", logo: ffmpegLogo, notice: "FFmpeg and ffprobe are used for media metadata analysis." }
+] as const;
 
 const settingsTabs = [
   { id: "general", label: "General", Icon: Wrench },
@@ -927,6 +953,30 @@ export function SettingsPage() {
                     TVDB and TMDB lookup requires your own API keys. Saved keys stay in the {isDesktop ? "local application configuration directory" : "mounted server configuration directory"}; never commit or publish that data.
                   </p>
                 </div>
+              </SettingsCard>
+
+              {/* Required, not decorative: TMDB's API terms oblige the notice
+                  below. Kept in About and away from the workflow screens, per
+                  docs/ATTRIBUTION_AND_LOGOS.md. */}
+              <SettingsCard
+                title="Attribution"
+                description="MKVO relies on these third-party services and tools."
+              >
+                <ul className="grid gap-3 sm:grid-cols-2">
+                  {attributions.map((item) => (
+                    <li
+                      key={item.name}
+                      className="flex flex-col gap-2 rounded-lg border border-border bg-input p-3"
+                    >
+                      <img
+                        src={item.logo}
+                        alt={`${item.name} logo`}
+                        className="h-12 w-auto max-w-[140px] self-start object-contain"
+                      />
+                      <p className="text-xs leading-5 text-muted">{item.notice}</p>
+                    </li>
+                  ))}
+                </ul>
               </SettingsCard>
 
               <SettingsCard title="Configuration Safety" description="Deployment-specific data should live in mounted volumes or environment variables, not source control.">

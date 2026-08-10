@@ -1,6 +1,5 @@
 [CmdletBinding()]
 param(
-    [switch]$SkipLegacy,
     [switch]$SkipWeb,
     [switch]$IncludeDesktop
 )
@@ -18,16 +17,6 @@ try {
     Write-Host 'Checking generated TypeScript contracts for drift...'
     cargo run --locked --package mkvo-contract-gen -- --check
     if ($LASTEXITCODE -ne 0) { throw 'Generated contract drift check failed.' }
-
-    if (-not $SkipLegacy) {
-        Write-Host 'Building the existing .NET baseline...'
-        dotnet build MKVOrchestrator.sln --configuration Release
-        if ($LASTEXITCODE -ne 0) { throw '.NET build failed.' }
-
-        Write-Host 'Running the existing behavior harness...'
-        dotnet run --project tests/MKVOrchestrator.Tests/MKVOrchestrator.Tests.csproj --configuration Release --no-build
-        if ($LASTEXITCODE -ne 0) { throw '.NET behavior harness failed.' }
-    }
 
     if (-not $SkipWeb) {
         Write-Host 'Building the shared React UI...'
@@ -52,7 +41,7 @@ try {
     cargo test --workspace --all-targets @excluded
     if ($LASTEXITCODE -ne 0) { throw 'Rust tests failed.' }
 
-    Write-Host 'Migration verification passed.' -ForegroundColor Green
+    Write-Host 'Verification passed.' -ForegroundColor Green
 }
 finally {
     Pop-Location

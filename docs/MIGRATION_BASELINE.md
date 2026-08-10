@@ -4,6 +4,13 @@ Captured: 2026-08-04
 Purpose: establish the behavior that the staged Tauri/Rust replacement must
 match before the .NET implementation can be retired.
 
+> **Historical record.** The .NET tree was removed at cutover on 2026-08-08, so
+> the commands below no longer run against this repository. The document is kept
+> as the captured baseline the Rust implementation was measured against; the
+> behaviour it describes now lives in the parity fixtures under
+> `tests/parity-fixtures/`, which the Rust tests still read. Recover the sources
+> from git history if you need to re-run any of it.
+
 ## Build baseline
 
 ```powershell
