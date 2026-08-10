@@ -217,8 +217,8 @@ export function MuxRemuxPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Mux / Remux" description="Remove tracks, mux matching subtitle sidecars, or extract subtitle tracks with MKVToolNix." />
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[300px_minmax(0,1fr)] gap-3">
-        <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
+        <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <div className="flex justify-end">
             <button onClick={refreshFiles} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">Refresh</button>
           </div>
@@ -306,7 +306,7 @@ export function MuxRemuxPage() {
         </section>
 
         <div className="grid min-h-0 min-w-0 grid-rows-[1.3fr_1fr] gap-3">
-          <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+          <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex shrink-0 items-center justify-between gap-3">
               <h2 className="text-base font-semibold">File Info</h2>
               <button
@@ -318,7 +318,7 @@ export function MuxRemuxPage() {
               </button>
             </div>
             <div className="mt-3 min-h-0 flex-1 overflow-auto">
-              <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+              <table className="w-full min-w-[56.25rem] border-collapse text-left text-sm">
                 <thead className="sticky top-0 bg-card text-xs text-text">
                   <tr>
                     <th className="border-b border-border px-3 py-2">File</th>
@@ -348,14 +348,14 @@ export function MuxRemuxPage() {
             </div>
           </section>
 
-          <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+          <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex shrink-0 gap-6 text-sm">
               <button onClick={() => setDetailTab("tracks")} className={detailTab === "tracks" ? "border-b border-accent pb-1 font-semibold text-text" : "pb-1 font-semibold text-muted"}>File Details: Tracks</button>
               <button onClick={() => setDetailTab("attachments")} className={detailTab === "attachments" ? "border-b border-accent pb-1 font-semibold text-text" : "pb-1 font-semibold text-muted"}>File Details: Attachments</button>
             </div>
             <div className="mt-3 min-h-0 flex-1 overflow-auto">
               {detailTab === "tracks" ? (
-                <table className="w-full min-w-[720px] table-fixed border-collapse text-left text-sm">
+                <table className="w-full min-w-[45rem] table-fixed border-collapse text-left text-sm">
                   <thead className="sticky top-0 bg-card text-xs text-text">
                     <tr>
                       <th className="w-12 border-b border-border px-3 py-2">#</th>
@@ -378,11 +378,11 @@ export function MuxRemuxPage() {
                   </tbody>
                 </table>
               ) : selectedDetailFile?.attachments?.length ? (
-                <table className="w-full min-w-[760px] table-fixed border-collapse text-left text-sm">
+                <table className="w-full min-w-[47.5rem] table-fixed border-collapse text-left text-sm">
                   <thead className="sticky top-0 bg-card text-xs text-text">
                     <tr>
                       <th className="w-14 border-b border-border px-3 py-2">#</th>
-                      <th className="w-[260px] border-b border-border px-3 py-2">File</th>
+                      <th className="w-[16.25rem] border-b border-border px-3 py-2">File</th>
                       <th className="w-52 border-b border-border px-3 py-2">Content Type</th>
                       <th className="w-28 border-b border-border px-3 py-2">Size</th>
                       <th className="border-b border-border px-3 py-2">Description</th>
@@ -401,7 +401,7 @@ export function MuxRemuxPage() {
                   </tbody>
                 </table>
               ) : (
-                <div className="flex h-full min-h-[120px] items-center justify-center text-sm text-subtle">
+                <div className="flex h-full min-h-[7.5rem] items-center justify-center text-sm text-subtle">
                   No attachments or fonts were detected for the selected file.
                 </div>
               )}

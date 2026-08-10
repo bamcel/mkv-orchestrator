@@ -31,18 +31,47 @@ body,
   height: 100%;
 }
 
+/*
+ * The console is laid out in rem, so the root font size is the scale control
+ * for the whole interface: type, spacing, and every panel width shrink and
+ * grow together instead of the layout rearranging itself at breakpoints.
+ *
+ * 1.1vw hits 16px at about 1453px, the width of a maximised window on a
+ * 2560x1600 display at 200% scale, and 12.1px at the 1100px minimum. Between
+ * those the proportions are identical, which is the point -- a small window is
+ * the same design seen smaller, not a different one. The clamp stops type
+ * becoming unreadable below the minimum and stops it ballooning on very wide
+ * monitors, where extra width is better spent on content than on scale.
+ */
 html {
+  font-size: clamp(12px, 1.1vw, 16px);
   background: var(--color-window);
 }
 
 body {
   margin: 0;
-  min-width: 1180px;
   overflow: hidden;
   background: var(--color-window);
   font-family: var(--font-sans);
   color: var(--color-text);
 }
+
+/*
+ * Lucide renders its size prop as pixel width and height attributes, which
+ * would leave icons frozen while everything around them scaled. Restating each
+ * size in rem keeps them in step with the root scale.
+ *
+ * Matching on the attribute preserves the sizes already chosen rather than
+ * flattening every icon to one; rem rather than em because the surrounding
+ * text sizes vary, and an icon should track the interface scale, not the
+ * particular label it sits next to.
+ */
+svg.lucide[width="11"] { width: 0.6875rem; height: 0.6875rem; }
+svg.lucide[width="12"] { width: 0.75rem; height: 0.75rem; }
+svg.lucide[width="13"] { width: 0.8125rem; height: 0.8125rem; }
+svg.lucide[width="14"] { width: 0.875rem; height: 0.875rem; }
+svg.lucide[width="15"] { width: 0.9375rem; height: 0.9375rem; }
+svg.lucide[width="16"] { width: 1rem; height: 1rem; }
 
 button,
 input,

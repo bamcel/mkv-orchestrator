@@ -62,8 +62,8 @@ export function LogsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Logs" description="Review recent scan and operation output." />
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[300px_minmax(0,1fr)] gap-5">
-        <section className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-5">
+        <section className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-5 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold">Recent Operations</h2>
             <div className="flex gap-2">
@@ -101,7 +101,7 @@ export function LogsPage() {
 
           <div className="mt-4 min-h-0 flex-1 overflow-auto rounded-lg border border-border bg-panel">
             {visibleEntries.length === 0 ? (
-              <div className="flex h-full min-h-[300px] items-center justify-center text-sm text-subtle">No operation logs yet.</div>
+              <div className="flex h-full min-h-[18.75rem] items-center justify-center text-sm text-subtle">No operation logs yet.</div>
             ) : visibleEntries.map((entry, index) => (
               <button
                 key={`${entry.timestampUtc}-${entry.area}-${index}`}
@@ -121,7 +121,7 @@ export function LogsPage() {
           </div>
         </section>
 
-        <section className="flex min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+        <section className="flex min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-5 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold">Output</h2>
             <div className="flex gap-2">
@@ -147,7 +147,7 @@ export function LogsPage() {
               </pre>
             </>
           ) : (
-            <div className="mt-4 flex min-h-[300px] items-center justify-center rounded-lg border border-border bg-panel text-sm text-subtle">
+            <div className="mt-4 flex min-h-[18.75rem] items-center justify-center rounded-lg border border-border bg-panel text-sm text-subtle">
               Select an operation to inspect output.
             </div>
           )}

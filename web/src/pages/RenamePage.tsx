@@ -451,8 +451,8 @@ export function RenamePage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Rename" description="Match files to provider metadata and preview safe destination names." />
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[300px_minmax(0,1fr)] gap-3">
-        <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
+        <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold">Rename Options</h2>
             <button
@@ -593,7 +593,7 @@ export function RenamePage() {
             onChange={(event) => setTemplate(event.target.value)}
             className="hidden"
           />
-          <div className="mt-1 text-[11px] text-muted">Manage templates in Settings &gt; Rename.</div>
+          <div className="mt-1 text-[0.6875rem] text-muted">Manage templates in Settings &gt; Rename.</div>
 
           <div className="mt-3 text-sm font-semibold">Execution</div>
           <div className="mt-3 flex gap-2">
@@ -620,7 +620,7 @@ export function RenamePage() {
         </section>
 
         <div className="min-h-0 min-w-0">
-        <section className="flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+        <section className="flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <div className="flex shrink-0 items-center justify-between">
             <h2 className="text-base font-semibold">Rename Preview</h2>
             <div className="flex items-center gap-3">
@@ -644,13 +644,13 @@ export function RenamePage() {
 
           <div className="mt-4 min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-panel">
             {previewRows.length === 0 ? (
-              <div className="flex h-full min-h-[260px] flex-col items-center justify-center text-center">
+              <div className="flex h-full min-h-[16.25rem] flex-col items-center justify-center text-center">
                 <div className="text-xl font-semibold">No preview built yet</div>
                 <div className="mt-2 text-sm text-subtle">Search metadata, select a result, then click Preview.</div>
               </div>
             ) : (
               <div className="h-full overflow-auto">
-                <table className={["w-full table-fixed border-collapse text-left text-sm", compactPreview ? "min-w-[760px]" : "min-w-[1180px]"].join(" ")}>
+                <table className={["w-full table-fixed border-collapse text-left text-sm", compactPreview ? "min-w-[47.5rem]" : "min-w-[73.75rem]"].join(" ")}>
                   <thead className="sticky top-0 bg-panel text-xs uppercase tracking-wide text-subtle">
                     {compactPreview ? (
                       <tr>
@@ -659,12 +659,12 @@ export function RenamePage() {
                       </tr>
                     ) : (
                       <tr>
-                        <th className="w-[280px] border-b border-border px-3 py-2">Current File</th>
+                        <th className="w-[17.5rem] border-b border-border px-3 py-2">Current File</th>
                         <th className="w-24 border-b border-border px-3 py-2">Detected</th>
-                        <th className="w-[220px] border-b border-border px-3 py-2">Episode Name</th>
-                        <th className="w-[340px] border-b border-border px-3 py-2">New Filename</th>
+                        <th className="w-[13.75rem] border-b border-border px-3 py-2">Episode Name</th>
+                        <th className="w-[21.25rem] border-b border-border px-3 py-2">New Filename</th>
                         <th className="w-28 border-b border-border px-3 py-2">Confidence</th>
-                        <th className="w-[180px] border-b border-border px-3 py-2">Status</th>
+                        <th className="w-[11.25rem] border-b border-border px-3 py-2">Status</th>
                       </tr>
                     )}
                   </thead>
@@ -685,15 +685,15 @@ export function RenamePage() {
                         </tr>
                       ) : (
                         <tr key={row.sourcePath} className={["bg-card hover:bg-selected", changedTextClass].join(" ")}>
-                          <td className="max-w-[280px] truncate border-b border-border px-3 py-2" title={row.sourcePath}>
+                          <td className="max-w-[17.5rem] truncate border-b border-border px-3 py-2" title={row.sourcePath}>
                             <div className="flex min-w-0 items-center gap-3">
                               <input type="checkbox" checked={row.selected} disabled={!row.canApply} onChange={() => toggleRow(row)} />
                               <span className="truncate">{row.currentFileName}</span>
                             </div>
                           </td>
                           <td className="truncate whitespace-nowrap border-b border-border px-3 py-2" title={row.detected}>{row.detected}</td>
-                          <td className="max-w-[240px] truncate border-b border-border px-3 py-2" title={row.episodeName}>{row.episodeName || "-"}</td>
-                          <td className="max-w-[340px] truncate border-b border-border px-3 py-2" title={row.newFileName}>{row.newFileName || "-"}</td>
+                          <td className="max-w-[15rem] truncate border-b border-border px-3 py-2" title={row.episodeName}>{row.episodeName || "-"}</td>
+                          <td className="max-w-[21.25rem] truncate border-b border-border px-3 py-2" title={row.newFileName}>{row.newFileName || "-"}</td>
                           <td className="truncate whitespace-nowrap border-b border-border px-3 py-2" title={row.confidence}>{row.confidence}</td>
                           <td className={["truncate whitespace-nowrap border-b border-border px-3 py-2", changedTextClass || "text-muted"].join(" ")} title={row.status}>{statusDisplay}</td>
                         </tr>
@@ -754,7 +754,7 @@ function RenameApplyConfirmModal({ warnings, selectedCount, isApplying, onConfir
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-6">
-      <section className="w-[min(640px,calc(100vw-48px))] rounded-lg border-2 border-window bg-card shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
+      <section className="w-[min(40rem,calc(100vw-3rem))] rounded-lg border-2 border-window bg-card shadow-[0_1.875rem_5.625rem_rgba(0,0,0,0.55)]">
         <div className="flex h-10 items-center justify-between border-b border-border bg-window px-4">
           <div className="text-sm font-semibold text-muted">Confirm Rename Apply</div>
           <button type="button" onClick={onClose} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition hover:bg-button-hover hover:text-text" title="Close">
@@ -828,7 +828,7 @@ function RenameUndoBatchModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-6">
-      <section className="flex max-h-[min(760px,calc(100vh-48px))] w-[min(1120px,calc(100vw-48px))] flex-col overflow-hidden rounded-lg border-2 border-window bg-card shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
+      <section className="flex max-h-[min(47.5rem,calc(100vh-3rem))] w-[min(70rem,calc(100vw-3rem))] flex-col overflow-hidden rounded-lg border-2 border-window bg-card shadow-[0_1.875rem_5.625rem_rgba(0,0,0,0.55)]">
         <div className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-window px-4">
           <div className="text-sm font-semibold text-muted">Undo Rename Batch</div>
           <button
@@ -849,7 +849,7 @@ function RenameUndoBatchModal({
             </p>
           </div>
 
-          <div className="grid min-h-0 flex-1 grid-cols-[310px_minmax(0,1fr)_330px] gap-3">
+          <div className="grid min-h-0 flex-1 grid-cols-[19.375rem_minmax(0,1fr)_20.625rem] gap-3">
             <div className="flex min-h-0 flex-col rounded-lg border border-border-strong bg-panel p-3">
               <h3 className="text-sm font-semibold">Last 20 Batch Jobs</h3>
               <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-md border border-border bg-input p-1">
@@ -881,7 +881,7 @@ function RenameUndoBatchModal({
                 ) : selectedBatch.entries.map((entry, index) => (
                   <div key={`${entry.renamedPath}-${entry.originalPath}`} className="mb-2 rounded-md border border-border bg-card p-3 font-mono text-xs leading-5">
                     <div className="font-semibold text-muted">{String(index + 1).padStart(2, "0")}</div>
-                    <div className="mt-2 grid grid-cols-[78px_minmax(0,1fr)] gap-2">
+                    <div className="mt-2 grid grid-cols-[4.875rem_minmax(0,1fr)] gap-2">
                       <div className="text-subtle">Current</div>
                       <div className="break-words text-text">{entry.renamedFileName}</div>
                       <div className="text-subtle">Restore To</div>

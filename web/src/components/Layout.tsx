@@ -20,14 +20,14 @@ export function Layout() {
 
   return (
     <div className="h-screen overflow-hidden bg-window text-text">
-      <div className="grid h-screen grid-cols-[236px_1fr]">
+      <div className="grid h-screen grid-cols-[14.75rem_1fr]">
         <aside className="flex h-screen min-h-0 flex-col border-r border-border bg-sidebar px-3 py-5">
           <div className="mb-8 flex items-center gap-3 px-1">
             <div className="flex h-9 w-9 items-center justify-center">
               <img
                 src={mkvoIcon}
                 alt=""
-                className="h-9 w-9 object-contain drop-shadow-[0_0_14px_rgba(139,92,246,0.32)]"
+                className="h-9 w-9 object-contain drop-shadow-[0_0_0.875rem_rgba(139,92,246,0.32)]"
                 aria-hidden="true"
               />
             </div>
@@ -61,7 +61,7 @@ export function Layout() {
           </nav>
 
           <div className="mt-auto rounded-lg border border-border bg-panel p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-subtle">Status</div>
+            <div className="text-[0.6875rem] font-semibold uppercase tracking-wide text-subtle">Status</div>
             <div className="mt-2 text-sm font-medium text-success">
               {status.isLoading ? "checking tools" : missingTools === 0 ? "ready" : `${missingTools} tool issue(s)`}
             </div>
