@@ -9,13 +9,13 @@ parity gate must pass against the current .NET implementation.
 | Stage | Scope | Status | Exit evidence |
 | --- | --- | --- | --- |
 | 0 | Baseline and decisions | Complete | Architecture plan, ADRs, 50-case fixture inventory, .NET 22/22 baseline, performance budgets |
-| 1 | Rust domain and contracts | Complete | 111 workspace tests, strict Clippy, generated TypeScript contracts with a CI drift check |
+| 1 | Rust domain and contracts | Complete | 142 Rust and 15 web tests, strict Clippy, generated TypeScript contracts with a CI drift check |
 | 2 | Processes, cache, and jobs | Complete | Live scan of real MKV/MP4 media: 3/3 probed, 0 failed, second scan reports `cached: 3` |
 | 3 | Dashboard slice | Complete | `mkvo-server` serves status/browse/scan end to end. The Tauri desktop app launches, renders all seven sections, and completed an IPC round trip: the status panel reports the backend-resolved media root and `browse_file_system` returned real directory contents |
-| 4 | Rename | Built, unverified | Preview/apply/undo implemented; no run against a live provider yet (needs TVDB/TMDB credentials) |
-| 5 | Remux and Track Properties | Property edit verified; remux unverified | Property edit ran preview → plan → apply → `mkvpropedit` and changed a real file's title on disk; idempotent replay returned the same job and a tampered fingerprint was rejected with `plan_tampered`/409. Remux and extraction not yet executed |
-| 6 | Library, watchers, servers, settings, logs | Built, unverified | Settings round-trip covered by tests; watcher, media-server, and library audit paths not yet executed against real inputs |
-| 7 | Rust HTTP/Docker host | Host verified; container unverified | Server verified on Windows against real media; `Dockerfile.rust` has not been built or run |
+| 4 | Rename | Provider path verified; TVDB/TMDB unverified | Search, scope loading, and episode listing ran against the live AniList and AniDB APIs. TVDB and TMDB clients have never made a real call because no credentials are available |
+| 5 | Remux and Track Properties | Complete | Property edit mutates a real file, replays idempotently, and refuses a tampered fingerprint. All four remux modes executed and their outputs structurally verified with `mkvmerge -J` |
+| 6 | Library, watchers, servers, settings, logs | Complete | Watchers start at boot and refresh the cache on a real file drop; library audit reports real grouping and mismatch issues; media-server discovery verified over HTTP against a stub for all three vendors; logs and export return real entries; desktop secrets round-trip through the OS credential store |
+| 7 | Rust HTTP/Docker host | Complete | Image builds at 827MB, healthcheck reports healthy, all six tools resolve inside the container, a scan of mounted media returns correct tracks, the SPA is served, and PUID/PGID runs the process as 1000:1000 |
 | 8 | Cutover | Pending | Side-by-side beta, migration validation, rollback window |
 
 "Built, unverified" means the code compiles, is covered by unit tests, and has a
@@ -37,10 +37,10 @@ against generated MKV/MP4 fixtures.
 - The legacy `settings.json` importer leaves the original byte-identical and
   writes only a sibling `.mkvo-backup`.
 
-## Defects found by the first live run
+## Defects found by live running
 
 Each was invisible to the unit suite because every test supplied
-already-normalized inputs.
+already-normalized inputs or fixture payloads.
 
 | Defect | Effect | Fix |
 | --- | --- | --- |
@@ -48,6 +48,14 @@ already-normalized inputs.
 | Version probe used `--version` for every tool | `ffmpeg --version` exits 8 and `ffprobe --version` exits 1, so both read as present but unusable | Version flag is per tool kind |
 | `display_unit` typed as a string | Real `mkvmerge -J` emits an integer, so every MKV with a video track failed to parse while MP4s succeeded | Correct typing, plus lenient string properties so future schema drift degrades to "absent" rather than a skipped file |
 | Plan-time root check used raw configured paths | Scanned paths are canonical (`\\?\` on Windows) and never prefix-matched, so every mutating plan reported its inputs unauthorized | Planners share one `path_key`/`path_contains`; roots come from the live authorization service |
+| Watch folders were never started or consumed | The backend was constructed but only started from a settings save, and nothing subscribed to its events, so live monitoring did nothing at all | A watch supervisor starts watchers at boot and turns changes into cache updates, reconciling on lag |
+| Cache keyed canonical paths while watch events reported plain ones | A deletion never matched a cache row, so pruning silently did nothing | One path-identity definition in `mkvo-domain`, shared by the cache key and the UI display helper |
+| `LogQuery` derived `Default` | `#[serde(default = "…")]` applies only when deserializing, so `limit` was 0 and every caller asked the store for zero rows — the Logs page was permanently empty | Hand-written `Default` that agrees with the wire default |
+| Scans never wrote to the operation log | Only rename, mux, and propedit logged, so the most-run operation left no trace even once the query was fixed | Scan completion logs its summary, correlated to the job that produced it |
+| Every port failure mapped to `Internal` | An unconfigured provider returned 500 "internal error", sending users to file a bug instead of opening Settings | Port failures keep an actionable code and status |
+| AniList `seasonYear` never deserialized | The struct lacked the camelCase rename, so every search result silently lost its year | Rename plus a test asserting the real wire field names |
+| The frontend hardcoded the ignored-folder list | The constant was sent with every scan, silently overriding the folders configured in Settings | Seeded from saved settings, without clobbering an edit in progress |
+| Verbatim `\\?\` paths reached the UI | Canonicalized paths are not what a user recognizes or can paste back into a folder field | Normalized at the DTO boundary; process arguments deliberately keep the prefix for long-path support |
 
 ## Cutover rules
 
