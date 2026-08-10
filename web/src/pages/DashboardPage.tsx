@@ -271,8 +271,8 @@ export function DashboardPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Dashboard" description="Scan folders and review MKV or MP4 file metadata." />
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[300px_minmax(0,1fr)] gap-5">
-        <section className="min-h-0 overflow-auto rounded-xl border border-border bg-card p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-5">
+        <section className="min-h-0 overflow-auto rounded-xl border border-border bg-card p-5 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <h2 className="text-base font-semibold">Scan Sources</h2>
 
           <label className="mt-4 block text-xs font-semibold text-muted">Sources</label>
@@ -385,7 +385,7 @@ export function DashboardPage() {
           {scanStart.error ? <div className="mt-3 rounded-md border border-warning bg-input p-3 text-xs text-warning">{String(scanStart.error.message)}</div> : null}
         </section>
 
-        <section className="flex min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+        <section className="flex min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-5 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <div className="flex min-w-0 shrink-0 items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <h2 className="text-base font-semibold">File Info</h2>
@@ -410,7 +410,7 @@ export function DashboardPage() {
 
           <div className="mt-4 min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-panel">
             {files.length === 0 ? (
-              <div className="flex h-full min-h-[220px] flex-col items-center justify-center text-center">
+              <div className="flex h-full min-h-[13.75rem] flex-col items-center justify-center text-center">
                 <div className="text-xl font-semibold">No files scanned yet</div>
                 {/* The desktop browses the whole machine, so telling it to
                     mount something is advice for a container the user is not
@@ -423,7 +423,7 @@ export function DashboardPage() {
               </div>
             ) : (
               <div className="h-full overflow-auto">
-                <table className="w-full min-w-[1100px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[68.75rem] border-collapse text-left text-sm">
                   <thead className="sticky top-0 bg-panel text-xs uppercase tracking-wide text-subtle">
                     <tr>
                       <th className="border-b border-border px-3 py-2 font-semibold">File</th>
@@ -451,12 +451,12 @@ export function DashboardPage() {
                             templateRow ? "text-accent" : mismatchRow ? "text-warning" : "text-text"
                           ].join(" ")}
                         >
-                          <td className="max-w-[340px] truncate border-b border-border px-3 py-2" title={file.path}>{file.fileName}</td>
+                          <td className="max-w-[21.25rem] truncate border-b border-border px-3 py-2" title={file.path}>{file.fileName}</td>
                           <td className="border-b border-border px-3 py-2">{file.reader}</td>
                           <td className="border-b border-border px-3 py-2">{file.codec || "Unknown"}</td>
                           <td className="border-b border-border px-3 py-2">{file.resolution || "Unknown"}</td>
-                          <td className="max-w-[250px] truncate border-b border-border px-3 py-2" title={file.audioSummary}>{file.audioSummary || "None"}</td>
-                          <td className="max-w-[250px] truncate border-b border-border px-3 py-2" title={file.subtitleSummary}>{file.subtitleSummary || "None"}</td>
+                          <td className="max-w-[15.625rem] truncate border-b border-border px-3 py-2" title={file.audioSummary}>{file.audioSummary || "None"}</td>
+                          <td className="max-w-[15.625rem] truncate border-b border-border px-3 py-2" title={file.subtitleSummary}>{file.subtitleSummary || "None"}</td>
                           <td className={["border-b border-border px-3 py-2", !templateRow && !mismatchRow ? "text-success" : ""].join(" ")}>
                             {templateRow ? "Template" : mismatchRow ? "Warning" : file.status}
                           </td>
@@ -476,15 +476,15 @@ export function DashboardPage() {
           ) : null}
 
           {selectedFile ? (
-            <div className="mt-4 grid h-[26vh] min-h-[190px] max-h-[250px] min-w-0 shrink-0 grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-4">
+            <div className="mt-4 grid h-[26vh] min-h-[11.875rem] max-h-[15.625rem] min-w-0 shrink-0 grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-4">
               <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-panel p-4">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">Media Info</h3>
-                  <span className="rounded-md bg-input px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-subtle">
+                  <span className="rounded-md bg-input px-2 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-subtle">
                     {selectedFile.reader}
                   </span>
                 </div>
-                <dl className="mt-3 grid min-h-0 flex-1 grid-cols-[110px_1fr] gap-x-3 gap-y-2 overflow-auto text-sm">
+                <dl className="mt-3 grid min-h-0 flex-1 grid-cols-[6.875rem_1fr] gap-x-3 gap-y-2 overflow-auto text-sm">
                   <dt className="text-subtle">File</dt>
                   <dd className="truncate text-text" title={selectedFile.path}>{selectedFile.fileName}</dd>
                   <dt className="text-subtle">Codec</dt>
@@ -531,7 +531,7 @@ export function DashboardPage() {
                           <td className={["truncate border-b border-border px-2 py-2 capitalize", trackTextClass(index, (item) => item.type)].join(" ")}>{track.type}</td>
                           <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => item.codec)].join(" ")} title={track.codec}>{track.codec || "Unknown"}</td>
                           <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => item.language)].join(" ")}>{track.language || "und"}</td>
-                          <td className={["max-w-[220px] truncate border-b border-border px-2 py-2", normalizeCompareValue(track.type) === "video" ? "text-text" : trackTextClass(index, (item) => item.name)].join(" ")} title={track.name}>{track.name || "-"}</td>
+                          <td className={["max-w-[13.75rem] truncate border-b border-border px-2 py-2", normalizeCompareValue(track.type) === "video" ? "text-text" : trackTextClass(index, (item) => item.name)].join(" ")} title={track.name}>{track.name || "-"}</td>
                           <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => `${item.default}-${item.forced}`), trackTextClass(index, (item) => `${item.default}-${item.forced}`) === "text-text" ? "text-subtle" : ""].join(" ")}>
                             {[track.default ? "Default" : "", track.forced ? "Forced" : ""].filter(Boolean).join(", ") || "-"}
                           </td>
@@ -582,7 +582,7 @@ function FileContextMenu({ x, y, file, onSetTemplate, onCopyName, onCopyPath, on
 
   return (
     <div
-      className="fixed z-[60] w-56 overflow-hidden rounded-lg border border-border-strong bg-card py-1 shadow-[0_18px_55px_rgba(0,0,0,0.45)]"
+      className="fixed z-[60] w-56 overflow-hidden rounded-lg border border-border-strong bg-card py-1 shadow-[0_1.125rem_3.4375rem_rgba(0,0,0,0.45)]"
       style={{ left: Math.min(x, window.innerWidth - 240), top: Math.min(y, window.innerHeight - 180) }}
       onClick={(event) => event.stopPropagation()}
     >

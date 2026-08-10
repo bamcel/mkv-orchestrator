@@ -241,8 +241,8 @@ export function TrackPropertiesPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Track Properties" description="Edit container, track title, language, default, and forced flags." />
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[300px_minmax(0,1fr)] gap-3">
-        <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
+        <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold">Properties Configuration</h2>
               <button onClick={refreshFiles} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">Refresh</button>
@@ -253,7 +253,7 @@ export function TrackPropertiesPage() {
             <select value={templatePath} onChange={(event) => setTemplatePath(event.target.value)} className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent">
               {mkvFiles.length === 0 ? <option value="">No MKV files scanned</option> : mkvFiles.map((file) => <option key={file.path} value={file.path}>{file.fileName}</option>)}
             </select>
-            <div className="mt-1 text-[11px] text-muted">Uses template track order; validates before editing.</div>
+            <div className="mt-1 text-[0.6875rem] text-muted">Uses template track order; validates before editing.</div>
             {nonMkvCount > 0 ? (
               <div className="mt-2 rounded-md border border-warning bg-input p-2 text-xs leading-5 text-warning">
                 {nonMkvCount} non-MKV file(s) are excluded. Track Properties uses mkvpropedit and supports MKV files only.
@@ -297,7 +297,7 @@ export function TrackPropertiesPage() {
         </section>
 
         <div className="min-h-0 min-w-0">
-          <section className="flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+          <section className="flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex shrink-0 items-center justify-between gap-3">
               <h2 className="text-base font-semibold">Track Properties</h2>
               <button
@@ -308,7 +308,7 @@ export function TrackPropertiesPage() {
                 Preview Summary
               </button>
             </div>
-            <div className="mt-4 grid min-h-0 flex-1 auto-rows-[minmax(260px,1fr)] gap-3 overflow-y-auto pr-1">
+            <div className="mt-4 grid min-h-0 flex-1 auto-rows-[minmax(16.25rem,1fr)] gap-3 overflow-y-auto pr-1">
               <TrackEditor
                   title="Audio Tracks"
                   rows={audioTracks}
@@ -409,23 +409,23 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
   onChange: (type: TrackType, trackNumber: number, patch: Partial<PropEditTrackConfigRow>) => void;
 }) {
   return (
-    <section className="flex min-h-[260px] min-w-0 flex-col rounded-lg border border-border bg-panel p-3">
+    <section className="flex min-h-[16.25rem] min-w-0 flex-col rounded-lg border border-border bg-panel p-3">
       <h3 className="text-base font-semibold">{title}</h3>
       <div className="mt-2 flex shrink-0 flex-wrap gap-3">
         <FlagSelect label="Set default track" value={defaultValue} onChange={onDefaultChange} options={flagOptions} />
         <FlagSelect label="Set forced track" value={forcedValue} onChange={onForcedChange} options={flagOptions} />
       </div>
 
-      <div className="mt-2 min-h-[140px] min-w-0 flex-1 overflow-auto rounded-md border border-border bg-card">
+      <div className="mt-2 min-h-[8.75rem] min-w-0 flex-1 overflow-auto rounded-md border border-border bg-card">
         {rows.length === 0 ? (
-          <div className="flex h-full min-h-[120px] items-center justify-center text-sm text-subtle">No tracks available.</div>
+          <div className="flex h-full min-h-[7.5rem] items-center justify-center text-sm text-subtle">No tracks available.</div>
         ) : (
-          <table className="w-full min-w-[820px] table-fixed border-collapse text-left text-sm">
+          <table className="w-full min-w-[51.25rem] table-fixed border-collapse text-left text-sm">
             <thead className="sticky top-0 bg-panel text-xs text-text">
               <tr>
                 <th className="w-24 border-b border-border px-3 py-2">Track</th>
                 <th className="w-20 border-b border-border px-3 py-2">Custom</th>
-                <th className="w-[260px] border-b border-border px-3 py-2">Name</th>
+                <th className="w-[16.25rem] border-b border-border px-3 py-2">Name</th>
                 <th className="w-32 border-b border-border px-3 py-2">Language</th>
                 <th className="border-b border-border px-3 py-2">Current</th>
               </tr>

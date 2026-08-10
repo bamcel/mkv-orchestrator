@@ -279,7 +279,7 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
       <section
-        className="flex h-[82vh] min-h-[560px] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+        className="flex h-[82vh] min-h-[35rem] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_1.5rem_5rem_rgba(0,0,0,0.45)]"
         role="dialog"
         aria-label="Select media source"
       >
@@ -412,7 +412,7 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
           <nav className="w-52 shrink-0 overflow-y-auto border-r border-border bg-sidebar/60 py-3">
             {roots.length > 0 ? (
               <>
-                <div className="px-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-subtle">
+                <div className="px-4 pb-1.5 text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">
                   Quick access
                 </div>
                 {roots.map((root) => (
@@ -436,7 +436,7 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
             ) : null}
 
             {hasVolumeList ? (
-              <div className="px-4 pb-1.5 pt-4 text-[10px] font-semibold uppercase tracking-wider text-subtle">
+              <div className="px-4 pb-1.5 pt-4 text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">
                 This PC
               </div>
             ) : null}
@@ -460,7 +460,7 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
 
             {hasVolumeList ? (
               <>
-                <div className="px-4 pb-1.5 pt-4 text-[10px] font-semibold uppercase tracking-wider text-subtle">
+                <div className="px-4 pb-1.5 pt-4 text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">
                   Network
                 </div>
                 {networkLocations.map((server) => (

@@ -212,10 +212,10 @@ export function LibraryPage() {
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Library" description="Browse cached watch-folder coverage, season groups, and items that may need attention." />
 
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_190px] gap-3">
-        <section className="rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)_11.875rem] gap-3">
+        <section className="rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <h2 className="text-base font-semibold">Library Source</h2>
-          <div className="mt-3 grid grid-cols-[120px_minmax(260px,420px)_1fr] items-center gap-3">
+          <div className="mt-3 grid grid-cols-[7.5rem_minmax(16.25rem,26.25rem)_1fr] items-center gap-3">
             <label className="text-sm text-muted" htmlFor="library-source">Source</label>
             <select
               id="library-source"
@@ -252,7 +252,7 @@ export function LibraryPage() {
           ) : null}
         </section>
 
-        <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+        <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <div className="flex shrink-0 items-center justify-between">
             <h2 className="text-base font-semibold">Library Overview</h2>
             <button
@@ -267,16 +267,16 @@ export function LibraryPage() {
 
           <div className="mt-3 min-h-0 flex-1 overflow-auto">
             {displayedItems.length ? (
-              <table className="w-full min-w-[1220px] table-fixed border-collapse text-left text-sm">
+              <table className="w-full min-w-[76.25rem] table-fixed border-collapse text-left text-sm">
                 <thead className="sticky top-0 bg-card text-xs text-text">
                   <tr>
                     <th className="w-24 border-b border-border px-1 py-2 font-semibold">status</th>
-                    <th className="w-[220px] border-b border-border px-1 py-2 font-semibold">title</th>
-                    <th className="w-[150px] border-b border-border px-1 py-2 font-semibold">season/folder</th>
+                    <th className="w-[13.75rem] border-b border-border px-1 py-2 font-semibold">title</th>
+                    <th className="w-[9.375rem] border-b border-border px-1 py-2 font-semibold">season/folder</th>
                     <th className="w-16 border-b border-border px-1 py-2 font-semibold">files</th>
-                    <th className="w-[220px] border-b border-border px-1 py-2 font-semibold">standard video</th>
-                    <th className="w-[260px] border-b border-border px-1 py-2 font-semibold">standard audio</th>
-                    <th className="w-[260px] border-b border-border px-1 py-2 font-semibold">standard subtitles</th>
+                    <th className="w-[13.75rem] border-b border-border px-1 py-2 font-semibold">standard video</th>
+                    <th className="w-[16.25rem] border-b border-border px-1 py-2 font-semibold">standard audio</th>
+                    <th className="w-[16.25rem] border-b border-border px-1 py-2 font-semibold">standard subtitles</th>
                     <th className="border-b border-border px-1 py-2 font-semibold">warnings</th>
                   </tr>
                 </thead>
@@ -300,14 +300,14 @@ export function LibraryPage() {
                 </tbody>
               </table>
             ) : (
-              <div className="flex h-full min-h-[320px] items-center justify-center text-sm text-subtle">
+              <div className="flex h-full min-h-[20rem] items-center justify-center text-sm text-subtle">
                 {auditResult ? "No folders match the current filter." : "Build an overview to inspect scanned folders."}
               </div>
             )}
           </div>
         </section>
 
-        <section className="flex min-h-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+        <section className="flex min-h-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <div className="flex shrink-0 items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-base font-semibold">Selection Details</h2>

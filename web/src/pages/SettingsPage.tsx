@@ -336,7 +336,7 @@ export function SettingsPage() {
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Settings" description="Configure MKVO behavior, provider keys, presets, library paths, themes, and media tools." />
 
-      <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-card shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+      <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-card shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border p-3">
           <div className="flex flex-wrap items-center gap-2">
             {settingsTabs.map((tab) => (
@@ -344,7 +344,7 @@ export function SettingsPage() {
             ))}
           </div>
           <div className="flex items-center gap-3">
-            <span className="max-w-[360px] truncate text-sm text-success" title={settingsStatus}>{settingsStatus}</span>
+            <span className="max-w-[22.5rem] truncate text-sm text-success" title={settingsStatus}>{settingsStatus}</span>
             <button
               type="button"
               onClick={saveSettings}
@@ -357,14 +357,14 @@ export function SettingsPage() {
 
         <div className="min-h-0 flex-1 overflow-auto p-5">
           {activeTab === "general" ? (
-            <div className="grid gap-5 xl:grid-cols-[minmax(360px,520px)_1fr]">
+            <div className="grid gap-5 lg:grid-cols-[minmax(22.5rem,32.5rem)_1fr]">
               <SettingsCard
                 title={isDesktop ? "Desktop storage" : "Server storage"}
                 description={isDesktop
                   ? "Paths are resolved by the native Tauri host and restricted to authorized media roots."
                   : "Paths are resolved inside the server or Docker host, not from the browser device."}
               >
-                <dl className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-3 text-sm">
+                <dl className="grid grid-cols-[8.75rem_1fr] gap-x-4 gap-y-3 text-sm">
                   <dt className="text-muted">Media Root</dt>
                   <dd className="font-mono text-text">{status.data?.mediaRoot ?? "/media"}</dd>
                   <dt className="text-muted">Config Root</dt>
@@ -379,7 +379,7 @@ export function SettingsPage() {
                   : "The server image provides MKVToolNix and FFmpeg for scan, remux, extraction, and property workflows."}
               >
                 <div className="overflow-auto rounded-lg border border-border bg-panel">
-                  <table className="w-full min-w-[620px] border-collapse text-left text-sm">
+                  <table className="w-full min-w-[38.75rem] border-collapse text-left text-sm">
                     <thead className="bg-panel text-xs uppercase tracking-wide text-subtle">
                       <tr>
                         <th className="border-b border-border px-3 py-2">Tool</th>
@@ -410,7 +410,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "rename" ? (
-            <div className="grid gap-5 xl:grid-cols-[minmax(360px,520px)_1fr]">
+            <div className="grid gap-5 lg:grid-cols-[minmax(22.5rem,32.5rem)_1fr]">
               <SettingsCard title="API Providers" description="TVDB and TMDB lookup requires your own API keys. Leave saved key fields blank to keep existing values.">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
@@ -547,7 +547,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "presets" ? (
-            <div className="grid gap-5 xl:grid-cols-[2fr_1fr]">
+            <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
               <SettingsCard title="Track Presets" description="These lists feed Rename language choices and Track Properties name/language selectors.">
                 <div className="grid gap-4 lg:grid-cols-3">
                   <PresetEditor label="Audio Name Presets" value={audioNamePresetsText} onChange={setAudioNamePresetsText} />
@@ -580,7 +580,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "library" ? (
-            <div className="grid gap-5 xl:grid-cols-[minmax(420px,600px)_1fr]">
+            <div className="grid gap-5 lg:grid-cols-[minmax(26.25rem,37.5rem)_1fr]">
               <SettingsCard
                 title="Library Folders"
                 description={
@@ -624,7 +624,7 @@ export function SettingsPage() {
                         }
                         placeholder={isDesktop ? "D:\\Anime" : "/mnt/user/anime"}
                         aria-label={`Library folder ${index + 1} path`}
-                        className="h-9 min-w-[180px] flex-1 rounded-md border border-border bg-input px-2 font-mono text-xs text-text outline-none placeholder:text-subtle focus:border-accent"
+                        className="h-9 min-w-[11.25rem] flex-1 rounded-md border border-border bg-input px-2 font-mono text-xs text-text outline-none placeholder:text-subtle focus:border-accent"
                       />
                       <button
                         type="button"
@@ -691,12 +691,12 @@ export function SettingsPage() {
                   ) : mediaServers.map((server) => (
                     <div key={server.id} className="rounded-lg border border-border bg-input p-3">
                       <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-[240px] flex-1">
+                        <div className="min-w-[15rem] flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <input
                               value={server.name}
                               onChange={(event) => updateMediaServer(server.id, { name: event.target.value })}
-                              className="h-9 min-w-[180px] flex-1 rounded-md border border-border bg-card px-3 text-sm font-semibold text-text outline-none focus:border-accent"
+                              className="h-9 min-w-[11.25rem] flex-1 rounded-md border border-border bg-card px-3 text-sm font-semibold text-text outline-none focus:border-accent"
                             />
                             <select
                               value={server.type}
@@ -707,7 +707,7 @@ export function SettingsPage() {
                               <option value="Jellyfin">Jellyfin</option>
                               <option value="Plex">Plex</option>
                             </select>
-                            {server.isDefault ? <span className="rounded bg-accent/20 px-2 py-1 text-[11px] font-semibold text-accent">default</span> : null}
+                            {server.isDefault ? <span className="rounded bg-accent/20 px-2 py-1 text-[0.6875rem] font-semibold text-accent">default</span> : null}
                           </div>
                           <input
                             value={server.serverUrl}
@@ -760,7 +760,7 @@ export function SettingsPage() {
                       {server.libraries.length > 0 ? (
                         <div className="mt-3 max-h-36 overflow-auto rounded-md border border-border bg-card">
                           {server.libraries.map((library) => (
-                            <label key={library.id} className="grid grid-cols-[24px_minmax(120px,180px)_1fr] gap-2 border-b border-border px-3 py-2 text-xs last:border-b-0">
+                            <label key={library.id} className="grid grid-cols-[1.5rem_minmax(7.5rem,11.25rem)_1fr] gap-2 border-b border-border px-3 py-2 text-xs last:border-b-0">
                               <input
                                 type="checkbox"
                                 checked={library.isEnabled}
@@ -781,7 +781,7 @@ export function SettingsPage() {
                         </div>
                       )}
                       {server.lastSyncedUtc ? (
-                        <div className="mt-2 text-[11px] text-subtle">Last synced: {formatDateTime(server.lastSyncedUtc)}</div>
+                        <div className="mt-2 text-[0.6875rem] text-subtle">Last synced: {formatDateTime(server.lastSyncedUtc)}</div>
                       ) : null}
                     </div>
                   ))}
@@ -870,7 +870,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "appearance" ? (
-            <div className="grid gap-5 xl:grid-cols-[minmax(420px,1fr)_280px]">
+            <div className="grid gap-5 lg:grid-cols-[minmax(26.25rem,1fr)_17.5rem]">
               <SettingsCard title="Theme" description="Themes apply to this interface and are remembered locally on this device.">
                 <div className="flex max-w-xl items-end gap-3">
                   <label className="block flex-1">
@@ -937,7 +937,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "about" ? (
-            <div className="grid gap-5 xl:grid-cols-[minmax(440px,720px)_1fr]">
+            <div className="grid gap-5 lg:grid-cols-[minmax(27.5rem,45rem)_1fr]">
               <SettingsCard
                 title={isDesktop ? "About MKV Orchestrator Desktop" : "About MKV Orchestrator Server"}
                 description={isDesktop ? "The native Tauri desktop backed by the shared Rust runtime." : "The Rust server for browser, Docker, and NAS access."}
@@ -971,7 +971,7 @@ export function SettingsPage() {
                       <img
                         src={item.logo}
                         alt={`${item.name} logo`}
-                        className="h-12 w-auto max-w-[140px] self-start object-contain"
+                        className="h-12 w-auto max-w-[8.75rem] self-start object-contain"
                       />
                       <p className="text-xs leading-5 text-muted">{item.notice}</p>
                     </li>
