@@ -17,8 +17,8 @@
       {
         "label": "main",
         "title": "MKV Orchestrator",
-        "width": 1440,
-        "height": 920,
+        "width": 1100,
+        "height": 720,
         "minWidth": 1100,
         "minHeight": 720,
         "resizable": true,
