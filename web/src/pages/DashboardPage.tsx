@@ -130,7 +130,15 @@ export function DashboardPage() {
         : selectedFile.status;
 
     return [
-      { label: "File", value: selectedFile.fileName, className: "truncate text-text", title: selectedFile.path },
+      {
+        label: "File",
+        value: selectedFile.fileName,
+        // Not compared like the fields below it: every file's name differs from
+        // the template's, so comparing would mark them all as mismatched. It
+        // only needs to say whether this row is the template.
+        className: isTemplate(selectedFile) ? "truncate text-accent" : "truncate text-text",
+        title: selectedFile.path
+      },
       { label: "Codec", value: selectedFile.codec || "Unknown", className: compareTextClass(selectedFile, (row) => row.codec), title: undefined },
       { label: "Resolution", value: selectedFile.resolution || "Unknown", className: compareTextClass(selectedFile, (row) => row.resolution), title: undefined },
       { label: "Bit Depth", value: selectedFile.bitDepth || "Unknown", className: compareTextClass(selectedFile, (row) => row.bitDepth), title: undefined },
@@ -306,7 +314,11 @@ export function DashboardPage() {
   }
 
   function trackTextClass(index: number, selector: (track: MediaFileRow["tracks"][number]) => string) {
-    if (!templateFile || !selectedFile || isTemplate(selectedFile)) return "text-text";
+    if (!selectedFile) return "text-text";
+    // The template is what everything else is measured against, so its own
+    // tracks read as the reference rather than as a match or a mismatch.
+    if (isTemplate(selectedFile)) return "text-accent";
+    if (!templateFile) return "text-text";
     const selectedTrack = selectedFile.tracks[index];
     const templateTrack = templateFile.tracks[index];
     if (!selectedTrack || !templateTrack) return "text-warning";
@@ -574,7 +586,11 @@ export function DashboardPage() {
                           <td className={["truncate border-b border-border px-2 py-2 capitalize", trackTextClass(index, (item) => item.type)].join(" ")}>{track.type}</td>
                           <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => item.codec)].join(" ")} title={track.codec}>{track.codec || "Unknown"}</td>
                           <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => item.language)].join(" ")}>{track.language || "und"}</td>
-                          <td className={["max-w-[13.75rem] truncate border-b border-border px-2 py-2", normalizeCompareValue(track.type) === "video" ? "text-text" : trackTextClass(index, (item) => item.name)].join(" ")} title={track.name}>{track.name || "-"}</td>
+                          {/* A video track's name usually carries the release
+                              string, which differs for every file, so it is not
+                              compared -- but the template still colours as the
+                              template. */}
+                          <td className={["max-w-[13.75rem] truncate border-b border-border px-2 py-2", normalizeCompareValue(track.type) === "video" && !isTemplate(selectedFile) ? "text-text" : trackTextClass(index, (item) => item.name)].join(" ")} title={track.name}>{track.name || "-"}</td>
                           <td className={["truncate border-b border-border px-2 py-2", trackTextClass(index, (item) => `${item.default}-${item.forced}`), trackTextClass(index, (item) => `${item.default}-${item.forced}`) === "text-text" ? "text-subtle" : ""].join(" ")}>
                             {[track.default ? "Default" : "", track.forced ? "Forced" : ""].filter(Boolean).join(", ") || "-"}
                           </td>
