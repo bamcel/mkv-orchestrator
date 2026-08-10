@@ -16,7 +16,7 @@ import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
 export function MuxRemuxPage() {
-  const { files, setFiles, selectedPaths, setSelectedPaths, toggleSelectedPath } = useMediaLibrary();
+  const { files, setFiles, selectedPaths, setSelectedPaths, toggleSelectedPath, hydrateSelection } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const [activeTab, setActiveTab] = useState<"remux" | "subtitles">("remux");
@@ -49,6 +49,9 @@ export function MuxRemuxPage() {
   useEffect(() => {
     if (files.length > 0 || !currentScan.data?.files.length) return;
     setFiles(currentScan.data.files);
+    // Rust owns the selection, so adopt what it reports rather than keeping
+    // whatever this tab happened to have.
+    hydrateSelection(currentScan.data.selectedPaths);
   }, [currentScan.data, files.length, setFiles]);
 
   useEffect(() => {

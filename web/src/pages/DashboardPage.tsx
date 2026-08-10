@@ -9,7 +9,7 @@ const lastBrowsePathStorageKey = "mkvo.web.lastBrowsePath";
 
 export function DashboardPage() {
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
-  const { files, setFiles, templateFilePath, setTemplateFilePath } = useMediaLibrary();
+  const { files, setFiles, templateFilePath, setTemplateFilePath, hydrateSelection } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const [sources, setSources] = useState<string[]>([]);
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
@@ -144,6 +144,9 @@ export function DashboardPage() {
   useEffect(() => {
     if (files.length > 0 || !currentScan.data?.files.length) return;
     setFiles(currentScan.data.files);
+    // Rust owns the selection, so adopt what it reports rather than keeping
+    // whatever this tab happened to have.
+    hydrateSelection(currentScan.data.selectedPaths);
     setSelectedFilePath(currentScan.data.files[0]?.path ?? "");
   }, [currentScan.data, files.length, setFiles]);
 

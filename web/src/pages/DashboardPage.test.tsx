@@ -53,7 +53,7 @@ const emptyStatus = {
   tools: []
 };
 
-const emptyScan = { updatedUtc: null, files: [], summary: { total: 0, mkv: 0, mp4: 0, failed: 0 } };
+const emptyScan = { updatedUtc: null, files: [], summary: { total: 0, mkv: 0, mp4: 0, failed: 0 }, selectedPaths: [] };
 
 function renderDashboard(overrides: Parameters<typeof renderWithBackend>[1]) {
   return renderWithBackend(

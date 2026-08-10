@@ -174,6 +174,10 @@ export class HttpBackendClient implements BackendClient {
     return this.json<CurrentScanResponse>("/api/files/current", "DELETE");
   }
 
+  setFileSelection(paths: string[]): Promise<CurrentScanResponse> {
+    return this.json<CurrentScanResponse>("/api/files/selection", "PUT", { paths });
+  }
+
   getWebSettings(): Promise<WebSettings> {
     return this.request<WebSettings>("/api/settings");
   }

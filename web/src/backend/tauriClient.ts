@@ -100,6 +100,10 @@ export class TauriBackendClient implements BackendClient {
     return this.invoke<CurrentScanResponse>("clear_current_scan_files");
   }
 
+  setFileSelection(paths: string[]): Promise<CurrentScanResponse> {
+    return this.invoke<CurrentScanResponse>("set_file_selection", { request: { paths } });
+  }
+
   getWebSettings(): Promise<WebSettings> {
     return this.invoke<WebSettings>("get_web_settings");
   }

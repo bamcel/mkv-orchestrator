@@ -1,7 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, renderHook, waitFor } from "@testing-library/react";
 
 import { MediaLibraryProvider, useMediaLibrary } from "./MediaLibraryContext";
+import { createMockBackendClient } from "../backend/mockClient";
+import { setBackendClient } from "../backend/runtime";
 import type { MediaFileRow } from "../api";
 
 function file(path: string, extension = ".mkv"): MediaFileRow {
@@ -112,6 +114,43 @@ describe("working set persistence", () => {
 
     act(() => result.current.setFiles([file(String.raw`C:\media\Show\a.mkv`)]));
     expect(result.current.selectedPaths).toHaveLength(1);
+  });
+
+  /// Rust owns the working set, so a selection made in the UI has to reach it —
+  /// otherwise an operation could run against a set the backend disagrees with.
+  it("pushes every selection change to the backend", async () => {
+    const setFileSelection = vi.fn().mockResolvedValue({
+      updatedUtc: null,
+      files: [],
+      summary: { total: 0, mkv: 0, mp4: 0, failed: 0 },
+      selectedPaths: ["/media/a.mkv"]
+    });
+    setBackendClient(createMockBackendClient({ setFileSelection }));
+
+    const { result } = library();
+    act(() => result.current.setFiles([file("/media/a.mkv")]));
+    act(() => result.current.toggleSelectedPath("/media/a.mkv"));
+
+    await waitFor(() => expect(setFileSelection).toHaveBeenCalledWith(["/media/a.mkv"]));
+  });
+
+  /// The backend is authoritative, so what it reports wins over whatever this
+  /// tab happened to have cached.
+  it("adopts the backend selection without echoing it back", async () => {
+    const setFileSelection = vi.fn().mockResolvedValue({
+      updatedUtc: null,
+      files: [],
+      summary: { total: 0, mkv: 0, mp4: 0, failed: 0 },
+      selectedPaths: []
+    });
+    setBackendClient(createMockBackendClient({ setFileSelection }));
+
+    const { result } = library();
+    act(() => result.current.setFiles([file("/media/a.mkv"), file("/media/b.mkv")]));
+    act(() => result.current.hydrateSelection(["/media/b.mkv"]));
+
+    expect(result.current.selectedPaths).toEqual(["/media/b.mkv"]);
+    expect(setFileSelection).not.toHaveBeenCalled();
   });
 
   it("toggles a path on and off", () => {
