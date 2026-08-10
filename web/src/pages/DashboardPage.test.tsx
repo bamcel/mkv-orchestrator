@@ -51,10 +51,11 @@ const emptyStatus = {
   mediaRoot: "/media",
   configRoot: "/config",
   sourceRoots: [],
-  tools: []
+  tools: [],
+  contractVersion: 1
 };
 
-const emptyScan = { updatedUtc: null, files: [], summary: { total: 0, mkv: 0, mp4: 0, failed: 0 }, selectedPaths: [] };
+const emptyScan = { updatedUtc: null, files: [], summary: { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 }, selectedPaths: [] };
 
 // The library context persists the working set and the template choice, so
 // without this one test's files leak into the next -- and the dashboard only
@@ -151,7 +152,7 @@ describe("Dashboard ignored folders", () => {
       total: 0,
       files: [],
       skipped: [],
-      summary: { total: 0, mkv: 0, mp4: 0, failed: 0 },
+      summary: { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 },
       error: ""
     });
 
@@ -177,7 +178,7 @@ describe("Dashboard ignored folders", () => {
           total: 0,
           files: [],
           skipped: [],
-          summary: { total: 0, mkv: 0, mp4: 0, failed: 0 },
+          summary: { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 },
           error: ""
         })
     });
@@ -249,7 +250,7 @@ describe("Dashboard detail panels", () => {
     renderDashboard({
       getStatus: () => Promise.resolve(emptyStatus),
       getCurrentScanFiles: () =>
-        Promise.resolve({ ...emptyScan, files: [file], summary: { total: 1, mkv: 1, mp4: 0, failed: 0 } }),
+        Promise.resolve({ ...emptyScan, files: [file], summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 0 } }),
       getWebSettings: () => Promise.resolve(settings())
     });
 
@@ -287,7 +288,7 @@ describe("Dashboard template highlighting", () => {
         Promise.resolve({
           ...emptyScan,
           files: [templateFile],
-          summary: { total: 1, mkv: 1, mp4: 0, failed: 0 }
+          summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 0 }
         }),
       getWebSettings: () => Promise.resolve(settings())
     });

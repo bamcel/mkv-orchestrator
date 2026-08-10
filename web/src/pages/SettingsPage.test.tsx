@@ -50,7 +50,8 @@ const status = {
   mediaRoot: "/media",
   configRoot: "/config",
   sourceRoots: [],
-  tools: []
+  tools: [],
+  contractVersion: 1
 };
 
 /// Provider settings live behind the Rename tab, so every test opens it first.

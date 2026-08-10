@@ -432,7 +432,7 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
   );
 }
 
-function formatBytes(value: number | null) {
+function formatBytes(value: number | null | undefined) {
   if (!value || value <= 0) return "-";
 
   const units = ["B", "KB", "MB", "GB"];

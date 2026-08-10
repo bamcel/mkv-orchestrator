@@ -167,7 +167,7 @@ export function LibraryPage() {
     setAuditResult(null);
     setSelectedFolder("");
     setPendingOverviewScan(true);
-    scanStart.mutate({ sources: [selectedSource] });
+    scanStart.mutate({ sources: [selectedSource], ignoredFolderNames: [], forceRefresh: false });
   }
 
   function cancelLibraryBuild() {

@@ -74,7 +74,9 @@ function breadcrumbs(path: string): Array<{ label: string; path: string }> {
   return crumbs;
 }
 
-function formatSize(bytes: number | null): string {
+// Optional on the wire: a folder has no size, and the field may be
+// absent rather than null.
+function formatSize(bytes: number | null | undefined): string {
   if (bytes === null || bytes === undefined) return "";
   const units = ["B", "KB", "MB", "GB", "TB"];
   let value = bytes;
