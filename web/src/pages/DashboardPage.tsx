@@ -1,4 +1,4 @@
-import { type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { Fragment, type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronUp, Copy, FileCheck, FileVideo, Folder, FolderOpen, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { authorizeBrowsedRoot, cancelScan, FileSystemEntry, getBackendTransport, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, startScan } from "../api";
@@ -104,6 +104,53 @@ export function DashboardPage() {
     () => selectedFile ? getTemplateMismatchMessages(selectedFile, templateFile) : [],
     [selectedFile, templateFile]
   );
+  /**
+   * Media Info rows, built either way so the panel keeps its shape.
+   *
+   * With nothing selected the labels still show, each against a dash: the
+   * reader can see what the panel will tell them once a file is picked, rather
+   * than an empty box.
+   */
+  const mediaInfoRows = useMemo(() => {
+    if (!selectedFile) {
+      return ["File", "Codec", "Resolution", "Bit Depth", "HDR", "Audio", "Subtitles", "Status"].map(
+        (label) => ({ label, value: "—", className: "text-subtle", title: undefined as string | undefined })
+      );
+    }
+
+    const statusClass = isTemplate(selectedFile)
+      ? "text-accent"
+      : hasTemplateMismatch(selectedFile, templateFile)
+        ? "text-warning"
+        : "text-success";
+    const statusText = isTemplate(selectedFile)
+      ? "Template"
+      : hasTemplateMismatch(selectedFile, templateFile)
+        ? "Warning"
+        : selectedFile.status;
+
+    return [
+      { label: "File", value: selectedFile.fileName, className: "truncate text-text", title: selectedFile.path },
+      { label: "Codec", value: selectedFile.codec || "Unknown", className: compareTextClass(selectedFile, (row) => row.codec), title: undefined },
+      { label: "Resolution", value: selectedFile.resolution || "Unknown", className: compareTextClass(selectedFile, (row) => row.resolution), title: undefined },
+      { label: "Bit Depth", value: selectedFile.bitDepth || "Unknown", className: compareTextClass(selectedFile, (row) => row.bitDepth), title: undefined },
+      { label: "HDR", value: selectedFile.hdr || "None", className: compareTextClass(selectedFile, (row) => row.hdr), title: undefined },
+      {
+        label: "Audio",
+        value: selectedFile.audioSummary || "None",
+        className: ["truncate", compareTextClass(selectedFile, (row) => row.audioSummary)].join(" "),
+        title: selectedFile.audioSummary
+      },
+      {
+        label: "Subtitles",
+        value: selectedFile.subtitleSummary || "None",
+        className: ["truncate", compareTextClass(selectedFile, (row) => row.subtitleSummary)].join(" "),
+        title: selectedFile.subtitleSummary
+      },
+      { label: "Status", value: statusText, className: statusClass, title: undefined }
+    ];
+  }, [selectedFile, templateFile]);
+
   const dashboardStatus = actionStatus
     || (isScanning ? `scan executing ${progressText}` : files.length > 0 ? `${files.length} file(s) scanned` : hasSources ? "ready" : "choose a source to scan");
 
@@ -475,34 +522,26 @@ export function DashboardPage() {
             </div>
           ) : null}
 
-          {selectedFile ? (
-            <div className="mt-4 grid h-[26vh] min-h-[11.875rem] max-h-[15.625rem] min-w-0 shrink-0 grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-4">
+          {/* Both panels hold their place whether or not a file is selected.
+              Showing them only after a scan made the dashboard reflow as files
+              came and went, and an empty frame says what will appear here. */}
+          <div className="mt-4 grid h-[26vh] min-h-[11.875rem] max-h-[15.625rem] min-w-0 shrink-0 grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-4">
               <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-panel p-4">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">Media Info</h3>
-                  <span className="rounded-md bg-input px-2 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-subtle">
-                    {selectedFile.reader}
-                  </span>
+                  {selectedFile ? (
+                    <span className="rounded-md bg-input px-2 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-subtle">
+                      {selectedFile.reader}
+                    </span>
+                  ) : null}
                 </div>
                 <dl className="mt-3 grid min-h-0 flex-1 grid-cols-[6.875rem_1fr] gap-x-3 gap-y-2 overflow-auto text-sm">
-                  <dt className="text-subtle">File</dt>
-                  <dd className="truncate text-text" title={selectedFile.path}>{selectedFile.fileName}</dd>
-                  <dt className="text-subtle">Codec</dt>
-                  <dd className={compareTextClass(selectedFile, (row) => row.codec)}>{selectedFile.codec || "Unknown"}</dd>
-                  <dt className="text-subtle">Resolution</dt>
-                  <dd className={compareTextClass(selectedFile, (row) => row.resolution)}>{selectedFile.resolution || "Unknown"}</dd>
-                  <dt className="text-subtle">Bit Depth</dt>
-                  <dd className={compareTextClass(selectedFile, (row) => row.bitDepth)}>{selectedFile.bitDepth || "Unknown"}</dd>
-                  <dt className="text-subtle">HDR</dt>
-                  <dd className={compareTextClass(selectedFile, (row) => row.hdr)}>{selectedFile.hdr || "None"}</dd>
-                  <dt className="text-subtle">Audio</dt>
-                  <dd className={["truncate", compareTextClass(selectedFile, (row) => row.audioSummary)].join(" ")} title={selectedFile.audioSummary}>{selectedFile.audioSummary || "None"}</dd>
-                  <dt className="text-subtle">Subtitles</dt>
-                  <dd className={["truncate", compareTextClass(selectedFile, (row) => row.subtitleSummary)].join(" ")} title={selectedFile.subtitleSummary}>{selectedFile.subtitleSummary || "None"}</dd>
-                  <dt className="text-subtle">Status</dt>
-                  <dd className={isTemplate(selectedFile) ? "text-accent" : hasTemplateMismatch(selectedFile, templateFile) ? "text-warning" : "text-success"}>
-                    {isTemplate(selectedFile) ? "Template" : hasTemplateMismatch(selectedFile, templateFile) ? "Warning" : selectedFile.status}
-                  </dd>
+                  {mediaInfoRows.map((row) => (
+                    <Fragment key={row.label}>
+                      <dt className="text-subtle">{row.label}</dt>
+                      <dd className={row.className} title={row.title}>{row.value}</dd>
+                    </Fragment>
+                  ))}
                 </dl>
               </section>
 
@@ -521,7 +560,11 @@ export function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedFile.tracks.length === 0 ? (
+                      {!selectedFile ? (
+                        <tr>
+                          <td colSpan={6} className="px-2 py-8 text-center text-subtle">Scan a folder, then select a file.</td>
+                        </tr>
+                      ) : selectedFile.tracks.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="px-2 py-8 text-center text-subtle">No track data available.</td>
                         </tr>
@@ -541,8 +584,7 @@ export function DashboardPage() {
                   </table>
                 </div>
               </section>
-            </div>
-          ) : null}
+          </div>
         </section>
       </div>
 
