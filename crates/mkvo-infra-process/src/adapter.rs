@@ -161,9 +161,11 @@ impl ToolRegistryPort for ToolRegistry {
         Ok(ContractToolStatus {
             name: kind.command_name().to_owned(),
             command: kind.command_name().to_owned(),
+            // Tool paths are canonicalized during resolution; Settings shows this
+            // value back to the user, so it leaves in its plain form.
             resolved_path: status
                 .path
-                .map_or_else(String::new, |path| path.to_string_lossy().into_owned()),
+                .map_or_else(String::new, |path| mkvo_domain::normalized_path_text(&path)),
             available: status.available,
             version: status.version.unwrap_or_default(),
             error: status.error,

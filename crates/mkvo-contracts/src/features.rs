@@ -1064,6 +1064,45 @@ mod tests {
         assert_eq!(row.attachment_summary, "Fonts x1, Other x1");
     }
 
+    /// Scanned paths are canonicalized, which on Windows means the UI would
+    /// otherwise receive `\\?\C:\...` — not a path a user recognizes or can
+    /// paste back into a folder field. The DTO boundary is where that is
+    /// normalized, so every consumer of the contract inherits it.
+    #[test]
+    fn dto_paths_leave_the_boundary_in_their_plain_form() {
+        use std::path::PathBuf;
+
+        let dto = MediaFileDto::from(&media_file(PathBuf::from(
+            r"\\?\C:\media\Show\Season 01\a.mkv",
+        )));
+        assert_eq!(dto.path, r"C:\media\Show\Season 01\a.mkv");
+        assert_eq!(dto.fingerprint.path, r"C:\media\Show\Season 01\a.mkv");
+
+        let row = MediaFileRow::from(&media_file(PathBuf::from(r"\\?\UNC\nas\media\a.mkv")));
+        assert_eq!(row.path, r"\\nas\media\a.mkv");
+    }
+
+    fn media_file(path: std::path::PathBuf) -> mkvo_domain::MediaFile {
+        mkvo_domain::MediaFile {
+            path: path.clone(),
+            original_file_name: None,
+            watch_root: None,
+            relative_path: None,
+            fingerprint: mkvo_domain::FileFingerprint {
+                path,
+                size_bytes: 1,
+                modified_at: chrono::Utc::now(),
+                quick_hash: None,
+            },
+            container: mkvo_domain::ContainerMetadata::default(),
+            tracks: Vec::new(),
+            attachments: Vec::new(),
+            episode: None,
+            provider_match: None,
+            status: mkvo_domain::MediaStatus::Ready,
+        }
+    }
+
     fn track(
         id: u64,
         kind: TrackKind,
