@@ -82,3 +82,151 @@ jobs:
         run: cargo clippy --package mkvo-desktop --all-targets -- -D warnings
       - name: Test desktop host
         run: cargo test --package mkvo-desktop --all-targets
+
+  tauri-cross-platform:
+    # Windows is the release gate; these tell us whether the plan's
+    # cross-platform claim actually holds. They are not allowed to fail
+    # silently — a red job here is a real finding, not noise to ignore.
+    name: Check Tauri desktop (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux webview dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.88"
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the frontend the desktop host embeds
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - name: Check desktop host
+        run: cargo check --package mkvo-desktop
+      - name: Lint desktop host
+        run: cargo clippy --package mkvo-desktop --all-targets -- -D warnings
+      - name: Test desktop host
+        run: cargo test --package mkvo-desktop --all-targets
+
+  docker:
+    name: Build and smoke-test the container
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.rust
+          tags: mkvo-rust:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # Building the image only proves it compiles. The container is the
+      # artifact users actually run, so it has to answer for itself: the tools
+      # have to resolve inside it and a real scan has to return real tracks.
+      - name: Generate a media fixture
+        run: |
+          sudo apt-get update && sudo apt-get install --no-install-recommends -y ffmpeg
+          mkdir -p media/Show
+          ffmpeg -y -loglevel error \
+            -f lavfi -i testsrc=size=160x120:rate=10:duration=1 \
+            -f lavfi -i sine=frequency=440:duration=1 \
+            -map 0:v -map 1:a -c:v libx264 -preset ultrafast -c:a aac \
+            -metadata:s:a:0 language=eng "media/Show/Ep01.mkv"
+      - name: Run the container
+        run: |
+          mkdir -p config
+          docker run -d --name mkvo-ci -p 8080:8080 \
+            -v "$PWD/media:/media" -v "$PWD/config:/config" mkvo-rust:ci
+      - name: Wait for the health check
+        run: |
+          for _ in $(seq 1 60); do
+            if [ "$(docker inspect -f '{{.State.Health.Status}}' mkvo-ci)" = "healthy" ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "container never became healthy"
+          docker logs mkvo-ci
+          exit 1
+      - name: Every external tool resolves inside the container
+        run: |
+          curl -fsS http://127.0.0.1:8080/api/status > status.json
+          python3 - <<'PY'
+          import json, sys
+          tools = json.load(open("status.json"))["tools"]
+          missing = [t["name"] for t in tools if not t["available"]]
+          print("\n".join(f"{t['name']}: {t['version']}" for t in tools))
+          if missing:
+              sys.exit(f"unavailable in the image: {', '.join(missing)}")
+          PY
+      - name: A scan of mounted media returns real tracks
+        run: |
+          job=$(curl -fsS -X POST http://127.0.0.1:8080/api/scans \
+            -H 'Content-Type: application/json' \
+            -d '{"roots":["/media"],"recursive":true}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          for _ in $(seq 1 30); do
+            curl -fsS "http://127.0.0.1:8080/api/scans/$job" > scan.json
+            status=$(python3 -c 'import json; print(json.load(open("scan.json"))["status"])')
+            case "$status" in Completed|Failed|Canceled) break ;; esac
+            sleep 2
+          done
+          python3 - <<'PY'
+          import json, sys
+          scan = json.load(open("scan.json"))
+          print(scan["status"], scan["summary"], scan["skipped"])
+          if scan["status"] != "Completed" or scan["summary"]["total"] != 1 or scan["summary"]["failed"]:
+              sys.exit("the container did not scan the mounted media")
+          tracks = scan["files"][0]["tracks"]
+          if not any(t["type"] == "video" for t in tracks):
+              sys.exit(f"no video track parsed: {tracks}")
+          PY
+      - name: Container logs
+        if: always()
+        run: docker logs mkvo-ci || true
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.88"
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      # Fails on vulnerabilities. Unmaintained and unsound advisories are
+      # reported but not fatal: the current ones are all in Tauri's GTK
+      # dependency tree, which this repository cannot upgrade on its own, and a
+      # permanently red job is one people learn to ignore.
+      - name: Audit Rust dependencies
+        run: cargo audit
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Audit npm dependencies
+        working-directory: web
+        run: |
+          npm ci
+          npm audit --audit-level=high
