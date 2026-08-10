@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "apps/cli",
     "apps/desktop/src-tauri",
     "apps/server",
     "crates/mkvo-application",

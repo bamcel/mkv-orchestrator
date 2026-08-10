@@ -894,13 +894,17 @@ the solution file and `Directory.Build.props` are deleted. The Rust container
 took the default `Dockerfile` and `docker-compose.yml` names, the `dotnet` CI
 job is gone, and the publish scripts build Tauri bundles.
 
-Two deliberate departures from the bullets above. The retirement happened
-without waiting out a stable release and rollback window: git history is the
-rollback, and keeping a parallel UI alive was the cost the migration existed to
-remove. And `MKVOrchestrator.Cli` (`scan`, `inspect`, `cleanup`, `rename`) went
-with it -- it depended on `Core` and so could not outlive the cutover. Nothing
-referenced it, and there is no Rust replacement; those verbs are reachable only
-through the desktop app or the HTTP API until one is written.
+One deliberate departure from the bullets above: the retirement happened without
+waiting out a stable release and rollback window, because git history is the
+rollback and keeping a parallel UI alive was the cost the migration existed to
+remove.
+
+`MKVOrchestrator.Cli` went with the cutover, since it depended on `Core`. It is
+replaced by `apps/cli`, a third host over the same runtime, carrying the same
+four verbs, flag names, and exit codes so existing scripts keep working. The one
+behavioural change is `rename`, which now goes through the provider lookup the
+UI uses rather than renaming from parsed filenames alone -- that is what supplies
+episode titles, and it means the command needs something to search for.
 
 What survives from the .NET era: `tests/parity-fixtures/`, read by eight Rust
 test sites, and the legacy settings importer in `mkvo-infra-sqlite`, which reads
