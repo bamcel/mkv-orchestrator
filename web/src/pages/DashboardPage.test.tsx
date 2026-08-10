@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -55,6 +55,14 @@ const emptyStatus = {
 };
 
 const emptyScan = { updatedUtc: null, files: [], summary: { total: 0, mkv: 0, mp4: 0, failed: 0 }, selectedPaths: [] };
+
+// The library context persists the working set and the template choice, so
+// without this one test's files leak into the next -- and the dashboard only
+// adopts a fresh scan when it is holding none, so the leak wins.
+beforeEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+});
 
 function renderDashboard(overrides: Parameters<typeof renderWithBackend>[1]) {
   return renderWithBackend(
@@ -247,5 +255,65 @@ describe("Dashboard detail panels", () => {
 
     await waitFor(() => expect(screen.getAllByText("HEVC/H.265").length).toBeGreaterThan(0));
     expect(screen.queryByText(/scan a folder, then select a file/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("Dashboard template highlighting", () => {
+  const templateFile = {
+    path: "/media/Show/Ep01.mkv",
+    fileName: "Ep01.mkv",
+    extension: ".mkv",
+    status: "Scanned",
+    reader: "mkvmerge",
+    codec: "HEVC/H.265",
+    resolution: "1920x1080",
+    bitDepth: "",
+    hdr: "",
+    videoSummary: "HEVC/H.265 | 1920x1080",
+    audioSummary: "eng x1",
+    subtitleSummary: "eng x1",
+    attachmentSummary: "None",
+    tracks: [
+      { id: 0, trackNumber: 1, type: "video", codec: "HEVC/H.265", language: "und", name: "Ep01.Release", default: true, forced: false },
+      { id: 1, trackNumber: 2, type: "audio", codec: "AC-3", language: "eng", name: "", default: true, forced: false }
+    ],
+    attachments: []
+  };
+
+  function renderWithTemplate() {
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () =>
+        Promise.resolve({
+          ...emptyScan,
+          files: [templateFile],
+          summary: { total: 1, mkv: 1, mp4: 0, failed: 0 }
+        }),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+  }
+
+  /// The other Media Info fields already marked the template in accent; the
+  /// filename was left plain, so the one row naming the file did not match.
+  it("colours the template's filename like the rest of its details", async () => {
+    renderWithTemplate();
+
+    const rows = await screen.findAllByText("Ep01.mkv");
+    const detail = rows.find((element) => element.tagName === "DD");
+    expect(detail).toBeDefined();
+    expect(detail).toHaveClass("text-accent");
+  });
+
+  /// Track rows are compared against the template, so the template itself has
+  /// nothing to compare against and reads as the reference.
+  it("colours the template's track rows as the reference", async () => {
+    renderWithTemplate();
+
+    const codec = (await screen.findAllByText("AC-3"))[0];
+    expect(codec).toHaveClass("text-accent");
+
+    // A video track's name is exempt from comparison, but not from being
+    // marked as the template.
+    expect(screen.getByText("Ep01.Release")).toHaveClass("text-accent");
   });
 });
