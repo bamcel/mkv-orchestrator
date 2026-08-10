@@ -218,10 +218,13 @@ Build the workspace:
 cargo build --workspace
 ```
 
-Run the desktop app with hot reload:
+Run the desktop app with hot reload. This starts the Vite dev server and the
+desktop host together, and must be run from the repository root -- that is where
+the Tauri CLI finds `apps/desktop/src-tauri/tauri.conf.json`:
 
 ```powershell
-npm --prefix web run tauri -- dev
+.\web
+ode_modules\.bin	auri.cmd dev
 ```
 
 Run the tests:
@@ -236,8 +239,8 @@ npm --prefix web test
 
 ## Command Line
 
-The `mkvo` binary drives the same runtime as the app, so it sees the same
-cache, settings, and provider keys.
+The `mkvo` binary drives the same runtime as the app, against whichever
+configuration directory it is pointed at.
 
 ```powershell
 cargo run --package mkvo-cli -- scan "D:\Media\Show"
