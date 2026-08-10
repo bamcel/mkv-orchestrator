@@ -11,7 +11,8 @@ import {
   RefreshCw,
   SlidersHorizontal,
   Trash2,
-  Wrench
+  Wrench,
+  X
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -23,7 +24,8 @@ import {
   testMediaServerConnection,
   testRenameProvider
 } from "../api";
-import type { WebMediaServer, WebMediaServerPathMapping, WebSettings } from "../api";
+import type { SourceRoot, WebMediaServer, WebMediaServerPathMapping, WebSettings } from "../api";
+import { FileBrowser } from "../components/FileBrowser";
 import { SectionHeader } from "../components/SectionHeader";
 import { applyWebTheme, getAllWebThemes, getStoredWebThemeName, getWebTheme, removeCustomWebTheme, saveCustomWebTheme } from "../theme";
 
@@ -73,6 +75,9 @@ export function SettingsPage() {
   const [languagePresetsText, setLanguagePresetsText] = useState("");
   const [muxAudioDefaults, setMuxAudioDefaults] = useState("eng,jpn");
   const [muxSubtitleDefaults, setMuxSubtitleDefaults] = useState("eng");
+  const [libraryRoots, setLibraryRoots] = useState<SourceRoot[]>([]);
+  // Which row the browser is filling in, so one dialog serves every row.
+  const [browsingRow, setBrowsingRow] = useState<number | null>(null);
   const [watchFoldersText, setWatchFoldersText] = useState("");
   const [liveWatcherEnabled, setLiveWatcherEnabled] = useState(false);
   const [mediaServers, setMediaServers] = useState<EditableMediaServer[]>([]);
@@ -105,6 +110,7 @@ export function SettingsPage() {
     setLanguagePresetsText((webSettings.data.languagePresets ?? []).join("\n"));
     setMuxAudioDefaults(webSettings.data.mkvMergeDefaultAudioLanguages || "eng,jpn");
     setMuxSubtitleDefaults(webSettings.data.mkvMergeDefaultSubtitleLanguages || "eng");
+    setLibraryRoots(webSettings.data.libraryRoots ?? []);
     setWatchFoldersText((webSettings.data.watchFolders ?? []).join("\n"));
     setLiveWatcherEnabled(Boolean(webSettings.data.enableLiveWatchFolderMonitoring));
     setMediaServers((webSettings.data.mediaServers ?? []).map((server) => ({ ...server, apiKey: "" })));
@@ -127,6 +133,9 @@ export function SettingsPage() {
         languagePresets: normalizeLineList(languagePresetsText),
         mkvMergeDefaultAudioLanguages: muxAudioDefaults,
         mkvMergeDefaultSubtitleLanguages: muxSubtitleDefaults,
+        libraryRoots: libraryRoots
+          .map((root) => ({ name: root.name.trim(), path: root.path.trim() }))
+          .filter((root) => root.name && root.path),
         watchFolders: normalizeLineList(watchFoldersText),
         enableLiveWatchFolderMonitoring: liveWatcherEnabled,
         mediaServers: mediaServers.map((server) => ({
@@ -158,6 +167,7 @@ export function SettingsPage() {
       setLanguagePresetsText(saved.languagePresets.join("\n"));
       setMuxAudioDefaults(saved.mkvMergeDefaultAudioLanguages);
       setMuxSubtitleDefaults(saved.mkvMergeDefaultSubtitleLanguages);
+      setLibraryRoots(saved.libraryRoots);
       setWatchFoldersText(saved.watchFolders.join("\n"));
       setLiveWatcherEnabled(saved.enableLiveWatchFolderMonitoring);
       setMediaServers(saved.mediaServers.map((server) => ({ ...server, apiKey: "" })));
@@ -545,6 +555,83 @@ export function SettingsPage() {
 
           {activeTab === "library" ? (
             <div className="grid gap-5 xl:grid-cols-[minmax(420px,600px)_1fr]">
+              <SettingsCard
+                title="Library Folders"
+                description={
+                  isDesktop
+                    ? "The folders that make up your library. They appear as shortcuts when browsing, and the first one is where browsing starts."
+                    : "Folders inside a mount, listed separately. Add each share you care about and it becomes a shortcut when browsing."
+                }
+              >
+                <div className="space-y-2">
+                  {libraryRoots.length === 0 ? (
+                    <div className="rounded-lg border border-border bg-input p-3 text-sm text-subtle">
+                      {isDesktop
+                        ? "No library folders yet. Browsing starts at This PC until you add one."
+                        : "No library folders yet. Browsing starts at the mount."}
+                    </div>
+                  ) : null}
+
+                  {libraryRoots.map((root, index) => (
+                    <div key={index} className="flex flex-wrap items-center gap-2">
+                      <input
+                        value={root.name}
+                        onChange={(event) =>
+                          setLibraryRoots((current) =>
+                            current.map((item, position) =>
+                              position === index ? { ...item, name: event.target.value } : item
+                            )
+                          )
+                        }
+                        placeholder="Anime"
+                        aria-label={`Library folder ${index + 1} name`}
+                        className="h-9 w-32 shrink-0 rounded-md border border-border bg-input px-2 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
+                      />
+                      <input
+                        value={root.path}
+                        onChange={(event) =>
+                          setLibraryRoots((current) =>
+                            current.map((item, position) =>
+                              position === index ? { ...item, path: event.target.value } : item
+                            )
+                          )
+                        }
+                        placeholder={isDesktop ? "D:\\Anime" : "/mnt/user/anime"}
+                        aria-label={`Library folder ${index + 1} path`}
+                        className="h-9 min-w-[180px] flex-1 rounded-md border border-border bg-input px-2 font-mono text-xs text-text outline-none placeholder:text-subtle focus:border-accent"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setBrowsingRow(index)}
+                        className="h-9 shrink-0 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                      >
+                        Browse
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLibraryRoots((current) =>
+                            current.filter((_, position) => position !== index)
+                          )
+                        }
+                        aria-label={`Remove library folder ${index + 1}`}
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-subtle transition hover:bg-button-hover hover:text-text"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setLibraryRoots((current) => [...current, { name: "", path: "" }])}
+                    className="h-9 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                  >
+                    Add folder
+                  </button>
+                </div>
+              </SettingsCard>
+
               <SettingsCard title="Manual Watch Folders" description="Default fallback paths. These are always available even when no media server is configured.">
                 <label className="block">
                   <span className="text-xs font-semibold text-muted">Watch folders</span>
@@ -856,8 +943,42 @@ export function SettingsPage() {
           ) : null}
         </div>
       </section>
+
+      {browsingRow !== null ? (
+        <FileBrowser
+          initialPath={libraryRoots[browsingRow]?.path || status.data?.mediaRoot || ""}
+          roots={status.data?.sourceRoots ?? []}
+          onCancel={() => setBrowsingRow(null)}
+          onSelect={(path, kind) => {
+            // Picking a file means the folder holding it, since a library
+            // folder is always a directory.
+            const folder = kind === "file" ? parentFolder(path) : path;
+            setLibraryRoots((current) =>
+              current.map((item, position) =>
+                position === browsingRow
+                  ? { ...item, path: folder, name: item.name || folderName(folder) }
+                  : item
+              )
+            );
+            setBrowsingRow(null);
+          }}
+        />
+      ) : null}
     </div>
   );
+}
+
+/** The folder holding a path, so picking a file still yields a directory. */
+function parentFolder(path: string): string {
+  const trimmed = path.replace(/[\\/]+$/, "");
+  const cut = Math.max(trimmed.lastIndexOf("\\"), trimmed.lastIndexOf("/"));
+  return cut > 0 ? trimmed.slice(0, cut) : trimmed;
+}
+
+/** A sensible default name so a picked folder does not save as unnamed. */
+function folderName(path: string): string {
+  const parts = path.replace(/[\\/]+$/, "").split(/[\\/]+/);
+  return parts[parts.length - 1] ?? "";
 }
 
 function SettingsTabButton({ tab, active, onSelect }: { tab: SettingsTabDefinition; active: boolean; onSelect: (tab: SettingsTabId) => void }) {

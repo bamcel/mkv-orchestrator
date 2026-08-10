@@ -24,6 +24,7 @@ function settings(overrides: Partial<WebSettings> = {}): WebSettings {
     mkvToolNixDirectory: null,
     ffmpegDirectory: null,
     defaultRoot: null,
+    libraryRoots: [],
     ignoredScanFolderNames: [],
     useQuickHashOnUnreliableTimestamps: false,
     renamePreviewCompactView: false,
@@ -113,5 +114,125 @@ describe("Settings providers", () => {
     await user.click(screen.getByRole("button", { name: /save settings/i }));
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
     expect(saveWebSettings.mock.calls[0][0].tvdbApiKey).toBeUndefined();
+  });
+});
+
+describe("Settings library folders", () => {
+  /// The container case the setting exists for: one bind mount, several shares
+  /// inside it, each wanted as its own entry in the browser.
+  it("saves several folders from inside a single mount", async () => {
+    const user = userEvent.setup();
+    const saveWebSettings = vi.fn().mockResolvedValue(
+      settings({
+        libraryRoots: [
+          { name: "Anime", path: "/mnt/user/anime" },
+          { name: "TV", path: "/mnt/user/tv" }
+        ]
+      })
+    );
+
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve({ ...status, mediaRoot: "/mnt/user" }),
+      getWebSettings: () => Promise.resolve(settings()),
+      saveWebSettings
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^library$/i }));
+    await user.click(await screen.findByRole("button", { name: /add folder/i }));
+    await user.type(screen.getByLabelText(/library folder 1 name/i), "Anime");
+    await user.type(screen.getByLabelText(/library folder 1 path/i), "/mnt/user/anime");
+    await user.click(screen.getByRole("button", { name: /add folder/i }));
+    await user.type(screen.getByLabelText(/library folder 2 name/i), "TV");
+    await user.type(screen.getByLabelText(/library folder 2 path/i), "/mnt/user/tv");
+
+    await user.click(screen.getByRole("button", { name: /save settings/i }));
+
+    await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
+    expect(saveWebSettings.mock.calls[0][0].libraryRoots).toEqual([
+      { name: "Anime", path: "/mnt/user/anime" },
+      { name: "TV", path: "/mnt/user/tv" }
+    ]);
+  });
+
+  it("loads folders already configured and can remove one", async () => {
+    const user = userEvent.setup();
+    const saveWebSettings = vi.fn().mockResolvedValue(settings());
+
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () =>
+        Promise.resolve(
+          settings({
+            libraryRoots: [
+              { name: "Anime", path: "/mnt/user/anime" },
+              { name: "TV", path: "/mnt/user/tv" }
+            ]
+          })
+        ),
+      saveWebSettings
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^library$/i }));
+    await waitFor(() =>
+      expect(screen.getByLabelText(/library folder 1 name/i)).toHaveValue("Anime")
+    );
+
+    await user.click(screen.getByRole("button", { name: /remove library folder 1/i }));
+    await user.click(screen.getByRole("button", { name: /save settings/i }));
+
+    await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
+    expect(saveWebSettings.mock.calls[0][0].libraryRoots).toEqual([
+      { name: "TV", path: "/mnt/user/tv" }
+    ]);
+  });
+
+  /// A half-finished row must not be saved as an unnamed root.
+  it("drops a row that was never filled in", async () => {
+    const user = userEvent.setup();
+    const saveWebSettings = vi.fn().mockResolvedValue(settings());
+
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings()),
+      saveWebSettings
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^library$/i }));
+    await user.click(await screen.findByRole("button", { name: /add folder/i }));
+    await user.click(screen.getByRole("button", { name: /save settings/i }));
+
+    await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
+    expect(saveWebSettings.mock.calls[0][0].libraryRoots).toEqual([]);
+  });
+
+  /// Typing a path by hand is fine, but browsing is the point on the desktop.
+  it("fills a row from the browser and names it after the folder", async () => {
+    const user = userEvent.setup();
+
+    renderWithBackend(<SettingsPage />, {
+      transport: "tauri",
+      getStatus: () => Promise.resolve({ ...status, mediaRoot: "" }),
+      getWebSettings: () => Promise.resolve(settings()),
+      browseFileSystem: (path?: string) =>
+        Promise.resolve(
+          path
+            ? { path, parentPath: "", entries: [] }
+            : { path: "", parentPath: null, entries: [{ name: "D:", path: "D:\\", kind: "folder" as const, sizeBytes: null, modifiedUtc: "1970-01-01T00:00:00Z" }] }
+        )
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^library$/i }));
+    await user.click(await screen.findByRole("button", { name: /add folder/i }));
+    await user.click(screen.getByRole("button", { name: /^browse$/i }));
+
+    // "D:" is both a sidebar shortcut and a row; the row is the one to open.
+    const rows = await screen.findAllByText("D:");
+    const cell = rows.find((element) => element.closest("tr"));
+    await user.dblClick(cell!);
+    await user.click(await screen.findByRole("button", { name: /select this folder/i }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/library folder 1 path/i)).toHaveValue("D:\\")
+    );
   });
 });

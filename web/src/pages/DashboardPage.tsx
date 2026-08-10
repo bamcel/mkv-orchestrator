@@ -57,12 +57,15 @@ export function DashboardPage() {
   // A container has a mount to point at; a desktop has the whole machine, so
   // guidance that names /media is wrong there.
   const isDesktop = getBackendTransport() === "tauri";
-  const defaultSourcePath = status.data?.mediaRoot || "/media";
+  // An empty media root means the user has named no library folder yet, which
+  // only the desktop can report. Browsing then opens at the volume list rather
+  // than at a folder nobody chose.
+  const defaultSourcePath = status.data?.mediaRoot ?? (isDesktop ? "" : "/media");
   const browseRootOptions = useMemo(() => {
-    const roots = [
-      { name: "Media", path: defaultSourcePath },
-      ...(status.data?.sourceRoots ?? [])
-    ];
+    // The host reports its own roots and the user's library folders as one
+    // list, each already named. Synthesising a "Media" entry here would win the
+    // dedupe below and relabel whatever the user called their own folder.
+    const roots = status.data?.sourceRoots ?? [];
     const seen = new Set<string>();
     return roots.filter((root) => {
       const path = root.path.trim();
@@ -70,7 +73,7 @@ export function DashboardPage() {
       seen.add(path.toLowerCase());
       return true;
     });
-  }, [defaultSourcePath, status.data?.sourceRoots]);
+  }, [status.data?.sourceRoots]);
   const activeSources = sources;
   const hasSources = sources.length > 0;
   const sourceSummary = sources.length === 0
