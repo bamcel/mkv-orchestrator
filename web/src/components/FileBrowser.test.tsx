@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -37,6 +37,8 @@ const volumeList: FileSystemResponse = {
 };
 
 describe("file browser navigation", () => {
+  beforeEach(() => window.localStorage.clear());
+
   /// The desktop was previously stuck inside one mounted directory. Reaching a
   /// library on another drive is the whole point of the change.
   it("navigates to another volume from the sidebar", async () => {
@@ -194,6 +196,118 @@ describe("file browser navigation", () => {
 
     expect(screen.queryByText("Anime")).not.toBeInTheDocument();
     expect(screen.getByText("Movies")).toBeInTheDocument();
+  });
+
+  /// A NAS share is reachable by typing its path, which is how a location that
+  /// no drive letter points at gets into the browser in the first place.
+  it("navigates to a UNC path typed into the address bar", async () => {
+    const user = userEvent.setup();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "C:\\media": { path: "C:\\media", parentPath: "C:\\", entries: [] },
+      "\\\\nas\\downloads": {
+        path: "\\\\nas\\downloads",
+        parentPath: "\\\\nas",
+        entries: [folder("completed", "\\\\nas\\downloads\\completed")]
+      }
+    });
+
+    renderWithBackend(
+      <FileBrowser initialPath="C:\media" roots={[]} onCancel={() => {}} onSelect={() => {}} />,
+      { browseFileSystem }
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Address bar" }));
+    const address = screen.getByLabelText("Path");
+    await user.clear(address);
+    await user.type(address, "\\\\nas\\downloads{Enter}");
+
+    expect(await screen.findByText("completed")).toBeInTheDocument();
+  });
+
+  /// Enumerating hosts on a network is slow and unreliable, so a server the
+  /// user has actually reached is remembered instead.
+  it("remembers a reached server under Network and navigates back to it", async () => {
+    const user = userEvent.setup();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "\\\\nas": {
+        path: "\\\\nas",
+        parentPath: "",
+        entries: [folder("downloads", "\\\\nas\\downloads")]
+      },
+      "\\\\nas\\downloads": {
+        path: "\\\\nas\\downloads",
+        parentPath: "\\\\nas",
+        entries: [folder("completed", "\\\\nas\\downloads\\completed")]
+      }
+    });
+
+    renderWithBackend(
+      <FileBrowser
+        initialPath="\\nas\downloads"
+        roots={[]}
+        onCancel={() => {}}
+        onSelect={() => {}}
+      />,
+      { browseFileSystem }
+    );
+
+    const sidebar = await screen.findByRole("navigation");
+    const remembered = await within(sidebar).findByRole("button", { name: /^nas$/ });
+
+    // The share list is a level the browser can only reach by enumeration,
+    // since a bare server is not a directory.
+    await user.click(remembered);
+    expect(await screen.findByText("downloads")).toBeInTheDocument();
+  });
+
+  /// A share carries no timestamp, which arrives as the epoch. Rendering that
+  /// literally would date every share to 1969.
+  it("leaves the date blank for a share rather than showing the epoch", async () => {
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "\\\\nas": {
+        path: "\\\\nas",
+        parentPath: "",
+        entries: [folder("downloads", "\\\\nas\\downloads", "1970-01-01T00:00:00Z")]
+      }
+    });
+
+    renderWithBackend(
+      <FileBrowser initialPath="\\nas" roots={[]} onCancel={() => {}} onSelect={() => {}} />,
+      { browseFileSystem }
+    );
+
+    const row = (await screen.findByText("downloads")).closest("tr");
+    expect(row).not.toBeNull();
+    expect(row!.textContent).not.toMatch(/19(69|70)/);
+  });
+
+  it("forgets a network location on request", async () => {
+    const user = userEvent.setup();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "\\\\nas\\downloads": { path: "\\\\nas\\downloads", parentPath: "\\\\nas", entries: [] }
+    });
+
+    renderWithBackend(
+      <FileBrowser
+        initialPath="\\nas\downloads"
+        roots={[]}
+        onCancel={() => {}}
+        onSelect={() => {}}
+      />,
+      { browseFileSystem }
+    );
+
+    const sidebar = await screen.findByRole("navigation");
+    await within(sidebar).findByRole("button", { name: /^nas$/ });
+    await user.click(within(sidebar).getByRole("button", { name: /forget/i }));
+
+    await waitFor(() =>
+      expect(within(sidebar).queryByRole("button", { name: /^nas$/ })).not.toBeInTheDocument()
+    );
   });
 
   /// An unreadable folder is ordinary — a permission-denied system directory is

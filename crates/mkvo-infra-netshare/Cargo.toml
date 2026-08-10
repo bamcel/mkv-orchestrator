@@ -1,0 +1,18 @@
+[package]
+name = "mkvo-infra-netshare"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+
+# The workspace forbids unsafe code, and `forbid` cannot be relaxed by the
+# crate that needs it. Enumerating the shares a server publishes has no safe
+# equivalent -- the only alternative is parsing localized `net view` output --
+# so that one FFI call lives here, alone, and every other crate keeps the ban.
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

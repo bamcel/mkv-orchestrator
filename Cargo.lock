@@ -2183,6 +2183,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "mkvo-infra-netshare"
+version = "0.1.0"
+
+[[package]]
 name = "mkvo-infra-process"
 version = "0.1.0"
 dependencies = [
@@ -2266,6 +2270,7 @@ dependencies = [
  "mkvo-contracts",
  "mkvo-domain",
  "mkvo-infra-media-servers",
+ "mkvo-infra-netshare",
  "mkvo-infra-process",
  "mkvo-infra-providers",
  "mkvo-infra-sqlite",
