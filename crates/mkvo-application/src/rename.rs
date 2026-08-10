@@ -278,6 +278,21 @@ pub fn rename_tokens(file: &MediaFile) -> RenameTokens {
     }
 }
 
+/// Whether a template positions a file within a series.
+///
+/// Season, episode, and absolute number are the tokens a film cannot answer.
+/// Episode title is not one of them: a film's title is a reasonable thing to
+/// put there, and the provider fills it in.
+fn mentions_episode_position(template: &str) -> bool {
+    let lowered = template.to_ascii_lowercase();
+    // `{episode}` and `{episode:00}` are positions; `{episodeTitle}` is not, so
+    // the episode token has to be matched closed rather than by prefix.
+    lowered.contains("{season")
+        || lowered.contains("{absolute")
+        || lowered.contains("{episode}")
+        || lowered.contains("{episode:")
+}
+
 #[must_use]
 pub fn build_file_name(file: &MediaFile, template: &str) -> String {
     let tokens = rename_tokens(file);
@@ -286,7 +301,14 @@ pub fn build_file_name(file: &MediaFile, template: &str) -> String {
     if active.is_empty() {
         active = DEFAULT_SERIES_TEMPLATE;
     }
-    if is_movie && active.eq_ignore_ascii_case(DEFAULT_SERIES_TEMPLATE) {
+    // A film has no season or episode, so a template asking for them renders
+    // them as nothing and leaves the punctuation around them behind -- "S01E01
+    // - " with no numbers, or worse. This used to catch only the exact default
+    // series template, so any customised one produced that wreckage.
+    //
+    // A template that asks for neither is left alone: someone who wrote their
+    // own movie template meant it.
+    if is_movie && mentions_episode_position(active) {
         active = DEFAULT_MOVIE_TEMPLATE;
     }
 
@@ -552,6 +574,64 @@ mod tests {
             provider_match: None,
             status: MediaStatus::Ready,
         }
+    }
+
+    /// A film named with a series template used to render as the template's
+    /// bare punctuation -- "SE -.mkv" -- because season and episode have
+    /// nothing to say about a film.
+    #[test]
+    fn a_film_ignores_a_template_that_positions_it_in_a_series() {
+        let mut file = media("Obsession (Bluray) 2026.mkv", 1);
+        let episode = file.episode.as_mut().expect("episode");
+        episode.is_movie = true;
+        episode.series_title = Some("Obsession".to_owned());
+        episode.episode_title = Some("Obsession".to_owned());
+        episode.year = Some(2026);
+
+        // The custom template the report came from.
+        let name = build_file_name(&file, "S{season:00}E{episode:00} - {episodeTitle}");
+
+        assert_eq!(name, "Obsession (2026).mkv");
+    }
+
+    /// Someone who wrote a movie template meant it, so it is left alone.
+    #[test]
+    fn a_film_keeps_a_template_that_does_not_position_it() {
+        let mut file = media("Obsession (Bluray) 2026.mkv", 1);
+        let episode = file.episode.as_mut().expect("episode");
+        episode.is_movie = true;
+        episode.series_title = Some("Obsession".to_owned());
+        episode.episode_title = Some("Obsession".to_owned());
+        episode.year = Some(2026);
+
+        let name = build_file_name(&file, "{title} [{year}]");
+
+        assert_eq!(name, "Obsession [2026].mkv");
+    }
+
+    /// `{episodeTitle}` is a name, not a position, so it must not be mistaken
+    /// for one by a prefix match on `{episode`.
+    #[test]
+    fn an_episode_title_alone_does_not_count_as_a_position() {
+        let mut file = media("Obsession (Bluray) 2026.mkv", 1);
+        let episode = file.episode.as_mut().expect("episode");
+        episode.is_movie = true;
+        episode.series_title = Some("Obsession".to_owned());
+        episode.episode_title = Some("Obsession".to_owned());
+
+        let name = build_file_name(&file, "{episodeTitle}");
+
+        assert_eq!(name, "Obsession.mkv");
+    }
+
+    /// Series renaming must keep working exactly as before.
+    #[test]
+    fn a_series_still_uses_the_template_it_was_given() {
+        let name = build_file_name(
+            &media("old.mkv", 3),
+            "S{season:00}E{episode:00} - {episodeTitle}",
+        );
+        assert_eq!(name, "S01E03 - Pilot - Part 1.mkv");
     }
 
     #[test]

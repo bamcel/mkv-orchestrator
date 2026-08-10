@@ -58,15 +58,24 @@ impl MkvoRuntime {
             )
             .await?;
         let selected_seasons = selected_seasons(&request.scope_keys);
+        let is_movie = request.selected_result.format.eq_ignore_ascii_case("movie");
         for file in &mut files {
-            let number = parse_episode_number(&file.file_name());
-            let matched = number.and_then(|number| {
-                episodes.iter().find(|episode| {
-                    episode.episode == number
-                        && (selected_seasons.is_empty()
-                            || selected_seasons.contains(&episode.season))
+            // A film has no episode number to parse out of its name, so
+            // requiring one left every movie unmatched and every token empty --
+            // the rename came out as the bare punctuation of the template. The
+            // provider returns exactly one entry for a film, and that is the
+            // match.
+            let matched = if is_movie {
+                episodes.first()
+            } else {
+                parse_episode_number(&file.file_name()).and_then(|number| {
+                    episodes.iter().find(|episode| {
+                        episode.episode == number
+                            && (selected_seasons.is_empty()
+                                || selected_seasons.contains(&episode.season))
+                    })
                 })
-            });
+            };
             if let Some(episode) = matched {
                 file.episode = Some(EpisodeIdentity {
                     series_title: Some(request.selected_result.name.clone()),
