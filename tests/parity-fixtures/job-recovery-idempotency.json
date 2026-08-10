@@ -1,0 +1,320 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "jobs.recovery-idempotency.v1",
+  "kind": "target_policy",
+  "description": "Durable idempotency, journal upserts, and startup recovery classifications for mutating jobs.",
+  "sourceOfTruth": [
+    "src/MKVOrchestrator.WebHost/OperationJobs.cs",
+    "crates/mkvo-contracts/src/jobs.rs",
+    "crates/mkvo-domain/src/plan.rs",
+    "crates/mkvo-infra-sqlite/src/lib.rs",
+    "docs/TAURI_RUST_ARCHITECTURE_PLAN.md"
+  ],
+  "comparison": {
+    "arrayOrder": "significant",
+    "objectPropertyOrder": "ignored",
+    "timestamps": "exact_fixed_values"
+  },
+  "policy": {
+    "idempotencyScope": "global_key",
+    "sameKeySameFingerprint": "return_existing_job",
+    "sameKeyDifferentFingerprint": "reject",
+    "completedJournalStepsAreNeverRepeated": true,
+    "inPlaceMutationWithoutCompletionProof": "manual_review",
+    "temporaryOutputMutationMayRetryOnlyAfterCleanup": true
+  },
+  "submissionCases": [
+    {
+      "id": "new-key-creates-one-job",
+      "input": {
+        "kind": "remux",
+        "idempotencyKey": "fixture-remux-request-001",
+        "requestFingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "existingJobs": [],
+        "injectedIds": {
+          "jobId": "018f0000-0000-7000-8000-000000000001",
+          "correlationId": "018f0000-0000-7000-8000-000000000101"
+        },
+        "now": "2024-05-01T10:00:00Z"
+      },
+      "expected": {
+        "accepted": {
+          "id": "018f0000-0000-7000-8000-000000000001",
+          "correlationId": "018f0000-0000-7000-8000-000000000101",
+          "status": "Queued",
+          "idempotentReplay": false
+        },
+        "createdJobCount": 1,
+        "createdJournalEntries": []
+      }
+    },
+    {
+      "id": "same-key-and-fingerprint-replays-completed-job",
+      "input": {
+        "kind": "remux",
+        "idempotencyKey": "fixture-remux-request-001",
+        "requestFingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "existingJobs": [
+          {
+            "id": "018f0000-0000-7000-8000-000000000001",
+            "correlationId": "018f0000-0000-7000-8000-000000000101",
+            "kind": "remux",
+            "status": "Completed",
+            "idempotencyKey": "fixture-remux-request-001",
+            "requestFingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ]
+      },
+      "expected": {
+        "accepted": {
+          "id": "018f0000-0000-7000-8000-000000000001",
+          "correlationId": "018f0000-0000-7000-8000-000000000101",
+          "status": "Completed",
+          "idempotentReplay": true
+        },
+        "createdJobCount": 0,
+        "createdJournalEntries": [],
+        "toolInvocationCount": 0
+      }
+    },
+    {
+      "id": "same-key-with-different-request-is-conflict",
+      "input": {
+        "kind": "remux",
+        "idempotencyKey": "fixture-remux-request-001",
+        "requestFingerprint": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "existingJobs": [
+          {
+            "id": "018f0000-0000-7000-8000-000000000001",
+            "kind": "remux",
+            "status": "Completed",
+            "idempotencyKey": "fixture-remux-request-001",
+            "requestFingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ]
+      },
+      "expected": {
+        "accepted": null,
+        "error": {
+          "code": "idempotency_conflict",
+          "message": "The idempotency key is already bound to a different request fingerprint."
+        },
+        "createdJobCount": 0,
+        "toolInvocationCount": 0
+      }
+    }
+  ],
+  "recoveryCases": [
+    {
+      "id": "completed-promotion-reconciles-running-record",
+      "input": {
+        "job": {
+          "id": "018f0000-0000-7000-8000-000000000002",
+          "kind": "remux",
+          "state": "Running",
+          "idempotencyKey": "fixture-remux-request-002",
+          "requestFingerprint": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "completed": 0,
+          "failed": 0,
+          "skipped": 0,
+          "total": 1
+        },
+        "journal": [
+          {
+            "stepIndex": 0,
+            "stepKind": "validate_plan",
+            "state": "completed",
+            "startedAtMs": 1714557600000,
+            "completedAtMs": 1714557600100,
+            "payload": {}
+          },
+          {
+            "stepIndex": 1,
+            "stepKind": "run_tool_to_temporary_output",
+            "state": "completed",
+            "startedAtMs": 1714557600100,
+            "completedAtMs": 1714557605000,
+            "payload": {
+              "temporaryOutput": "${ROOT}/media/episode.mkvo-remux.tmp.mkv"
+            }
+          },
+          {
+            "stepIndex": 2,
+            "stepKind": "promote_output",
+            "state": "completed",
+            "startedAtMs": 1714557605000,
+            "completedAtMs": 1714557605100,
+            "payload": {
+              "finalOutput": "${ROOT}/media/episode.mkv",
+              "expectedFingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        ],
+        "filesystem": {
+          "existing": [
+            "${ROOT}/media/episode.mkv"
+          ],
+          "missing": [
+            "${ROOT}/media/episode.mkvo-remux.tmp.mkv"
+          ],
+          "fingerprints": {
+            "${ROOT}/media/episode.mkv": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        "now": "2024-05-01T10:01:00Z"
+      },
+      "expected": {
+        "classification": "already_completed",
+        "status": "Completed",
+        "completed": 1,
+        "failed": 0,
+        "resumeFromStepIndex": null,
+        "cleanupPaths": [],
+        "toolInvocationCount": 0,
+        "appendLog": "Recovered completed output from operation journal."
+      }
+    },
+    {
+      "id": "partial-temporary-output-is-cleaned-before-retry",
+      "input": {
+        "job": {
+          "id": "018f0000-0000-7000-8000-000000000003",
+          "kind": "remux",
+          "state": "Running",
+          "idempotencyKey": "fixture-remux-request-003",
+          "requestFingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "journal": [
+          {
+            "stepIndex": 0,
+            "stepKind": "validate_plan",
+            "state": "completed",
+            "startedAtMs": 1714557600000,
+            "completedAtMs": 1714557600100,
+            "payload": {}
+          },
+          {
+            "stepIndex": 1,
+            "stepKind": "run_tool_to_temporary_output",
+            "state": "running",
+            "startedAtMs": 1714557600100,
+            "completedAtMs": null,
+            "payload": {
+              "source": "${ROOT}/media/episode.mkv",
+              "temporaryOutput": "${ROOT}/media/episode.mkvo-remux.tmp.mkv",
+              "finalOutput": "${ROOT}/media/episode.mkv"
+            }
+          }
+        ],
+        "filesystem": {
+          "existing": [
+            "${ROOT}/media/episode.mkv",
+            "${ROOT}/media/episode.mkvo-remux.tmp.mkv"
+          ],
+          "missing": []
+        }
+      },
+      "expected": {
+        "classification": "cleanup_required_then_retryable",
+        "status": "WaitingForResources",
+        "resumeFromStepIndex": 1,
+        "neverRepeatStepIndexes": [
+          0
+        ],
+        "cleanupPaths": [
+          "${ROOT}/media/episode.mkvo-remux.tmp.mkv"
+        ],
+        "journalUpdates": [
+          {
+            "stepIndex": 1,
+            "state": "retry_pending",
+            "completedAtMs": null
+          }
+        ],
+        "toolInvocationCountDuringClassification": 0
+      }
+    },
+    {
+      "id": "interrupted-in-place-property-edit-needs-review",
+      "input": {
+        "job": {
+          "id": "018f0000-0000-7000-8000-000000000004",
+          "kind": "property_edit",
+          "state": "Running",
+          "idempotencyKey": "fixture-propedit-request-001",
+          "requestFingerprint": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+        },
+        "journal": [
+          {
+            "stepIndex": 0,
+            "stepKind": "validate_plan",
+            "state": "completed",
+            "payload": {}
+          },
+          {
+            "stepIndex": 1,
+            "stepKind": "run_in_place_tool",
+            "state": "running",
+            "payload": {
+              "source": "${ROOT}/media/episode.mkv",
+              "preMutationFingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          }
+        ],
+        "filesystem": {
+          "fingerprints": {
+            "${ROOT}/media/episode.mkv": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        }
+      },
+      "expected": {
+        "classification": "manual_review_required",
+        "status": "Failed",
+        "error": {
+          "code": "interrupted_in_place_mutation",
+          "message": "The file changed during an interrupted in-place mutation; automatic retry is unsafe."
+        },
+        "resumeFromStepIndex": null,
+        "cleanupPaths": [],
+        "toolInvocationCount": 0
+      }
+    }
+  ],
+  "journalCases": [
+    {
+      "id": "journal-step-upsert-is-idempotent",
+      "input": {
+        "existing": {
+          "jobId": "018f0000-0000-7000-8000-000000000003",
+          "stepIndex": 1,
+          "stepKind": "run_tool_to_temporary_output",
+          "state": "running",
+          "payload": {
+            "attempt": 1
+          }
+        },
+        "write": {
+          "jobId": "018f0000-0000-7000-8000-000000000003",
+          "stepIndex": 1,
+          "stepKind": "run_tool_to_temporary_output",
+          "state": "retry_pending",
+          "payload": {
+            "attempt": 2
+          }
+        }
+      },
+      "expected": {
+        "rowCountForJobAndStep": 1,
+        "stored": {
+          "jobId": "018f0000-0000-7000-8000-000000000003",
+          "stepIndex": 1,
+          "stepKind": "run_tool_to_temporary_output",
+          "state": "retry_pending",
+          "payload": {
+            "attempt": 2
+          }
+        }
+      }
+    }
+  ]
+}

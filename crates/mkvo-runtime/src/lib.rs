@@ -1,0 +1,19 @@
+//! Transport-neutral host runtime shared by the Tauri and HTTP frontends.
+
+pub mod compat;
+mod composition;
+mod error;
+mod runtime;
+mod workflows;
+
+pub use composition::{
+    FileSecretStore, MemorySecretStore, MkvoRuntimeBuilder, RuntimeConfig, RuntimeDependencies,
+};
+pub use error::{RuntimeError, RuntimeResult};
+pub use runtime::{
+    LegacyMigrationReport, LegacyMigrationStatus, MkvoRuntime, RecoveryDisposition,
+    StartupRecoveryItem, StartupRecoveryReport,
+};
+
+/// Canonical shared DTOs for hosts that do not need the legacy projections.
+pub use mkvo_contracts as contracts;

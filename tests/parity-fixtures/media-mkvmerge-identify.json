@@ -1,0 +1,252 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "media.mkvmerge-identify.v1",
+  "kind": "legacy_parity",
+  "description": "Representative mkvmerge -J payload and exact C# compatibility projection.",
+  "sourceOfTruth": [
+    "src/MKVOrchestrator.Core/Services/Media/MkvMergeService.cs",
+    "src/MKVOrchestrator.Core/Services/Media/CodecDisplayNormalizer.cs"
+  ],
+  "comparison": {
+    "pathSeparator": "/",
+    "arrayOrder": "significant",
+    "objectPropertyOrder": "ignored"
+  },
+  "cases": [
+    {
+      "id": "mkv-video-audio-subtitles-and-attachments",
+      "input": {
+        "filePath": "${ROOT}/Shows/Example Show/Season 01/Example Show - S01E02.mkv",
+        "exitCode": 0,
+        "standardError": "",
+        "payload": {
+          "container": {
+            "recognized": true,
+            "supported": true,
+            "properties": {
+              "container_type": 17,
+              "title": "Example Show - S01E02"
+            }
+          },
+          "tracks": [
+            {
+              "id": 0,
+              "type": "video",
+              "codec": "HEVC/H.265/MPEG-H",
+              "properties": {
+                "default_track": true,
+                "forced_track": false,
+                "pixel_dimensions": "1920x1080",
+                "bits_per_channel": 10,
+                "track_name": "Main Video"
+              }
+            },
+            {
+              "id": 1,
+              "type": "audio",
+              "codec": "AAC",
+              "properties": {
+                "language": "jpn",
+                "track_name": "Japanese",
+                "default_track": true,
+                "forced_track": false
+              }
+            },
+            {
+              "id": 2,
+              "type": "audio",
+              "codec": "AC-3",
+              "properties": {
+                "language": "eng",
+                "track_name": "English Dub",
+                "default_track": false,
+                "forced_track": false
+              }
+            },
+            {
+              "id": 3,
+              "type": "subtitles",
+              "codec": "SubStationAlpha",
+              "properties": {
+                "language": "eng",
+                "track_name": "Signs & Songs",
+                "default_track": false,
+                "forced_track": true
+              }
+            },
+            {
+              "id": 4,
+              "type": "subtitles",
+              "codec": "SubRip/SRT",
+              "properties": {
+                "language_ietf": "ja",
+                "track_name": "Dialogue",
+                "default_track": false,
+                "forced_track": false
+              }
+            }
+          ],
+          "attachments": [
+            {
+              "id": 1,
+              "file_name": "Example-Regular.ttf",
+              "content_type": "application/x-truetype-font",
+              "description": "Primary font",
+              "properties": {
+                "size": 2048
+              }
+            },
+            {
+              "id": 2,
+              "name": "Example-Bold.otf",
+              "mime_type": "font/otf",
+              "size": "4096"
+            },
+            {
+              "id": 3,
+              "file_name": "cover.jpg",
+              "content_type": "image/jpeg",
+              "properties": {
+                "size": 1024
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "filePath": "${ROOT}/Shows/Example Show/Season 01/Example Show - S01E02.mkv",
+        "containerTitle": "Example Show - S01E02",
+        "codec": "HEVC/H.265",
+        "resolution": "1920x1080",
+        "bitDepth": "10bit",
+        "videoSummary": "HEVC/H.265 | 1920x1080 | 10bit",
+        "audioSummary": "jpn x1, eng x1",
+        "subtitleSummary": "eng x1, ja x1",
+        "attachmentSummary": "Fonts x2, Other x1",
+        "status": "Scanned",
+        "tracks": [
+          {
+            "mkvMergeId": 0,
+            "propEditTrackNumber": 1,
+            "type": "video",
+            "codec": "HEVC/H.265",
+            "language": "und",
+            "name": "Main Video",
+            "resolution": "1920x1080",
+            "bitDepth": "10bit",
+            "default": true,
+            "forced": false
+          },
+          {
+            "mkvMergeId": 1,
+            "propEditTrackNumber": 2,
+            "type": "audio",
+            "codec": "AAC",
+            "language": "jpn",
+            "name": "Japanese",
+            "resolution": "",
+            "bitDepth": "",
+            "default": true,
+            "forced": false
+          },
+          {
+            "mkvMergeId": 2,
+            "propEditTrackNumber": 3,
+            "type": "audio",
+            "codec": "AC-3",
+            "language": "eng",
+            "name": "English Dub",
+            "resolution": "",
+            "bitDepth": "",
+            "default": false,
+            "forced": false
+          },
+          {
+            "mkvMergeId": 3,
+            "propEditTrackNumber": 4,
+            "type": "subtitles",
+            "codec": "SubStationAlpha",
+            "language": "eng",
+            "name": "Signs & Songs",
+            "resolution": "",
+            "bitDepth": "",
+            "default": false,
+            "forced": true
+          },
+          {
+            "mkvMergeId": 4,
+            "propEditTrackNumber": 5,
+            "type": "subtitles",
+            "codec": "SubRip/SRT",
+            "language": "ja",
+            "name": "Dialogue",
+            "resolution": "",
+            "bitDepth": "",
+            "default": false,
+            "forced": false
+          }
+        ],
+        "attachments": [
+          {
+            "id": 1,
+            "fileName": "Example-Regular.ttf",
+            "contentType": "application/x-truetype-font",
+            "description": "Primary font",
+            "sizeBytes": 2048
+          },
+          {
+            "id": 2,
+            "fileName": "Example-Bold.otf",
+            "contentType": "font/otf",
+            "description": "",
+            "sizeBytes": 4096
+          },
+          {
+            "id": 3,
+            "fileName": "cover.jpg",
+            "contentType": "image/jpeg",
+            "description": "",
+            "sizeBytes": 1024
+          }
+        ]
+      }
+    },
+    {
+      "id": "warning-exit-code-with-json",
+      "input": {
+        "filePath": "${ROOT}/Shows/Example Show/Season 01/Example Show - S01E03.mkv",
+        "exitCode": 1,
+        "standardError": "synthetic identify warning",
+        "payload": {
+          "container": {
+            "properties": {}
+          },
+          "tracks": [
+            {
+              "id": 0,
+              "type": "audio",
+              "codec": "AAC",
+              "properties": {
+                "language": "eng",
+                "default_track": true,
+                "forced_track": false
+              }
+            }
+          ]
+        }
+      },
+      "expected": {
+        "containerTitle": "",
+        "codec": "",
+        "resolution": "",
+        "bitDepth": "",
+        "videoSummary": "",
+        "audioSummary": "eng x1",
+        "subtitleSummary": "",
+        "attachmentSummary": "None",
+        "status": "Scanned - no video track / mkvmerge warning",
+        "trackCount": 1
+      }
+    }
+  ]
+}

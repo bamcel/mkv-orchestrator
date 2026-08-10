@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "rename.filename-planning.v1",
+  "kind": "legacy_parity",
+  "description": "Rename template, sanitizer, absolute matching, movie, special, and duplicate-target behavior.",
+  "sourceOfTruth": [
+    "src/MKVOrchestrator.Core/Services/Rename/RenameFileNameBuilder.cs",
+    "src/MKVOrchestrator.Core/Services/Rename/RenamePlanner.cs",
+    "src/MKVOrchestrator.Core/Services/Rename/RenameEpisodeMatcher.cs",
+    "tests/MKVOrchestrator.Tests/Program.cs"
+  ],
+  "comparison": {
+    "pathSeparator": "/",
+    "arrayOrder": "significant",
+    "objectPropertyOrder": "ignored"
+  },
+  "builderCases": [
+    {
+      "id": "series-template-is-case-insensitive",
+      "operation": "RenameFileNameBuilder.Build",
+      "input": {
+        "sourcePath": "${ROOT}/incoming/input.mkv",
+        "title": "Example Show",
+        "year": 2020,
+        "episode": {
+          "seasonNumber": 2,
+          "episodeNumber": 5,
+          "name": "Pilot"
+        },
+        "template": "{Series} - S{Season:00}E{Episode:00} - {EpisodeTitle}",
+        "isMovie": false
+      },
+      "expected": "Example Show - S02E05 - Pilot.mkv"
+    },
+    {
+      "id": "movie-default-template-switch",
+      "operation": "RenameFileNameBuilder.Build",
+      "input": {
+        "sourcePath": "${ROOT}/incoming/movie.mp4",
+        "title": "Example Movie",
+        "year": 2024,
+        "episode": {
+          "seasonNumber": 1,
+          "episodeNumber": 1,
+          "name": "Example Movie"
+        },
+        "template": "{series} - S{season:00}E{episode:00} - {episodeTitle}",
+        "isMovie": true
+      },
+      "expected": "Example Movie (2024).mp4"
+    },
+    {
+      "id": "special-absolute-token-stays-positive",
+      "operation": "RenameFileNameBuilder.Build",
+      "input": {
+        "sourcePath": "${ROOT}/incoming/special.mkv",
+        "title": "Example Show",
+        "year": 2020,
+        "episode": {
+          "seasonNumber": 0,
+          "episodeNumber": 3,
+          "name": "OVA"
+        },
+        "template": "{series} - {absolute:000} - {episodeTitle}",
+        "isMovie": false
+      },
+      "expected": "Example Show - 003 - OVA.mkv"
+    },
+    {
+      "id": "synthetic-absolute-token-uses-thousand-season-blocks",
+      "operation": "RenameFileNameBuilder.Build",
+      "input": {
+        "sourcePath": "${ROOT}/incoming/episode.mkv",
+        "title": "Example Show",
+        "year": 2020,
+        "episode": {
+          "seasonNumber": 4,
+          "episodeNumber": 23,
+          "name": "Finale"
+        },
+        "template": "{series} - {absolute:000} - {episodeTitle}",
+        "isMovie": false
+      },
+      "expected": "Example Show - 3023 - Finale.mkv"
+    },
+    {
+      "id": "filename-builder-invalid-characters-become-hyphens",
+      "operation": "RenameFileNameBuilder.Build",
+      "input": {
+        "sourcePath": "${ROOT}/incoming/input.mkv",
+        "title": "Show: Bad*Name? <Pilot>|",
+        "year": null,
+        "episode": {
+          "seasonNumber": 1,
+          "episodeNumber": 1,
+          "name": "Pilot"
+        },
+        "template": "{title}",
+        "isMovie": false
+      },
+      "expected": "Show- Bad-Name- -Pilot--.mkv"
+    },
+    {
+      "id": "planner-invalid-characters-become-spaces",
+      "operation": "RenamePlanner.SanitizeFileName",
+      "input": "Show: Bad*Name? <Pilot>|",
+      "expected": "Show Bad Name Pilot"
+    }
+  ],
+  "matchingCases": [
+    {
+      "id": "absolute-match-excludes-specials",
+      "operation": "RenameEpisodeMatcher.TryMatchAbsoluteEpisode",
+      "input": {
+        "providerEpisodes": [
+          {
+            "id": 10,
+            "seasonNumber": 0,
+            "episodeNumber": 1,
+            "name": "Special"
+          },
+          {
+            "id": 31,
+            "seasonNumber": 2,
+            "episodeNumber": 1,
+            "name": "Third"
+          },
+          {
+            "id": 22,
+            "seasonNumber": 1,
+            "episodeNumber": 2,
+            "name": "Second"
+          },
+          {
+            "id": 21,
+            "seasonNumber": 1,
+            "episodeNumber": 1,
+            "name": "First"
+          }
+        ],
+        "absoluteEpisode": 3
+      },
+      "expected": {
+        "matched": true,
+        "episodeId": 31,
+        "seasonNumber": 2,
+        "episodeNumber": 1,
+        "statusText": "Episode 3 = S02E01"
+      }
+    },
+    {
+      "id": "absolute-out-of-range-does-not-match",
+      "operation": "RenameEpisodeMatcher.TryMatchAbsoluteEpisode",
+      "input": {
+        "regularEpisodeCount": 3,
+        "absoluteEpisode": 4
+      },
+      "expected": {
+        "matched": false
+      }
+    },
+    {
+      "id": "ordered-match-requires-equal-counts",
+      "operation": "RenameEpisodeMatcher.MatchByListOrder",
+      "input": {
+        "providerEpisodes": [
+          {
+            "id": 10,
+            "seasonNumber": 0,
+            "episodeNumber": 1,
+            "name": "Special"
+          },
+          {
+            "id": 31,
+            "seasonNumber": 2,
+            "episodeNumber": 1,
+            "name": "Third"
+          },
+          {
+            "id": 22,
+            "seasonNumber": 1,
+            "episodeNumber": 2,
+            "name": "Second"
+          },
+          {
+            "id": 21,
+            "seasonNumber": 1,
+            "episodeNumber": 1,
+            "name": "First"
+          }
+        ],
+        "fileCount": 3
+      },
+      "expected": [
+        {
+          "rowNumber": 1,
+          "episodeId": 21,
+          "statusText": "List order match: row 1 = S01E01"
+        },
+        {
+          "rowNumber": 2,
+          "episodeId": 22,
+          "statusText": "List order match: row 2 = S01E02"
+        },
+        {
+          "rowNumber": 3,
+          "episodeId": 31,
+          "statusText": "List order match: row 3 = S02E01"
+        }
+      ]
+    }
+  ],
+  "planningCases": [
+    {
+      "id": "duplicate-targets-block-every-colliding-row",
+      "operation": "RenamePlanner.BuildPlan",
+      "input": {
+        "template": "{series} - S{season:00}E{episode:00} - {episodeTitle}",
+        "checkExistingFiles": false,
+        "files": [
+          {
+            "filePath": "${ROOT}/media/a.mkv",
+            "seriesTitle": "Example Show",
+            "season": 1,
+            "episode": 1,
+            "episodeTitle": "Pilot"
+          },
+          {
+            "filePath": "${ROOT}/media/b.mkv",
+            "seriesTitle": "Example Show",
+            "season": 1,
+            "episode": 1,
+            "episodeTitle": "Pilot"
+          }
+        ]
+      },
+      "expected": {
+        "renameCount": 0,
+        "skipCount": 2,
+        "hasBlockingIssues": true,
+        "items": [
+          {
+            "sourcePath": "${ROOT}/media/a.mkv",
+            "targetPath": "${ROOT}/media/Example Show - S01E01 - Pilot.mkv",
+            "newFileName": "Example Show - S01E01 - Pilot.mkv",
+            "status": "Skipped - duplicate target in plan",
+            "canApply": false
+          },
+          {
+            "sourcePath": "${ROOT}/media/b.mkv",
+            "targetPath": "${ROOT}/media/Example Show - S01E01 - Pilot.mkv",
+            "newFileName": "Example Show - S01E01 - Pilot.mkv",
+            "status": "Skipped - duplicate target in plan",
+            "canApply": false
+          }
+        ]
+      }
+    }
+  ]
+}

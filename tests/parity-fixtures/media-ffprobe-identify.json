@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "media.ffprobe-identify.v1",
+  "kind": "legacy_parity",
+  "description": "Representative ffprobe JSON payload for MP4 scanning and exact C# compatibility projection.",
+  "sourceOfTruth": [
+    "src/MKVOrchestrator.Core/Services/Media/FfProbeService.cs",
+    "src/MKVOrchestrator.Core/Services/Media/CodecDisplayNormalizer.cs"
+  ],
+  "comparison": {
+    "pathSeparator": "/",
+    "arrayOrder": "significant",
+    "objectPropertyOrder": "ignored"
+  },
+  "cases": [
+    {
+      "id": "mp4-video-audio-and-subtitle-streams",
+      "input": {
+        "filePath": "${ROOT}/Movies/Example Movie (2024).mp4",
+        "exitCode": 0,
+        "standardError": "",
+        "payload": {
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "video",
+              "codec_name": "h264",
+              "codec_long_name": "H.264 / AVC / MPEG-4 AVC",
+              "profile": "High 10",
+              "width": 3840,
+              "height": 2160,
+              "pix_fmt": "yuv420p10le",
+              "bits_per_raw_sample": "0",
+              "tags": {
+                "language": "und",
+                "title": "Main Video"
+              },
+              "disposition": {
+                "default": 1,
+                "forced": 0
+              }
+            },
+            {
+              "index": 1,
+              "codec_type": "audio",
+              "codec_name": "aac",
+              "tags": {
+                "language": "eng",
+                "title": "Stereo"
+              },
+              "disposition": {
+                "default": 1,
+                "forced": 0
+              }
+            },
+            {
+              "index": 2,
+              "codec_type": "audio",
+              "codec_name": "eac3",
+              "tags": {
+                "language": "jpn"
+              },
+              "disposition": {
+                "default": "0",
+                "forced": "0"
+              }
+            },
+            {
+              "index": 3,
+              "codec_type": "subtitle",
+              "codec_name": "mov_text",
+              "tags": {
+                "language": "spa",
+                "title": "Spanish"
+              },
+              "disposition": {
+                "default": 0,
+                "forced": 1
+              }
+            },
+            {
+              "index": 4,
+              "codec_type": "data",
+              "codec_name": "bin_data",
+              "disposition": {
+                "default": 0,
+                "forced": 0
+              }
+            }
+          ],
+          "format": {
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2"
+          }
+        }
+      },
+      "expected": {
+        "filePath": "${ROOT}/Movies/Example Movie (2024).mp4",
+        "containerTitle": "",
+        "codec": "AVC/H.264",
+        "resolution": "3840x2160",
+        "bitDepth": "10bit",
+        "videoSummary": "AVC/H.264 | 3840x2160 | 10bit",
+        "audioSummary": "eng x1, jpn x1",
+        "subtitleSummary": "spa x1",
+        "attachmentSummary": "None",
+        "status": "Scanned",
+        "tracks": [
+          {
+            "mkvMergeId": 0,
+            "propEditTrackNumber": 1,
+            "type": "video",
+            "codec": "AVC/H.264",
+            "language": "und",
+            "name": "Main Video",
+            "resolution": "3840x2160",
+            "bitDepth": "10bit",
+            "default": true,
+            "forced": false
+          },
+          {
+            "mkvMergeId": 1,
+            "propEditTrackNumber": 2,
+            "type": "audio",
+            "codec": "aac",
+            "language": "eng",
+            "name": "Stereo",
+            "resolution": "",
+            "bitDepth": "",
+            "default": true,
+            "forced": false
+          },
+          {
+            "mkvMergeId": 2,
+            "propEditTrackNumber": 3,
+            "type": "audio",
+            "codec": "eac3",
+            "language": "jpn",
+            "name": "",
+            "resolution": "",
+            "bitDepth": "",
+            "default": false,
+            "forced": false
+          },
+          {
+            "mkvMergeId": 3,
+            "propEditTrackNumber": 4,
+            "type": "subtitles",
+            "codec": "mov_text",
+            "language": "spa",
+            "name": "Spanish",
+            "resolution": "",
+            "bitDepth": "",
+            "default": false,
+            "forced": true
+          },
+          {
+            "mkvMergeId": 4,
+            "propEditTrackNumber": 5,
+            "type": "data",
+            "codec": "bin_data",
+            "language": "und",
+            "name": "",
+            "resolution": "",
+            "bitDepth": "",
+            "default": false,
+            "forced": false
+          }
+        ],
+        "attachments": []
+      }
+    },
+    {
+      "id": "missing-stream-array",
+      "input": {
+        "filePath": "${ROOT}/Movies/Empty.mp4",
+        "exitCode": 0,
+        "standardError": "",
+        "payload": {
+          "format": {
+            "format_name": "mov,mp4,m4a,3gp,3g2,mj2"
+          }
+        }
+      },
+      "expected": {
+        "filePath": "${ROOT}/Movies/Empty.mp4",
+        "status": "Scanned - no tracks found",
+        "tracks": [],
+        "attachments": []
+      }
+    }
+  ]
+}

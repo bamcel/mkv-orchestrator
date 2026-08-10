@@ -1,3 +1,49 @@
+import { getBackendClient } from "./backend/runtime";
+import type {
+  JobProgressErrorListener,
+  JobProgressListener,
+  JobProgressSubscription,
+  Unsubscribe
+} from "./backend/client";
+// Settings carry the widest surface of the whole contract, so they are taken
+// straight from the generated definitions rather than mirrored by hand. Run
+// `cargo run --package mkvo-contract-gen` after changing the Rust contracts.
+import type {
+  ThemeDefinition,
+  WebSettings,
+  WebSettingsRequest
+} from "./generated/contracts";
+
+export { HttpBackendClient } from "./backend/httpClient";
+export { TauriBackendClient } from "./backend/tauriClient";
+export { createMockBackendClient } from "./backend/mockClient";
+export { ApiError, normalizeApiError } from "./backend/error";
+export {
+  createBackendClient,
+  getBackendClient,
+  getBackendTransport,
+  isTauriRuntime,
+  resetBackendClient,
+  setBackendClient
+} from "./backend/runtime";
+export type {
+  BackendClient,
+  BackendTransport,
+  JobKind,
+  JobProgressErrorListener,
+  JobProgressEvent,
+  JobProgressListener,
+  JobProgressSubscription,
+  MediaServerConnectionRequest,
+  PropEditTemplateRequest,
+  RenameApplyRequest,
+  RenamePreviewRequest,
+  RenameProviderTestRequest,
+  RenameScopesRequest,
+  RenameSearchRequest,
+  Unsubscribe
+} from "./backend/client";
+
 export type ToolStatus = {
   name: string;
   command: string;
@@ -72,7 +118,7 @@ export type CurrentScanResponse = {
 
 export type ScanJobResponse = {
   id: string;
-  status: "Queued" | "Running" | "Canceling" | "Completed" | "Failed" | "Canceled";
+  status: "Queued" | "WaitingForResources" | "Running" | "Canceling" | "Completed" | "Failed" | "Skipped" | "Canceled";
   createdUtc: string;
   startedUtc: string | null;
   completedUtc: string | null;
@@ -107,43 +153,7 @@ export type FileSystemResponse = {
   entries: FileSystemEntry[];
 };
 
-export type WebSettings = {
-  hasTvdbApiKey: boolean;
-  hasTvdbPin: boolean;
-  hasTmdbApiKey: boolean;
-  tvdbLanguage: string;
-  renameLookupProvider: string;
-  renameTemplate: string;
-  renameTemplates: string[];
-  audioNamePresets: string[];
-  subtitleNamePresets: string[];
-  languagePresets: string[];
-  mkvMergeDefaultAudioLanguages: string;
-  mkvMergeDefaultSubtitleLanguages: string;
-  watchFolders: string[];
-  enableLiveWatchFolderMonitoring: boolean;
-  mediaServers: WebMediaServer[];
-  mediaServerPathMappings: WebMediaServerPathMapping[];
-};
-
-export type WebSettingsRequest = {
-  tvdbApiKey?: string;
-  tvdbPin?: string;
-  tmdbApiKey?: string;
-  tvdbLanguage?: string;
-  renameLookupProvider?: string;
-  renameTemplate?: string;
-  renameTemplates?: string[];
-  audioNamePresets?: string[];
-  subtitleNamePresets?: string[];
-  languagePresets?: string[];
-  mkvMergeDefaultAudioLanguages?: string;
-  mkvMergeDefaultSubtitleLanguages?: string;
-  watchFolders?: string[];
-  enableLiveWatchFolderMonitoring?: boolean;
-  mediaServers?: WebMediaServerRequest[];
-  mediaServerPathMappings?: WebMediaServerPathMapping[];
-};
+export type { ThemeDefinition, WebSettings, WebSettingsRequest };
 
 export type WebMediaServerLibraryPath = {
   id: string;
@@ -227,6 +237,9 @@ export type RenamePreviewResponse = {
   summary: string;
   scopes: RenameScopeRow[];
   status: string;
+  planId?: string;
+  planFingerprint?: string;
+  idempotencyKey?: string;
 };
 
 export type RenameApplyResponse = {
@@ -299,6 +312,9 @@ export type MuxPreviewRequest = {
   extractOverwriteExistingFiles: boolean;
   convertMp4ToMkv: boolean;
   deleteMp4AfterConvert: boolean;
+  planId?: string;
+  planFingerprint?: string;
+  idempotencyKey?: string;
 };
 
 export type MuxActionRow = {
@@ -316,6 +332,9 @@ export type MuxPreviewResponse = {
   noChangeFiles: string[];
   summary: string;
   status: string;
+  planId?: string;
+  planFingerprint?: string;
+  idempotencyKey?: string;
 };
 
 export type PropEditTrackConfigRow = {
@@ -354,6 +373,9 @@ export type PropEditPreviewRequest = {
   selectedForcedAudio: string;
   selectedDefaultSubtitle: string;
   selectedForcedSubtitle: string;
+  planId?: string;
+  planFingerprint?: string;
+  idempotencyKey?: string;
 };
 
 export type PropEditActionRow = {
@@ -382,12 +404,15 @@ export type PropEditPreviewResponse = {
   noChange: PropEditNoChangeRow[];
   summary: string;
   status: string;
+  planId?: string;
+  planFingerprint?: string;
+  idempotencyKey?: string;
 };
 
 export type OperationJobResponse = {
   id: string;
   kind: "mux" | "propedit";
-  status: "Queued" | "Running" | "Canceling" | "Completed" | "Failed" | "Canceled";
+  status: "Queued" | "WaitingForResources" | "Running" | "Canceling" | "Completed" | "Failed" | "Skipped" | "Canceled";
   createdUtc: string;
   startedUtc: string | null;
   completedUtc: string | null;
@@ -443,67 +468,40 @@ export type OperationLogEntry = {
   detail: string;
 };
 
-async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init);
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `${response.status} ${response.statusText}`);
-  }
-
-  return (await response.json()) as T;
-}
-
 export function getStatus(): Promise<AppStatus> {
-  return fetchJson<AppStatus>("/api/status");
+  return getBackendClient().getStatus();
 }
 
 export function browseFileSystem(path?: string): Promise<FileSystemResponse> {
-  const query = path ? `?path=${encodeURIComponent(path)}` : "";
-  return fetchJson<FileSystemResponse>(`/api/filesystem${query}`);
+  return getBackendClient().browseFileSystem(path);
 }
 
 export function startScan(request: ScanRequest): Promise<ScanJobResponse> {
-  return fetchJson<ScanJobResponse>("/api/scans", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().startScan(request);
 }
 
 export function getScanJob(id: string): Promise<ScanJobResponse> {
-  return fetchJson<ScanJobResponse>(`/api/scans/${encodeURIComponent(id)}`);
+  return getBackendClient().getScanJob(id);
 }
 
 export function cancelScan(id: string): Promise<ScanJobResponse> {
-  return fetchJson<ScanJobResponse>(`/api/scans/${encodeURIComponent(id)}/cancel`, {
-    method: "POST"
-  });
+  return getBackendClient().cancelScan(id);
 }
 
 export function getCurrentScanFiles(): Promise<CurrentScanResponse> {
-  return fetchJson<CurrentScanResponse>("/api/files/current");
+  return getBackendClient().getCurrentScanFiles();
 }
 
 export function clearCurrentScanFiles(): Promise<CurrentScanResponse> {
-  return fetchJson<CurrentScanResponse>("/api/files/current", {
-    method: "DELETE"
-  });
+  return getBackendClient().clearCurrentScanFiles();
 }
 
 export function getWebSettings(): Promise<WebSettings> {
-  return fetchJson<WebSettings>("/api/settings");
+  return getBackendClient().getWebSettings();
 }
 
 export function saveWebSettings(request: WebSettingsRequest): Promise<WebSettings> {
-  return fetchJson<WebSettings>("/api/settings", {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().saveWebSettings(request);
 }
 
 export function testMediaServerConnection(request: {
@@ -513,19 +511,11 @@ export function testMediaServerConnection(request: {
   serverUrl?: string;
   apiKey?: string;
 }): Promise<MediaServerTestResponse> {
-  return fetchJson<MediaServerTestResponse>("/api/media-servers/test", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().testMediaServerConnection(request);
 }
 
 export function syncMediaServerLibraries(id: string): Promise<MediaServerSyncResponse> {
-  return fetchJson<MediaServerSyncResponse>(`/api/media-servers/${encodeURIComponent(id)}/sync`, {
-    method: "POST"
-  });
+  return getBackendClient().syncMediaServerLibraries(id);
 }
 
 export function searchRenameMetadata(request: {
@@ -533,13 +523,7 @@ export function searchRenameMetadata(request: {
   provider?: string;
   language?: string;
 }): Promise<{ results: RenameSearchResult[] }> {
-  return fetchJson<{ results: RenameSearchResult[] }>("/api/rename/search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().searchRenameMetadata(request);
 }
 
 export function loadRenameScopes(request: {
@@ -547,26 +531,14 @@ export function loadRenameScopes(request: {
   provider?: string;
   language?: string;
 }): Promise<{ scopes: RenameScopeRow[] }> {
-  return fetchJson<{ scopes: RenameScopeRow[] }>("/api/rename/scopes", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().loadRenameScopes(request);
 }
 
 export function testRenameProvider(request: {
   provider?: string;
   language?: string;
 }): Promise<RenameProviderTestResponse> {
-  return fetchJson<RenameProviderTestResponse>("/api/rename/test-provider", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().testRenameProvider(request);
 }
 
 export function buildRenamePreview(request: {
@@ -577,125 +549,80 @@ export function buildRenamePreview(request: {
   scopeKeys?: string[];
   template?: string;
 }): Promise<RenamePreviewResponse> {
-  return fetchJson<RenamePreviewResponse>("/api/rename/preview", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().buildRenamePreview(request);
 }
 
 export function applyRenamePreview(request: {
   items: RenamePreviewRow[];
   provider?: string;
   template?: string;
+  planId?: string;
+  planFingerprint?: string;
+  idempotencyKey?: string;
 }): Promise<RenameApplyResponse> {
-  return fetchJson<RenameApplyResponse>("/api/rename/apply", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().applyRenamePreview(request);
 }
 
 export function getRenameBatches(): Promise<RenameBatchListResponse> {
-  return fetchJson<RenameBatchListResponse>("/api/rename/batches");
+  return getBackendClient().getRenameBatches();
 }
 
 export function previewRenameBatchUndo(id: string): Promise<RenameBatchUndoPreviewResponse> {
-  return fetchJson<RenameBatchUndoPreviewResponse>(`/api/rename/batches/${encodeURIComponent(id)}/preview`);
+  return getBackendClient().previewRenameBatchUndo(id);
 }
 
 export function undoRenameBatch(id: string): Promise<RenameBatchUndoResponse> {
-  return fetchJson<RenameBatchUndoResponse>(`/api/rename/batches/${encodeURIComponent(id)}/undo`, {
-    method: "POST"
-  });
+  return getBackendClient().undoRenameBatch(id);
 }
 
 export function clearRenameBatches(): Promise<RenameBatchListResponse> {
-  return fetchJson<RenameBatchListResponse>("/api/rename/batches", {
-    method: "DELETE"
-  });
+  return getBackendClient().clearRenameBatches();
 }
 
 export function buildMuxPreview(request: MuxPreviewRequest): Promise<MuxPreviewResponse> {
-  return fetchJson<MuxPreviewResponse>("/api/mux/preview", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().buildMuxPreview(request);
 }
 
 export function startMuxApply(request: MuxPreviewRequest): Promise<OperationJobResponse> {
-  return fetchJson<OperationJobResponse>("/api/mux/apply", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().startMuxApply(request);
 }
 
 export function getOperationJob(id: string): Promise<OperationJobResponse> {
-  return fetchJson<OperationJobResponse>(`/api/operations/${encodeURIComponent(id)}`);
+  return getBackendClient().getOperationJob(id);
 }
 
 export function cancelOperationJob(id: string): Promise<OperationJobResponse> {
-  return fetchJson<OperationJobResponse>(`/api/operations/${encodeURIComponent(id)}/cancel`, {
-    method: "POST"
-  });
+  return getBackendClient().cancelOperationJob(id);
 }
 
 export function loadPropEditTemplate(request: { files: MediaFileRow[]; templatePath?: string }): Promise<PropEditTemplateResponse> {
-  return fetchJson<PropEditTemplateResponse>("/api/propedit/template", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().loadPropEditTemplate(request);
 }
 
 export function buildPropEditPreview(request: PropEditPreviewRequest): Promise<PropEditPreviewResponse> {
-  return fetchJson<PropEditPreviewResponse>("/api/propedit/preview", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().buildPropEditPreview(request);
 }
 
 export function startPropEditApply(request: PropEditPreviewRequest): Promise<OperationJobResponse> {
-  return fetchJson<OperationJobResponse>("/api/propedit/apply", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(request)
-  });
+  return getBackendClient().startPropEditApply(request);
 }
 
 export function buildLibraryAudit(files: MediaFileRow[]): Promise<LibraryAuditResponse> {
-  return fetchJson<LibraryAuditResponse>("/api/library/audit", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ files })
-  });
+  return getBackendClient().buildLibraryAudit(files);
 }
 
 export function getOperationLogs(): Promise<{ entries: OperationLogEntry[] }> {
-  return fetchJson<{ entries: OperationLogEntry[] }>("/api/logs");
+  return getBackendClient().getOperationLogs();
 }
 
 export function clearOperationLogs(): Promise<{ entries: OperationLogEntry[] }> {
-  return fetchJson<{ entries: OperationLogEntry[] }>("/api/logs", {
-    method: "DELETE"
-  });
+  return getBackendClient().clearOperationLogs();
+}
+
+export function subscribeJobProgress(
+  subscription: JobProgressSubscription,
+  listener: JobProgressListener,
+  onError?: JobProgressErrorListener
+): Promise<Unsubscribe> {
+  return getBackendClient().subscribeJobProgress(subscription, listener, onError);
 }

@@ -90,7 +90,7 @@ export function LibraryPage() {
     enabled: scanJobId !== null,
     refetchInterval: (query) => {
       const job = query.state.data;
-      return job && ["Completed", "Failed", "Canceled"].includes(job.status) ? false : 1000;
+      return job && ["Completed", "Failed", "Skipped", "Canceled"].includes(job.status) ? false : 1000;
     }
   });
 
@@ -98,6 +98,7 @@ export function LibraryPage() {
   const isBusy = scanStart.isPending
     || audit.isPending
     || currentScanJob?.status === "Queued"
+    || currentScanJob?.status === "WaitingForResources"
     || currentScanJob?.status === "Running"
     || currentScanJob?.status === "Canceling";
   const cacheProgressText = currentScanJob?.total
@@ -107,7 +108,7 @@ export function LibraryPage() {
   useEffect(() => {
     if (!currentScanJob) return;
 
-    if (currentScanJob.status === "Running") {
+    if (currentScanJob.status === "Queued" || currentScanJob.status === "WaitingForResources" || currentScanJob.status === "Running") {
       setFiles(currentScanJob.files);
       setStatusText(`Building library overview: ${cacheProgressText}`);
       return;

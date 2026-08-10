@@ -1,11 +1,10 @@
 import { type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronUp, Copy, FileCheck, FileVideo, Folder, FolderOpen, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
-import { browseFileSystem, cancelScan, FileSystemEntry, getCurrentScanFiles, getScanJob, getStatus, MediaFileRow, startScan } from "../api";
+import { browseFileSystem, cancelScan, FileSystemEntry, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, startScan } from "../api";
 import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
-const defaultIgnored = "Extras, OVAs, backdrops, Specials";
 const lastBrowsePathStorageKey = "mkvo.web.lastBrowsePath";
 
 export function DashboardPage() {
@@ -24,7 +23,11 @@ export function DashboardPage() {
     }
   });
   const [scanJobId, setScanJobId] = useState<string | null>(null);
-  const [ignoredFolders, setIgnoredFolders] = useState(defaultIgnored);
+  // The scan request carries this list, so seeding it from a local constant
+  // would silently override the folders configured in Settings on every scan.
+  const settings = useQuery({ queryKey: ["settings"], queryFn: getWebSettings });
+  const [ignoredFolders, setIgnoredFolders] = useState("");
+  const [ignoredFoldersEdited, setIgnoredFoldersEdited] = useState(false);
   const [skipped, setSkipped] = useState<string[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState<string>("");
   const [actionStatus, setActionStatus] = useState("");
@@ -47,9 +50,15 @@ export function DashboardPage() {
     enabled: scanJobId !== null,
     refetchInterval: (query) => {
       const job = query.state.data;
-      return job && ["Completed", "Failed", "Canceled"].includes(job.status) ? false : 1000;
+      return job && ["Completed", "Failed", "Skipped", "Canceled"].includes(job.status) ? false : 1000;
     }
   });
+
+  const configuredIgnoredFolders = settings.data?.ignoredScanFolderNames;
+  useEffect(() => {
+    if (ignoredFoldersEdited || !configuredIgnoredFolders) return;
+    setIgnoredFolders(configuredIgnoredFolders.join(", "));
+  }, [configuredIgnoredFolders, ignoredFoldersEdited]);
 
   const defaultSourcePath = status.data?.mediaRoot || "/media";
   const browseRootOptions = useMemo(() => {
@@ -73,7 +82,7 @@ export function DashboardPage() {
       ? sources[0]
       : `${sources.length} sources selected`;
   const currentScanJob = scanJob.data;
-  const isScanning = scanStart.isPending || currentScanJob?.status === "Queued" || currentScanJob?.status === "Running" || currentScanJob?.status === "Canceling";
+  const isScanning = scanStart.isPending || currentScanJob?.status === "Queued" || currentScanJob?.status === "WaitingForResources" || currentScanJob?.status === "Running" || currentScanJob?.status === "Canceling";
   const progressText = currentScanJob?.total
     ? `${currentScanJob.completed}/${currentScanJob.total} files`
     : isScanning ? "preparing scan" : "";
@@ -361,7 +370,10 @@ export function DashboardPage() {
           <textarea
             id="ignored-folders"
             value={ignoredFolders}
-            onChange={(event) => setIgnoredFolders(event.target.value)}
+            onChange={(event) => {
+              setIgnoredFoldersEdited(true);
+              setIgnoredFolders(event.target.value);
+            }}
             rows={4}
             className="mt-2 w-full resize-none rounded-md border border-border bg-input px-3 py-2 text-sm text-text outline-none placeholder:text-subtle transition focus:border-accent"
           />

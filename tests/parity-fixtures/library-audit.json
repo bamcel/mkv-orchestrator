@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "library.audit-grouping.v1",
+  "kind": "legacy_parity",
+  "description": "Season and movie grouping, dominant standards, metadata mismatches, duplicate episodes, missing episodes, and uncached counts.",
+  "sourceOfTruth": [
+    "src/MKVOrchestrator.Core/Services/Audit/LibraryAuditService.cs",
+    "src/MKVOrchestrator.Core/Models/LibraryAuditModels.cs"
+  ],
+  "comparison": {
+    "pathSeparator": "/",
+    "arrayOrder": "significant",
+    "objectPropertyOrder": "ignored"
+  },
+  "cases": [
+    {
+      "id": "mixed-tv-movie-and-uncached-library",
+      "operation": "LibraryAuditService.BuildAudit",
+      "input": {
+        "watchRoot": "${ROOT}/Library",
+        "ignoredFolderNames": [
+          "Extras",
+          "Samples"
+        ],
+        "enumeratedFiles": [
+          "${ROOT}/Library/Movies/Example Movie/Example Movie (2024).mkv",
+          "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E01.mkv",
+          "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E02.mkv",
+          "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E02 Alt.mkv",
+          "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E04.mkv",
+          "${ROOT}/Library/Shows/Uncached Show/Season 01/Uncached Show - S01E01.mkv"
+        ],
+        "cache": [
+          {
+            "filePath": "${ROOT}/Library/Movies/Example Movie/Example Movie (2024).mkv",
+            "metadata": {
+              "resolution": "3840x2160",
+              "codec": "AVC/H.264",
+              "bitDepth": "8bit",
+              "hdr": ""
+            },
+            "tracks": [
+              {
+                "mkvMergeId": 1,
+                "type": "audio",
+                "language": "eng",
+                "codec": "AAC",
+                "name": "Stereo",
+                "default": true,
+                "forced": false
+              }
+            ]
+          },
+          {
+            "filePath": "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E01.mkv",
+            "metadata": {
+              "resolution": "1920x1080",
+              "codec": "HEVC/H.265",
+              "bitDepth": "10bit",
+              "hdr": "HDR10"
+            },
+            "tracks": [
+              {
+                "mkvMergeId": 1,
+                "type": "audio",
+                "language": "jpn",
+                "codec": "AAC",
+                "name": "Japanese",
+                "default": true,
+                "forced": false
+              },
+              {
+                "mkvMergeId": 2,
+                "type": "audio",
+                "language": "eng",
+                "codec": "AAC",
+                "name": "English",
+                "default": false,
+                "forced": false
+              },
+              {
+                "mkvMergeId": 3,
+                "type": "subtitles",
+                "language": "eng",
+                "codec": "SubStationAlpha",
+                "name": "Signs & Songs",
+                "default": false,
+                "forced": false
+              }
+            ]
+          },
+          {
+            "filePath": "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E02.mkv",
+            "metadata": {
+              "resolution": "1920x1080",
+              "codec": "HEVC/H.265",
+              "bitDepth": "10bit",
+              "hdr": "HDR10"
+            },
+            "tracks": [
+              {
+                "mkvMergeId": 1,
+                "type": "audio",
+                "language": "jpn",
+                "codec": "AAC",
+                "name": "Japanese",
+                "default": true,
+                "forced": false
+              },
+              {
+                "mkvMergeId": 2,
+                "type": "audio",
+                "language": "eng",
+                "codec": "AAC",
+                "name": "English",
+                "default": false,
+                "forced": false
+              },
+              {
+                "mkvMergeId": 3,
+                "type": "subtitles",
+                "language": "eng",
+                "codec": "SubStationAlpha",
+                "name": "Signs & Songs",
+                "default": false,
+                "forced": false
+              }
+            ]
+          },
+          {
+            "filePath": "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E02 Alt.mkv",
+            "metadata": {
+              "resolution": "1280x720",
+              "codec": "AVC/H.264",
+              "bitDepth": "8bit",
+              "hdr": ""
+            },
+            "tracks": [
+              {
+                "mkvMergeId": 1,
+                "type": "audio",
+                "language": "eng",
+                "codec": "AAC",
+                "name": "English",
+                "default": true,
+                "forced": false
+              }
+            ]
+          },
+          {
+            "filePath": "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E04.mkv",
+            "metadata": {
+              "resolution": "1920x1080",
+              "codec": "HEVC/H.265",
+              "bitDepth": "10bit",
+              "hdr": "HDR10"
+            },
+            "tracks": [
+              {
+                "mkvMergeId": 1,
+                "type": "audio",
+                "language": "jpn",
+                "codec": "AAC",
+                "name": "Japanese",
+                "default": true,
+                "forced": false
+              },
+              {
+                "mkvMergeId": 2,
+                "type": "audio",
+                "language": "eng",
+                "codec": "AAC",
+                "name": "English",
+                "default": false,
+                "forced": false
+              },
+              {
+                "mkvMergeId": 3,
+                "type": "subtitles",
+                "language": "eng",
+                "codec": "SubStationAlpha",
+                "name": "Signs & Songs",
+                "default": false,
+                "forced": false
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "summary": {
+          "shows": 2,
+          "seasonFolders": 2,
+          "files": 6,
+          "issueGroups": 1,
+          "uncachedFiles": 1
+        },
+        "groups": [
+          {
+            "watchRoot": "${ROOT}/Library",
+            "showName": "Example Movie",
+            "seasonFolder": "movie/single folder",
+            "relativeFolder": "Movies/Example Movie",
+            "fileCount": 1,
+            "standardVideo": "3840x2160 AVC/H.264 8bit",
+            "standardAudio": "eng:AAC - \"Stereo\"",
+            "standardSubtitles": "none",
+            "allFilePaths": [
+              "${ROOT}/Library/Movies/Example Movie/Example Movie (2024).mkv"
+            ],
+            "issueFilePaths": [],
+            "templateFilePath": "${ROOT}/Library/Movies/Example Movie/Example Movie (2024).mkv",
+            "issues": [],
+            "hasIssues": false,
+            "status": "standard",
+            "issueSummary": "no issues found"
+          },
+          {
+            "watchRoot": "${ROOT}/Library",
+            "showName": "Example Show",
+            "seasonFolder": "Season 01",
+            "relativeFolder": "Shows/Example Show/Season 01",
+            "fileCount": 4,
+            "standardVideo": "1920x1080 HEVC/H.265 10bit HDR10",
+            "standardAudio": "eng:AAC - \"English\", jpn:AAC - \"Japanese\"",
+            "standardSubtitles": "eng:SubStationAlpha - \"Signs & Songs\"",
+            "allFilePaths": [
+              "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E01.mkv",
+              "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E02 Alt.mkv",
+              "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E02.mkv",
+              "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E04.mkv"
+            ],
+            "issueFilePaths": [
+              "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E02 Alt.mkv",
+              "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E02.mkv"
+            ],
+            "templateFilePath": "${ROOT}/Library/Shows/Example Show/Season 01/Example Show - S01E01.mkv",
+            "issues": [
+              "Example Show - S01E02 Alt.mkv: video mismatch (1280x720 AVC/H.264 8bit vs 1920x1080 HEVC/H.265 10bit HDR10)",
+              "Example Show - S01E02 Alt.mkv: audio mismatch (eng:AAC - \"English\" vs eng:AAC - \"English\", jpn:AAC - \"Japanese\")",
+              "Example Show - S01E02 Alt.mkv: subtitles mismatch (none vs eng:SubStationAlpha - \"Signs & Songs\")",
+              "duplicate episode numbers: 02",
+              "possible missing episode numbers: 03"
+            ],
+            "hasIssues": true,
+            "status": "warning",
+            "issueSummary": "Example Show - S01E02 Alt.mkv: video mismatch (1280x720 AVC/H.264 8bit vs 1920x1080 HEVC/H.265 10bit HDR10) | Example Show - S01E02 Alt.mkv: audio mismatch (eng:AAC - \"English\" vs eng:AAC - \"English\", jpn:AAC - \"Japanese\") | Example Show - S01E02 Alt.mkv: subtitles mismatch (none vs eng:SubStationAlpha - \"Signs & Songs\")"
+          }
+        ]
+      }
+    }
+  ]
+}

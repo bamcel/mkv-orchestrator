@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "fixtureSetId": "mkvo-csharp-to-rust-parity.v1",
+  "description": "Golden behavior and safety-policy fixtures for the staged MKVO Tauri/Rust migration.",
+  "normalization": {
+    "canonicalPathSeparator": "/",
+    "rootToken": "${ROOT}",
+    "toolsToken": "${TOOLS}",
+    "secretTokenPattern": "${SECRET:NAME}",
+    "realCredentialsAllowed": false,
+    "realUserPathsAllowed": false
+  },
+  "totals": {
+    "fixtures": 10,
+    "cases": 50,
+    "legacyParityFixtures": 7,
+    "targetPolicyFixtures": 3
+  },
+  "fixtures": [
+    {
+      "id": "media.mkvmerge-identify.v1",
+      "file": "media-mkvmerge-identify.json",
+      "kind": "legacy_parity",
+      "category": "scan",
+      "caseCount": 2,
+      "requiredForStage": "phase_2_process_and_sqlite",
+      "summary": "mkvmerge JSON parsing, compatibility summaries, attachments, and warning exit codes"
+    },
+    {
+      "id": "media.ffprobe-identify.v1",
+      "file": "media-ffprobe-identify.json",
+      "kind": "legacy_parity",
+      "category": "scan",
+      "caseCount": 2,
+      "requiredForStage": "phase_2_process_and_sqlite",
+      "summary": "ffprobe MP4 parsing, stream normalization, and empty-stream behavior"
+    },
+    {
+      "id": "text.natural-sort.v1",
+      "file": "natural-sort.json",
+      "kind": "legacy_parity",
+      "category": "sorting",
+      "caseCount": 4,
+      "requiredForStage": "phase_1_rust_workspace_and_domain",
+      "summary": "embedded numbers, leading zeroes, multiple numeric segments, and large integers"
+    },
+    {
+      "id": "rename.filename-planning.v1",
+      "file": "rename-filenames.json",
+      "kind": "legacy_parity",
+      "category": "rename",
+      "caseCount": 10,
+      "requiredForStage": "phase_4_rename_parity",
+      "summary": "TV, movie, special, absolute, invalid-character, matching, and duplicate-target behavior"
+    },
+    {
+      "id": "remux.planning.v1",
+      "file": "remux-plans.json",
+      "kind": "legacy_parity",
+      "category": "remux",
+      "caseCount": 4,
+      "requiredForStage": "phase_5_remux_and_property_parity",
+      "summary": "track selection, sidecars, subtitle extraction, and lossless MP4 conversion"
+    },
+    {
+      "id": "properties.mkvpropedit-planning.v1",
+      "file": "mkvpropedit-plans.json",
+      "kind": "legacy_parity",
+      "category": "properties",
+      "caseCount": 2,
+      "requiredForStage": "phase_5_remux_and_property_parity",
+      "summary": "container and track metadata edits with type-specific selectors and exact argument order"
+    },
+    {
+      "id": "library.audit-grouping.v1",
+      "file": "library-audit.json",
+      "kind": "legacy_parity",
+      "category": "library_audit",
+      "caseCount": 1,
+      "requiredForStage": "phase_6_library_watchers_and_integrations",
+      "summary": "TV and movie grouping, dominant profiles, mismatch issues, episode gaps, and uncached totals"
+    },
+    {
+      "id": "settings.legacy-import.v1",
+      "file": "settings-legacy-import.json",
+      "kind": "target_policy",
+      "category": "settings",
+      "caseCount": 1,
+      "requiredForStage": "phase_8_cutover",
+      "summary": "flat legacy JSON import, secret extraction, list normalization, worker bounds, and data preservation"
+    },
+    {
+      "id": "jobs.recovery-idempotency.v1",
+      "file": "job-recovery-idempotency.json",
+      "kind": "target_policy",
+      "category": "jobs",
+      "caseCount": 7,
+      "requiredForStage": "phase_2_process_and_sqlite",
+      "summary": "idempotent submission, request conflicts, journal upserts, and startup recovery classification"
+    },
+    {
+      "id": "security.path-authorization.v1",
+      "file": "path-authorization.json",
+      "kind": "target_policy",
+      "category": "filesystem_security",
+      "caseCount": 17,
+      "requiredForStage": "phase_2_process_and_sqlite",
+      "summary": "existing and candidate paths, read-only roots, traversal, symlink escapes, and invalid roots"
+    }
+  ]
+}

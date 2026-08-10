@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
+  getBackendTransport,
   getStatus,
   getWebSettings,
   saveWebSettings,
@@ -49,6 +50,8 @@ type EditableMediaServer = WebMediaServer & {
 };
 
 export function SettingsPage() {
+  const backendTransport = getBackendTransport();
+  const isDesktop = backendTransport === "tauri";
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const webSettings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const [activeTab, setActiveTab] = useState<SettingsTabId>(() => readStoredSettingsTab());
@@ -292,7 +295,7 @@ export function SettingsPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <SectionHeader title="Settings" description="Configure web GUI behavior, provider keys, presets, library paths, themes, and bundled media tools." />
+      <SectionHeader title="Settings" description="Configure MKVO behavior, provider keys, presets, library paths, themes, and media tools." />
 
       <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-card shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border p-3">
@@ -316,7 +319,12 @@ export function SettingsPage() {
         <div className="min-h-0 flex-1 overflow-auto p-5">
           {activeTab === "general" ? (
             <div className="grid gap-5 xl:grid-cols-[minmax(360px,520px)_1fr]">
-              <SettingsCard title="Container" description="Paths are resolved inside the Docker container, not from the Windows host.">
+              <SettingsCard
+                title={isDesktop ? "Desktop storage" : "Server storage"}
+                description={isDesktop
+                  ? "Paths are resolved by the native Tauri host and restricted to authorized media roots."
+                  : "Paths are resolved inside the server or Docker host, not from the browser device."}
+              >
                 <dl className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-3 text-sm">
                   <dt className="text-muted">Media Root</dt>
                   <dd className="font-mono text-text">{status.data?.mediaRoot ?? "/media"}</dd>
@@ -325,7 +333,12 @@ export function SettingsPage() {
                 </dl>
               </SettingsCard>
 
-              <SettingsCard title="Media Tools" description="The container bundles MKVToolNix and FFmpeg for scan, remux, and property workflows.">
+              <SettingsCard
+                title="Media Tools"
+                description={isDesktop
+                  ? "MKVO resolves installed MKVToolNix and FFmpeg commands for scan, remux, extraction, and property workflows."
+                  : "The server image provides MKVToolNix and FFmpeg for scan, remux, extraction, and property workflows."}
+              >
                 <div className="overflow-auto rounded-lg border border-border bg-panel">
                   <table className="w-full min-w-[620px] border-collapse text-left text-sm">
                     <thead className="bg-panel text-xs uppercase tracking-wide text-subtle">
@@ -719,7 +732,7 @@ export function SettingsPage() {
 
           {activeTab === "appearance" ? (
             <div className="grid gap-5 xl:grid-cols-[minmax(420px,1fr)_280px]">
-              <SettingsCard title="Theme" description="Themes apply to this browser session and are remembered locally for the web GUI.">
+              <SettingsCard title="Theme" description="Themes apply to this interface and are remembered locally on this device.">
                 <div className="flex max-w-xl items-end gap-3">
                   <label className="block flex-1">
                     <span className="text-xs font-semibold text-muted">Theme</span>
@@ -786,16 +799,19 @@ export function SettingsPage() {
 
           {activeTab === "about" ? (
             <div className="grid gap-5 xl:grid-cols-[minmax(440px,720px)_1fr]">
-              <SettingsCard title="About MKV Orchestrator Web" description="A single-container companion for server or NAS-style access.">
+              <SettingsCard
+                title={isDesktop ? "About MKV Orchestrator Desktop" : "About MKV Orchestrator Server"}
+                description={isDesktop ? "The native Tauri desktop backed by the shared Rust runtime." : "The Rust server for browser, Docker, and NAS access."}
+              >
                 <div className="space-y-3 text-sm leading-6 text-muted">
                   <p>
-                    This web build shares the desktop app's core media logic where possible and exposes it through a React web interface.
+                    This React interface uses the same Rust application services through {isDesktop ? "typed Tauri IPC" : "the typed HTTP API"}.
                   </p>
                   <p>
                     Current supported workflows include MKV and MP4 scanning, metadata inspection, provider-based rename previews, rename apply and undo batches, MKV mux/remux operations, lossless MP4 to MKV conversion, MKV track property edits, library audit views, logs, and container tool checks.
                   </p>
                   <p>
-                    TVDB and TMDB lookup requires your own API keys. Saved keys are written to the container config volume under <span className="font-mono text-text">/config</span>, so do not commit or publish that volume.
+                    TVDB and TMDB lookup requires your own API keys. Saved keys stay in the {isDesktop ? "local application configuration directory" : "mounted server configuration directory"}; never commit or publish that data.
                   </p>
                 </div>
               </SettingsCard>

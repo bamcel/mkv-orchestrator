@@ -395,7 +395,14 @@ export function RenamePage() {
 
   function executeApply() {
     setIsApplyConfirmOpen(false);
-    apply.mutate({ items: previewRows, provider, template });
+    apply.mutate({
+      items: previewRows,
+      provider,
+      template,
+      planId: preview.data?.planId,
+      planFingerprint: preview.data?.planFingerprint,
+      idempotencyKey: preview.data?.idempotencyKey ?? crypto.randomUUID()
+    });
   }
 
   function toggleRow(row: RenamePreviewRow) {
