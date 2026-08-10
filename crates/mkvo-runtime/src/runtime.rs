@@ -16,8 +16,9 @@ use mkvo_contracts::{
     WebMediaServerLibraryPath, WebMediaServerPathMapping, WebSettings, WebSettingsRequest,
 };
 use mkvo_domain::{
-    AppSettings, CredentialState, IdempotencyKey, JobId, MediaFile, MediaServerId, MediaServerKind,
-    MediaServerLibrary, MediaServerSettings, MetadataProvider, PathMapping, stable_fingerprint,
+    AppSettings, CredentialState, IdempotencyKey, JobId, LibraryRoot, MediaFile, MediaServerId,
+    MediaServerKind, MediaServerLibrary, MediaServerSettings, MetadataProvider, PathMapping,
+    same_path, stable_fingerprint,
 };
 use mkvo_infra_media_servers::{
     ConfiguredMediaServerClient, MediaServerDiscoveryClient, MediaServerPathMapping,
@@ -456,24 +457,79 @@ impl MkvoRuntime {
 
     pub async fn get_status(&self) -> RuntimeResult<AppStatus> {
         let tools = self.inner.dependencies.tools.all_statuses().await?;
+        let library_roots = self.library_roots().await;
+
+        // The host's own roots come from how it was launched; the library roots
+        // are the user's. Both are shortcuts the browser offers, so callers see
+        // one list, with the user's own winning a name collision.
+        // An unrestricted host's own media root is the placeholder the runtime
+        // needs some path for, not a library anyone chose. Offering it as a
+        // shortcut would put an empty internal folder where the user's library
+        // belongs, which is the hardcoded root wearing a different hat.
+        let placeholder = (self.inner.config.browse_scope == BrowseScope::Unrestricted)
+            .then(|| self.inner.config.media_root.clone());
+        let mut source_roots: Vec<SourceRoot> = self
+            .inner
+            .config
+            .source_roots
+            .iter()
+            .filter(|(_, path)| {
+                placeholder
+                    .as_deref()
+                    .is_none_or(|hidden| !same_path(path, hidden))
+            })
+            .map(|(name, path)| SourceRoot {
+                name: name.clone(),
+                path: display_path(path),
+            })
+            .collect();
+        for root in &library_roots {
+            let path = display_path(&root.path);
+            source_roots
+                .retain(|existing| !same_path(Path::new(&existing.path), Path::new(&path)));
+            source_roots.push(SourceRoot {
+                name: root.name.clone(),
+                path,
+            });
+        }
+
         Ok(AppStatus {
             name: self.inner.config.app_name.clone(),
             version: self.inner.config.version.clone(),
-            media_root: display_path(&self.inner.config.media_root),
+            // Empty means "no library folder configured", which only an
+            // unrestricted host can report. Callers open the volume list.
+            media_root: self
+                .effective_media_root(&library_roots)
+                .as_deref()
+                .map_or_else(String::new, display_path),
             config_root: display_path(&self.inner.config.config_root),
-            source_roots: self
-                .inner
-                .config
-                .source_roots
-                .iter()
-                .map(|(name, path)| SourceRoot {
-                    name: name.clone(),
-                    path: display_path(path),
-                })
-                .collect(),
+            source_roots,
             tools,
             contract_version: mkvo_domain::CONTRACT_VERSION,
         })
+    }
+
+    /// Where browsing starts, or `None` when the user has no library yet.
+    ///
+    /// A host launched pointing at a mount keeps that as its root. An
+    /// unrestricted desktop has no such thing: choosing one on the user's
+    /// behalf is exactly what the hardcoded Videos folder did. So it uses the
+    /// first library folder the user named, and until there is one it answers
+    /// `None` -- browsing then opens at the volume list rather than somewhere
+    /// arbitrary.
+    fn effective_media_root(&self, library_roots: &[LibraryRoot]) -> Option<PathBuf> {
+        if self.inner.config.browse_scope == BrowseScope::Unrestricted {
+            return library_roots.first().map(|root| root.path.clone());
+        }
+        Some(self.inner.config.media_root.clone())
+    }
+
+    async fn library_roots(&self) -> Vec<LibraryRoot> {
+        self.settings_service()
+            .load()
+            .await
+            .map(|loaded| loaded.settings.scan.library_roots)
+            .unwrap_or_default()
     }
 
     pub async fn browse_file_system(
@@ -500,9 +556,18 @@ impl MkvoRuntime {
             return server_listing(&server);
         }
 
-        let requested = path
-            .filter(|value| !value.trim().is_empty())
-            .map_or_else(|| self.inner.config.media_root.clone(), PathBuf::from);
+        let requested = match path.filter(|value| !value.trim().is_empty()) {
+            Some(value) => PathBuf::from(value),
+            None => {
+                let library_roots = self.library_roots().await;
+                match self.effective_media_root(&library_roots) {
+                    Some(root) => root,
+                    // Nothing configured: show what there is to choose from
+                    // rather than inventing a folder.
+                    None => return Ok(volume_listing()),
+                }
+            }
+        };
         // Listing is read-only. An unrestricted host still validates every
         // mutation against the authorized roots, so widening what the browser
         // may *show* does not widen what it may change.
@@ -586,7 +651,13 @@ impl MkvoRuntime {
 
     pub async fn start_scan(&self, mut request: ScanRequest) -> RuntimeResult<ScanJobResponse> {
         if request.all_sources().is_empty() {
-            request.source_path = Some(display_path(&self.inner.config.media_root));
+            let library_roots = self.library_roots().await;
+            let root = self.effective_media_root(&library_roots).ok_or_else(|| {
+                RuntimeError::invalid(
+                    "no folder to scan: choose one, or add a library folder in Settings",
+                )
+            })?;
+            request.source_path = Some(display_path(&root));
         }
         let request_fingerprint = stable_fingerprint(&request)
             .map_err(|error| RuntimeError::internal(error.to_string()))?;
@@ -806,6 +877,9 @@ impl MkvoRuntime {
     ) -> RuntimeResult<WebSettings> {
         let current_compatibility = self.inner.compatibility_settings.read().await.clone();
         let compatibility = updated_compatibility_settings(&current_compatibility, &request);
+        if let Some(roots) = request.library_roots.as_deref() {
+            self.validate_library_roots(roots).await?;
+        }
         let loaded = self.settings_service().load().await?;
         let mut settings = loaded.settings;
         let mut secrets = Vec::new();
@@ -1243,11 +1317,45 @@ impl MkvoRuntime {
     /// it carries the same authority as the startup grant; a path that cannot be
     /// canonicalized is reported and skipped rather than failing the save, which
     /// has already been committed.
+    /// A library folder must exist, and on a confined host it must sit inside a
+    /// root the operator already granted.
+    ///
+    /// Without that second rule the setting would be an authorization bypass: a
+    /// web client could name `/etc`, save it, and have the runtime grant it --
+    /// which is precisely what the authorized roots exist to prevent. An
+    /// unrestricted desktop has no such boundary to breach, since the user
+    /// already reaches every one of these paths through their file manager.
+    async fn validate_library_roots(&self, roots: &[SourceRoot]) -> RuntimeResult<()> {
+        for root in roots {
+            if root.name.trim().is_empty() {
+                return Err(RuntimeError::invalid("a library folder needs a name"));
+            }
+            let path = PathBuf::from(root.path.trim());
+            if path.as_os_str().is_empty() {
+                return Err(RuntimeError::invalid(format!(
+                    "library folder `{}` needs a path",
+                    root.name.trim()
+                )));
+            }
+            if self.inner.config.browse_scope == BrowseScope::AuthorizedRootsOnly {
+                self.inner.dependencies.paths.authorize_read(&path).await?;
+            }
+            if !path.is_dir() {
+                return Err(RuntimeError::invalid(format!(
+                    "library folder is not a directory: {}",
+                    display_path(&path)
+                )));
+            }
+        }
+        Ok(())
+    }
+
     fn authorize_configured_roots(&self, settings: &AppSettings) {
         for path in settings
             .scan
             .default_root
             .iter()
+            .chain(settings.scan.library_roots.iter().map(|root| &root.path))
             .chain(settings.watch.roots.iter())
         {
             if let Err(error) = self.grant_authorized_root(path, true) {
@@ -1505,6 +1613,15 @@ fn web_settings(
             .map(display_path),
         ffmpeg_directory: settings.tools.ffmpeg_directory.as_deref().map(display_path),
         default_root: settings.scan.default_root.as_deref().map(display_path),
+        library_roots: settings
+            .scan
+            .library_roots
+            .iter()
+            .map(|root| SourceRoot {
+                name: root.name.clone(),
+                path: display_path(&root.path),
+            })
+            .collect(),
         ignored_scan_folder_names: settings.scan.ignored_folder_names.iter().cloned().collect(),
         use_quick_hash_on_unreliable_timestamps: settings
             .scan
@@ -1596,6 +1713,21 @@ fn apply_web_settings_request(
     }
     if let Some(value) = requested_path(request.default_root) {
         settings.scan.default_root = value;
+    }
+    if let Some(values) = request.library_roots {
+        // Blank rows are how a half-finished edit arrives from the form; they
+        // are dropped rather than saved as unnamed roots.
+        settings.scan.library_roots = values
+            .into_iter()
+            .filter_map(|root| {
+                let name = root.name.trim().to_owned();
+                let path = root.path.trim();
+                (!name.is_empty() && !path.is_empty()).then(|| LibraryRoot {
+                    name,
+                    path: PathBuf::from(path),
+                })
+            })
+            .collect();
     }
     if let Some(values) = request.ignored_scan_folder_names {
         settings.scan.ignored_folder_names = normalized_strings(values).into_iter().collect();
@@ -1959,6 +2091,216 @@ fn server_listing(server: &str) -> RuntimeResult<FileSystemResponse> {
             })
             .collect(),
     })
+}
+
+#[cfg(test)]
+mod library_root_tests {
+    use super::*;
+    use crate::MkvoRuntimeBuilder;
+
+    struct Host {
+        _directory: tempfile::TempDir,
+        mount: PathBuf,
+        outside: PathBuf,
+        runtime: MkvoRuntime,
+    }
+
+    /// `confined` mirrors the container: one mount, browsing limited to it.
+    /// Otherwise the desktop: no granted roots, browsing unrestricted.
+    fn host(confined: bool) -> Host {
+        let directory = tempfile::tempdir().unwrap();
+        let mount = directory.path().join("mnt/user");
+        let outside = directory.path().join("etc");
+        let config = directory.path().join("config");
+        for path in [&mount, &outside, &config] {
+            std::fs::create_dir_all(path).unwrap();
+        }
+        std::fs::create_dir_all(mount.join("anime")).unwrap();
+        std::fs::create_dir_all(mount.join("tv")).unwrap();
+
+        let mut builder = MkvoRuntimeBuilder::new(&mount, &config).app_name("test");
+        builder = if confined {
+            builder.authorized_root(&mount, true)
+        } else {
+            builder.unrestricted_browsing()
+        };
+
+        Host {
+            _directory: directory,
+            mount,
+            outside,
+            runtime: builder.build().unwrap(),
+        }
+    }
+
+    fn root(name: &str, path: &Path) -> SourceRoot {
+        SourceRoot {
+            name: name.to_owned(),
+            path: display_path(path),
+        }
+    }
+
+    /// The whole point of the setting for a container user: several shares
+    /// inside the one mount they bound in.
+    #[tokio::test]
+    async fn a_confined_host_accepts_folders_inside_its_mount() {
+        let host = host(true);
+        let anime = host.mount.join("anime");
+        let tv = host.mount.join("tv");
+
+        let saved = host
+            .runtime
+            .save_web_settings(WebSettingsRequest {
+                library_roots: Some(vec![root("Anime", &anime), root("TV", &tv)]),
+                ..WebSettingsRequest::default()
+            })
+            .await
+            .expect("save");
+
+        let names: Vec<&str> = saved
+            .library_roots
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect();
+        assert_eq!(names, ["Anime", "TV"]);
+    }
+
+    /// Saving a library folder grants it, so without this check the setting
+    /// would be an authorization bypass: name `/etc`, save, and the runtime
+    /// authorizes it for you.
+    #[tokio::test]
+    async fn a_confined_host_refuses_a_folder_outside_its_roots() {
+        let host = host(true);
+
+        let error = host
+            .runtime
+            .save_web_settings(WebSettingsRequest {
+                library_roots: Some(vec![root("Escape", &host.outside)]),
+                ..WebSettingsRequest::default()
+            })
+            .await
+            .expect_err("a path outside the mount must be refused");
+
+        assert!(
+            format!("{error}").contains("unauthorized"),
+            "expected an authorization failure, got: {error}"
+        );
+
+        // The refusal has to be total: nothing may be persisted on the way out.
+        let settings = host.runtime.get_web_settings().await.expect("settings");
+        assert!(settings.library_roots.is_empty());
+    }
+
+    /// The desktop user already reaches every path through their own file
+    /// manager, so there is no boundary for the setting to breach.
+    #[tokio::test]
+    async fn an_unrestricted_host_accepts_any_real_folder() {
+        let host = host(false);
+
+        host.runtime
+            .save_web_settings(WebSettingsRequest {
+                library_roots: Some(vec![root("Elsewhere", &host.outside)]),
+                ..WebSettingsRequest::default()
+            })
+            .await
+            .expect("an unrestricted host may name any folder");
+    }
+
+    /// The placeholder root is an implementation detail. Advertising it would
+    /// reintroduce the hardcoded library under another name.
+    #[tokio::test]
+    async fn a_desktop_offers_no_shortcuts_before_a_library_is_named() {
+        let host = host(false);
+
+        let status = host.runtime.get_status().await.expect("status");
+        assert!(status.media_root.is_empty(), "{}", status.media_root);
+        assert!(status.source_roots.is_empty(), "{:?}", status.source_roots);
+    }
+
+    /// The container was launched pointing at a mount, so that root is real and
+    /// stays on offer.
+    #[tokio::test]
+    async fn a_confined_host_keeps_its_mount_as_a_shortcut() {
+        let host = host(true);
+
+        let status = host.runtime.get_status().await.expect("status");
+        assert!(same_path(Path::new(&status.media_root), &host.mount));
+        assert!(
+            status
+                .source_roots
+                .iter()
+                .any(|entry| same_path(Path::new(&entry.path), &host.mount)),
+            "{:?}",
+            status.source_roots
+        );
+    }
+
+    #[tokio::test]
+    async fn a_folder_that_does_not_exist_is_refused() {
+        let host = host(false);
+        let missing = host.outside.join("nope");
+
+        let error = host
+            .runtime
+            .save_web_settings(WebSettingsRequest {
+                library_roots: Some(vec![root("Missing", &missing)]),
+                ..WebSettingsRequest::default()
+            })
+            .await
+            .expect_err("a missing folder must be refused");
+
+        assert!(format!("{error}").contains("not a directory"), "{error}");
+    }
+
+    /// Replaces the hardcoded Videos folder: with nothing configured the
+    /// desktop has no library, and naming one makes it the starting point.
+    #[tokio::test]
+    async fn the_desktop_media_root_follows_the_first_library_folder() {
+        let host = host(false);
+        let anime = host.mount.join("anime");
+
+        host.runtime
+            .save_web_settings(WebSettingsRequest {
+                library_roots: Some(vec![root("Anime", &anime)]),
+                ..WebSettingsRequest::default()
+            })
+            .await
+            .expect("save");
+
+        let status = host.runtime.get_status().await.expect("status");
+        assert!(same_path(Path::new(&status.media_root), &anime));
+        assert!(
+            status
+                .source_roots
+                .iter()
+                .any(|entry| entry.name == "Anime"),
+            "the library folder should be offered as a shortcut"
+        );
+    }
+
+    /// A saved folder has to be usable immediately; requiring a restart to
+    /// authorize it is the bug this mirrors for watch folders.
+    #[tokio::test]
+    async fn a_saved_folder_is_browsable_without_a_restart() {
+        let host = host(false);
+        let anime = host.mount.join("anime");
+        std::fs::write(anime.join("Ep01.mkv"), b"x").unwrap();
+
+        host.runtime
+            .save_web_settings(WebSettingsRequest {
+                library_roots: Some(vec![root("Anime", &anime)]),
+                ..WebSettingsRequest::default()
+            })
+            .await
+            .expect("save");
+
+        let listing = host
+            .runtime
+            .browse_file_system(None)
+            .await
+            .expect("browsing with no path should open the library folder");
+        assert!(same_path(Path::new(&listing.path), &anime));
+    }
 }
 
 #[cfg(test)]

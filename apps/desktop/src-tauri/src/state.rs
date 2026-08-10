@@ -13,7 +13,7 @@ pub fn compose_runtime<R: Runtime>(
     std::fs::create_dir_all(&app_data_root)?;
     std::fs::create_dir_all(&app_config_root)?;
 
-    let media_root = initial_media_root(app, &app_data_root)?;
+    let media_root = placeholder_media_root(&app_data_root)?;
     let tools_root = app_config_root.join("tools");
     std::fs::create_dir_all(&tools_root)?;
 
@@ -44,17 +44,16 @@ pub fn compose_runtime<R: Runtime>(
     Ok(Arc::new(runtime))
 }
 
-fn initial_media_root<R: Runtime>(
-    app: &AppHandle<R>,
-    app_data_root: &std::path::Path,
-) -> Result<PathBuf, std::io::Error> {
-    if let Ok(videos) = app.path().video_dir()
-        && videos.is_dir()
-    {
-        return Ok(videos);
-    }
-
-    let fallback = app_data_root.join("media");
-    std::fs::create_dir_all(&fallback)?;
-    Ok(fallback)
+/// The desktop has no library until the user names one.
+///
+/// This used to default to the OS Videos folder, which guessed at a library the
+/// user may not keep there and then anchored browsing to it. The runtime now
+/// takes its root from the library folders in Settings, and reports none until
+/// there are some, so browsing opens at the volume list instead. What remains
+/// here is only a placeholder for the parts of the runtime that need some path
+/// to exist; it is never presented as the user's library.
+fn placeholder_media_root(app_data_root: &std::path::Path) -> Result<PathBuf, std::io::Error> {
+    let placeholder = app_data_root.join("media");
+    std::fs::create_dir_all(&placeholder)?;
+    Ok(placeholder)
 }

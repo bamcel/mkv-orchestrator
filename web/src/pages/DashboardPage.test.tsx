@@ -25,6 +25,7 @@ function settings(overrides: Partial<WebSettings> = {}): WebSettings {
     mkvToolNixDirectory: null,
     ffmpegDirectory: null,
     defaultRoot: null,
+    libraryRoots: [],
     ignoredScanFolderNames: [],
     useQuickHashOnUnreliableTimestamps: false,
     renamePreviewCompactView: false,

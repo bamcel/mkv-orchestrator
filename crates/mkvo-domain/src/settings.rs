@@ -117,11 +117,28 @@ impl ToolSettings {
     }
 }
 
+/// A folder the user has named as part of their library.
+///
+/// These are the shortcuts the browser offers and the roots operations are
+/// allowed to touch. They are the user's own choice rather than the host's, so
+/// a desktop install has none until one is added and a container can name
+/// several inside a single mount.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryRoot {
+    pub name: String,
+    pub path: PathBuf,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_root: Option<PathBuf>,
+    // Skipped when empty so a settings file written before this existed round
+    // trips unchanged, and an install that never sets one stays as it was.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub library_roots: Vec<LibraryRoot>,
     #[serde(default)]
     pub ignored_folder_names: BTreeSet<String>,
     #[serde(default = "default_supported_extensions")]
@@ -141,6 +158,7 @@ impl Default for ScanSettings {
     fn default() -> Self {
         Self {
             default_root: None,
+            library_roots: Vec::new(),
             ignored_folder_names: [
                 "Extras",
                 "OVAs",

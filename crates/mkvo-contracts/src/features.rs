@@ -7,7 +7,7 @@ use mkvo_domain::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{JobSnapshot, JobStatus, MediaAttachmentDto, MediaFileDto};
+use crate::{JobSnapshot, JobStatus, MediaAttachmentDto, MediaFileDto, SourceRoot};
 use mkvo_domain::JobId;
 
 /// Compatibility projection consumed by the existing Dashboard components.
@@ -342,6 +342,10 @@ pub struct WebSettings {
     pub ffmpeg_directory: Option<String>,
     #[serde(default)]
     pub default_root: Option<String>,
+    /// The user's own named library folders, which drive the browser's
+    /// shortcuts and the roots operations may touch.
+    #[serde(default)]
+    pub library_roots: Vec<SourceRoot>,
     #[serde(default)]
     pub ignored_scan_folder_names: Vec<String>,
     #[serde(default)]
@@ -392,6 +396,7 @@ impl Default for WebSettings {
             mkv_tool_nix_directory: None,
             ffmpeg_directory: None,
             default_root: None,
+            library_roots: Vec::new(),
             ignored_scan_folder_names: Vec::new(),
             use_quick_hash_on_unreliable_timestamps: false,
             rename_preview_compact_view: false,
@@ -430,6 +435,7 @@ pub struct WebSettingsRequest {
     pub mkv_tool_nix_directory: Option<Option<String>>,
     pub ffmpeg_directory: Option<Option<String>>,
     pub default_root: Option<Option<String>>,
+    pub library_roots: Option<Vec<SourceRoot>>,
     pub ignored_scan_folder_names: Option<Vec<String>>,
     pub use_quick_hash_on_unreliable_timestamps: Option<bool>,
     pub rename_preview_compact_view: Option<bool>,
