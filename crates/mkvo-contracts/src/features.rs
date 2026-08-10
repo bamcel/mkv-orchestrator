@@ -303,6 +303,10 @@ pub struct WebSettings {
     pub has_tvdb_api_key: bool,
     pub has_tvdb_pin: bool,
     pub has_tmdb_api_key: bool,
+    /// AniDB identifies callers by a registered client name and version rather
+    /// than a key, stored as `name/version`.
+    #[serde(default)]
+    pub has_anidb_client: bool,
     pub tvdb_language: String,
     pub rename_lookup_provider: String,
     pub rename_template: String,
@@ -359,6 +363,7 @@ impl Default for WebSettings {
             has_tvdb_api_key: false,
             has_tvdb_pin: false,
             has_tmdb_api_key: false,
+            has_anidb_client: false,
             tvdb_language: String::new(),
             rename_lookup_provider: String::new(),
             rename_template: String::new(),
@@ -396,6 +401,7 @@ pub struct WebSettingsRequest {
     pub tvdb_api_key: Option<String>,
     pub tvdb_pin: Option<String>,
     pub tmdb_api_key: Option<String>,
+    pub anidb_client: Option<String>,
     pub tvdb_language: Option<String>,
     pub rename_lookup_provider: Option<String>,
     pub rename_template: Option<String>,

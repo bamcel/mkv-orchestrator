@@ -5,8 +5,8 @@ use mkvo_domain::{EpisodeMetadata as DomainEpisode, MetadataProvider, ProviderSe
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    MediaKind, MetadataProviderClient, ProviderCredentials, ProviderError, SearchResult,
-    SelectedMedia, TmdbClient, TvdbClient,
+    AniDbClient, AniListClient, MediaKind, MetadataProviderClient, ProviderCredentials,
+    ProviderError, SearchResult, SelectedMedia, TmdbClient, TvdbClient,
 };
 
 #[derive(Debug, Clone)]
@@ -155,6 +155,152 @@ impl ProviderPort for ConfiguredTmdbProvider {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ConfiguredAniListProvider {
+    client: AniListClient,
+    credentials: ProviderCredentials,
+    default_language: String,
+}
+
+impl ConfiguredAniListProvider {
+    pub fn new(client: AniListClient, default_language: impl Into<String>) -> Self {
+        Self {
+            client,
+            // AniList is public, so a placeholder keeps the credential-carrying
+            // client interface uniform without implying a key is configured.
+            credentials: ProviderCredentials::api_key(String::new()),
+            default_language: default_language.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfiguredAniDbProvider {
+    client: AniDbClient,
+    credentials: ProviderCredentials,
+    default_language: String,
+}
+
+impl ConfiguredAniDbProvider {
+    pub fn new(
+        client: AniDbClient,
+        credentials: ProviderCredentials,
+        default_language: impl Into<String>,
+    ) -> Self {
+        Self {
+            client,
+            credentials,
+            default_language: default_language.into(),
+        }
+    }
+}
+
+#[async_trait]
+impl ProviderPort for ConfiguredAniListProvider {
+    fn provider(&self) -> MetadataProvider {
+        MetadataProvider::AniList
+    }
+
+    async fn search(
+        &self,
+        query: &str,
+        language: Option<&str>,
+        cancel: CancellationToken,
+    ) -> Result<Vec<ProviderSearchResult>, PortError> {
+        provider_search(
+            &self.client,
+            &self.credentials,
+            query,
+            language.unwrap_or(&self.default_language),
+            cancel,
+        )
+        .await
+    }
+
+    async fn episodes(
+        &self,
+        media_id: &str,
+        language: Option<&str>,
+        cancel: CancellationToken,
+    ) -> Result<Vec<DomainEpisode>, PortError> {
+        provider_episodes(
+            &self.client,
+            &self.credentials,
+            media_id,
+            language.unwrap_or(&self.default_language),
+            cancel,
+        )
+        .await
+    }
+
+    async fn test(&self, cancel: CancellationToken) -> Result<(), PortError> {
+        MetadataProviderClient::search(
+            &self.client,
+            &self.credentials,
+            "test",
+            &self.default_language,
+            cancel,
+        )
+        .await
+        .map(|_| ())
+        .map_err(provider_port_error)
+    }
+}
+
+#[async_trait]
+impl ProviderPort for ConfiguredAniDbProvider {
+    fn provider(&self) -> MetadataProvider {
+        MetadataProvider::AniDb
+    }
+
+    async fn search(
+        &self,
+        query: &str,
+        language: Option<&str>,
+        cancel: CancellationToken,
+    ) -> Result<Vec<ProviderSearchResult>, PortError> {
+        provider_search(
+            &self.client,
+            &self.credentials,
+            query,
+            language.unwrap_or(&self.default_language),
+            cancel,
+        )
+        .await
+    }
+
+    async fn episodes(
+        &self,
+        media_id: &str,
+        language: Option<&str>,
+        cancel: CancellationToken,
+    ) -> Result<Vec<DomainEpisode>, PortError> {
+        provider_episodes(
+            &self.client,
+            &self.credentials,
+            media_id,
+            language.unwrap_or(&self.default_language),
+            cancel,
+        )
+        .await
+    }
+
+    /// A search exercises only the public title dump, so it verifies reachability
+    /// without spending an HTTP API call against the registered client name.
+    async fn test(&self, cancel: CancellationToken) -> Result<(), PortError> {
+        MetadataProviderClient::search(
+            &self.client,
+            &self.credentials,
+            "test",
+            &self.default_language,
+            cancel,
+        )
+        .await
+        .map(|_| ())
+        .map_err(provider_port_error)
+    }
+}
+
 async fn provider_search<P: MetadataProviderClient>(
     client: &P,
     credentials: &ProviderCredentials,
@@ -212,6 +358,8 @@ fn to_domain_search(result: SearchResult) -> ProviderSearchResult {
     let provider = match result.provider {
         crate::ProviderKind::Tvdb => MetadataProvider::Tvdb,
         crate::ProviderKind::Tmdb => MetadataProvider::Tmdb,
+        crate::ProviderKind::AniDb => MetadataProvider::AniDb,
+        crate::ProviderKind::AniList => MetadataProvider::AniList,
     };
     ProviderSearchResult {
         provider,

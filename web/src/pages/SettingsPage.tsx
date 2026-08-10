@@ -61,6 +61,8 @@ export function SettingsPage() {
   const [clearTvdbApiKey, setClearTvdbApiKey] = useState(false);
   const [clearTvdbPin, setClearTvdbPin] = useState(false);
   const [clearTmdbApiKey, setClearTmdbApiKey] = useState(false);
+  const [anidbClient, setAnidbClient] = useState("");
+  const [clearAnidbClient, setClearAnidbClient] = useState(false);
   const [isTestingProvider, setIsTestingProvider] = useState(false);
   const [language, setLanguage] = useState("eng");
   const [provider, setProvider] = useState("TVDB");
@@ -115,6 +117,7 @@ export function SettingsPage() {
         tvdbApiKey: clearTvdbApiKey ? "" : tvdbApiKey || undefined,
         tvdbPin: clearTvdbPin ? "" : tvdbPin || undefined,
         tmdbApiKey: clearTmdbApiKey ? "" : tmdbApiKey || undefined,
+        anidbClient: clearAnidbClient ? "" : anidbClient || undefined,
         tvdbLanguage: language,
         renameLookupProvider: provider,
         renameTemplate: template,
@@ -431,6 +434,27 @@ export function SettingsPage() {
                       </label>
                     ) : null}
                   </div>
+                  <div>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-muted">AniDB Client</span>
+                      <input
+                        value={anidbClient}
+                        onChange={(event) => setAnidbClient(event.target.value)}
+                        placeholder={webSettings.data?.hasAnidbClient ? "Saved - leave blank to keep" : "Registered client name, e.g. mkvo/1"}
+                        disabled={clearAnidbClient}
+                        className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
+                      />
+                    </label>
+                    <p className="mt-1.5 text-xs text-subtle">
+                      AniDB identifies callers by a registered client name and version rather than an API key. Searching works without it; loading episodes requires it.
+                    </p>
+                    {webSettings.data?.hasAnidbClient ? (
+                      <label className="mt-1.5 flex items-center gap-2 text-xs text-muted">
+                        <input type="checkbox" checked={clearAnidbClient} onChange={(event) => setClearAnidbClient(event.target.checked)} />
+                        Remove saved client on next save
+                      </label>
+                    ) : null}
+                  </div>
                   <label className="block">
                     <span className="text-xs font-semibold text-muted">Metadata Language</span>
                     <input
@@ -448,6 +472,8 @@ export function SettingsPage() {
                     >
                       <option value="TVDB">TVDB</option>
                       <option value="TMDB">TMDB</option>
+                      <option value="AniDB">AniDB</option>
+                      <option value="AniList">AniList</option>
                     </select>
                   </label>
                   <label className="block">

@@ -75,8 +75,64 @@ impl ApplicationError {
             Self::Plan(PlanValidationError::Expired(_)) => ApiErrorCode::PlanExpired,
             Self::Plan(PlanValidationError::FingerprintMismatch) => ApiErrorCode::PlanTampered,
             Self::Plan(_) => ApiErrorCode::PlanStale,
-            Self::Port(_) | Self::Internal(_) => ApiErrorCode::Internal,
+            // A port failure is usually something the user can act on — an
+            // unconfigured provider, an unreachable server, a stale reference.
+            // Collapsing them all to `Internal` tells the user to report a bug
+            // when they should be opening Settings.
+            Self::Port(PortError::Unavailable { .. }) => ApiErrorCode::ProviderUnavailable,
+            Self::Port(PortError::NotFound(_)) => ApiErrorCode::NotFound,
+            Self::Port(PortError::Conflict(_)) => ApiErrorCode::Conflict,
+            Self::Port(PortError::InvalidData(_)) => ApiErrorCode::InvalidRequest,
+            Self::Port(PortError::Other(_)) | Self::Internal(_) => ApiErrorCode::Internal,
         };
         ApiError::new(code, self.to_string(), correlation_id).retryable(retryable)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Port failures are mostly user-actionable: an unconfigured provider, an
+    /// unreachable server, a stale reference. Reporting them as `Internal` sends
+    /// the user to file a bug instead of to Settings, and makes every adapter
+    /// fault a 500 rather than the status that describes it.
+    #[test]
+    fn port_failures_keep_their_actionable_error_code() {
+        let cases = [
+            (
+                PortError::unavailable("AniDB credentials are not configured", false),
+                ApiErrorCode::ProviderUnavailable,
+            ),
+            (
+                PortError::NotFound("plan".to_owned()),
+                ApiErrorCode::NotFound,
+            ),
+            (
+                PortError::Conflict("idempotency".to_owned()),
+                ApiErrorCode::Conflict,
+            ),
+            (
+                PortError::InvalidData("bad payload".to_owned()),
+                ApiErrorCode::InvalidRequest,
+            ),
+            (
+                PortError::Other("disk exploded".to_owned()),
+                ApiErrorCode::Internal,
+            ),
+        ];
+
+        for (port, expected) in cases {
+            let api = ApplicationError::Port(port.clone())
+                .into_api_error(mkvo_domain::CorrelationId::new());
+            assert_eq!(api.code, expected, "{port:?}");
+        }
+    }
+
+    #[test]
+    fn a_retryable_port_failure_stays_marked_retryable() {
+        let api = ApplicationError::Port(PortError::unavailable("provider timed out", true))
+            .into_api_error(mkvo_domain::CorrelationId::new());
+        assert!(api.retryable);
     }
 }

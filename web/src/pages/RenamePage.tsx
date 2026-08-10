@@ -501,6 +501,8 @@ export function RenamePage() {
               >
                 <option value="TVDB">TVDB</option>
                 <option value="TMDB">TMDB</option>
+                <option value="AniDB">AniDB</option>
+                <option value="AniList">AniList</option>
               </select>
             </label>
             <label className="block">
