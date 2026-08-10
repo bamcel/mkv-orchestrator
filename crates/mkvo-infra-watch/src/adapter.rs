@@ -567,6 +567,30 @@ mod access_probe_tests {
         let _ = std::fs::remove_dir_all(&directory);
     }
 
+    /// Root bypasses Unix permission checks, so a read-only file really is
+    /// writable for it and reporting anything else would be wrong. The MKVO
+    /// container runs as root unless PUID is set, and contributors often run
+    /// tests in a root container, so this is a normal environment rather than
+    /// an exotic one.
+    #[cfg(unix)]
+    fn permissions_are_enforced_for_this_user() -> bool {
+        // `id -u` rather than /proc, which macOS does not have. If the uid
+        // cannot be determined, assume permissions are enforced: that is the
+        // stricter assertion, so an unknown environment fails loudly instead of
+        // quietly skipping the check this test exists for.
+        std::process::Command::new("id")
+            .arg("-u")
+            .output()
+            .ok()
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .is_none_or(|uid| uid.trim() != "0")
+    }
+
+    #[cfg(not(unix))]
+    fn permissions_are_enforced_for_this_user() -> bool {
+        true
+    }
+
     /// A read-only file passes every other precondition, so without this the
     /// failure only appears once an external tool is already running.
     #[test]
@@ -578,10 +602,20 @@ mod access_probe_tests {
         permissions.set_readonly(true);
         std::fs::set_permissions(&file, permissions).expect("set readonly");
 
-        assert_eq!(
-            probe_file_access(&file, RequiredAccess::ReadWrite),
-            FileAccessState::ReadOnly
-        );
+        if permissions_are_enforced_for_this_user() {
+            assert_eq!(
+                probe_file_access(&file, RequiredAccess::ReadWrite),
+                FileAccessState::ReadOnly
+            );
+        } else {
+            // Reporting the file as writable is the correct answer here: this
+            // user can in fact rewrite it.
+            assert_eq!(
+                probe_file_access(&file, RequiredAccess::ReadWrite),
+                FileAccessState::Available,
+                "root can write a read-only file, so the probe must say so"
+            );
+        }
         assert_eq!(
             probe_file_access(&file, RequiredAccess::Read),
             FileAccessState::Available,
