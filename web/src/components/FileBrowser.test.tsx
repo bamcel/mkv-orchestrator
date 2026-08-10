@@ -1,0 +1,211 @@
+import { describe, expect, it, vi } from "vitest";
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+import { FileBrowser } from "./FileBrowser";
+import { renderWithBackend } from "../test/render";
+import type { FileSystemEntry, FileSystemResponse } from "../api";
+
+function folder(name: string, path: string, modified = "2026-08-01T10:00:00Z"): FileSystemEntry {
+  return { name, path, kind: "folder", sizeBytes: null, modifiedUtc: modified };
+}
+
+function file(
+  name: string,
+  path: string,
+  sizeBytes: number,
+  modified = "2026-08-02T10:00:00Z"
+): FileSystemEntry {
+  return { name, path, kind: "file", sizeBytes, modifiedUtc: modified };
+}
+
+/** A stub filesystem keyed by path, including the volume list at "". */
+function filesystem(tree: Record<string, FileSystemResponse>) {
+  return vi.fn((path?: string) => {
+    const key = path ?? "";
+    const listing = tree[key];
+    return listing
+      ? Promise.resolve(listing)
+      : Promise.reject(new Error(`no such directory: ${key}`));
+  });
+}
+
+const volumeList: FileSystemResponse = {
+  path: "",
+  parentPath: null,
+  entries: [folder("C:", "C:\\"), folder("D:", "D:\\")]
+};
+
+describe("file browser navigation", () => {
+  /// The desktop was previously stuck inside one mounted directory. Reaching a
+  /// library on another drive is the whole point of the change.
+  it("navigates to another volume from the sidebar", async () => {
+    const user = userEvent.setup();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "C:\\media": { path: "C:\\media", parentPath: "C:\\", entries: [] },
+      "D:\\": { path: "D:\\", parentPath: "", entries: [folder("Shows", "D:\\Shows")] }
+    });
+
+    renderWithBackend(
+      <FileBrowser initialPath="C:\media" roots={[]} onCancel={() => {}} onSelect={() => {}} />,
+      { browseFileSystem }
+    );
+
+    const sidebar = await screen.findByRole("navigation");
+    await user.click(await within(sidebar).findByRole("button", { name: /D:/ }));
+
+    expect(await screen.findByText("Shows")).toBeInTheDocument();
+  });
+
+  /// Windows has no single filesystem root, so "up" from a drive is the volume
+  /// list rather than a directory.
+  it("goes up from a drive root to the volume list", async () => {
+    const user = userEvent.setup();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "C:\\": { path: "C:\\", parentPath: "", entries: [folder("media", "C:\\media")] }
+    });
+
+    renderWithBackend(
+      <FileBrowser initialPath="C:\" roots={[]} onCancel={() => {}} onSelect={() => {}} />,
+      { browseFileSystem }
+    );
+
+    await screen.findByText("media");
+    await user.click(screen.getByRole("button", { name: /up one level/i }));
+
+    // The volume list renders the drives as rows, not just sidebar entries.
+    await waitFor(() => expect(screen.getAllByText("C:").length).toBeGreaterThan(0));
+  });
+
+  it("opens a folder on double click and walks back with the crumb", async () => {
+    const user = userEvent.setup();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "C:\\media": { path: "C:\\media", parentPath: "C:\\", entries: [folder("Show", "C:\\media\\Show")] },
+      "C:\\media\\Show": {
+        path: "C:\\media\\Show",
+        parentPath: "C:\\media",
+        entries: [file("Ep01.mkv", "C:\\media\\Show\\Ep01.mkv", 2048)]
+      }
+    });
+
+    renderWithBackend(
+      <FileBrowser initialPath="C:\media" roots={[]} onCancel={() => {}} onSelect={() => {}} />,
+      { browseFileSystem }
+    );
+
+    await user.dblClick(await screen.findByText("Show"));
+    expect(await screen.findByText("Ep01.mkv")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "media" }));
+    expect(await screen.findByText("Show")).toBeInTheDocument();
+  });
+
+  it("returns the current folder when nothing is picked", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "C:\\media": { path: "C:\\media", parentPath: "C:\\", entries: [folder("Show", "C:\\media\\Show")] }
+    });
+
+    renderWithBackend(
+      <FileBrowser initialPath="C:\media" roots={[]} onCancel={() => {}} onSelect={onSelect} />,
+      { browseFileSystem }
+    );
+
+    await screen.findByText("Show");
+    await user.click(screen.getByRole("button", { name: /select this folder/i }));
+
+    expect(onSelect).toHaveBeenCalledWith("C:\\media", "folder");
+  });
+
+  it("returns a picked file rather than the folder holding it", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "C:\\media": {
+        path: "C:\\media",
+        parentPath: "C:\\",
+        entries: [file("Ep01.mkv", "C:\\media\\Ep01.mkv", 2048)]
+      }
+    });
+
+    renderWithBackend(
+      <FileBrowser initialPath="C:\media" roots={[]} onCancel={() => {}} onSelect={onSelect} />,
+      { browseFileSystem }
+    );
+
+    await user.click(await screen.findByText("Ep01.mkv"));
+    await user.click(screen.getByRole("button", { name: /select file/i }));
+
+    expect(onSelect).toHaveBeenCalledWith("C:\\media\\Ep01.mkv", "file");
+  });
+
+  /// Folders lead regardless of sort, the way a file manager orders them.
+  it("keeps folders above files when sorting by size", async () => {
+    const user = userEvent.setup();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "C:\\media": {
+        path: "C:\\media",
+        parentPath: "C:\\",
+        entries: [
+          file("big.mkv", "C:\\media\\big.mkv", 9_000_000),
+          folder("Show", "C:\\media\\Show"),
+          file("small.mkv", "C:\\media\\small.mkv", 10)
+        ]
+      }
+    });
+
+    renderWithBackend(
+      <FileBrowser initialPath="C:\media" roots={[]} onCancel={() => {}} onSelect={() => {}} />,
+      { browseFileSystem }
+    );
+
+    await screen.findByText("Show");
+    await user.click(screen.getByRole("button", { name: /^Size/ }));
+
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(within(rows[0]).getByText("Show")).toBeInTheDocument();
+  });
+
+  it("filters the current folder without navigating", async () => {
+    const user = userEvent.setup();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "C:\\media": {
+        path: "C:\\media",
+        parentPath: "C:\\",
+        entries: [folder("Anime", "C:\\media\\Anime"), folder("Movies", "C:\\media\\Movies")]
+      }
+    });
+
+    renderWithBackend(
+      <FileBrowser initialPath="C:\media" roots={[]} onCancel={() => {}} onSelect={() => {}} />,
+      { browseFileSystem }
+    );
+
+    await screen.findByText("Anime");
+    await user.type(screen.getByLabelText(/filter this folder/i), "mov");
+
+    expect(screen.queryByText("Anime")).not.toBeInTheDocument();
+    expect(screen.getByText("Movies")).toBeInTheDocument();
+  });
+
+  /// An unreadable folder is ordinary — a permission-denied system directory is
+  /// one click away when browsing is unrestricted.
+  it("reports a folder it cannot read instead of showing it as empty", async () => {
+    const browseFileSystem = filesystem({ "": volumeList });
+
+    renderWithBackend(
+      <FileBrowser initialPath="C:\forbidden" roots={[]} onCancel={() => {}} onSelect={() => {}} />,
+      { browseFileSystem }
+    );
+
+    expect(await screen.findByText(/no such directory/i)).toBeInTheDocument();
+  });
+});

@@ -178,6 +178,12 @@ export class HttpBackendClient implements BackendClient {
     return this.json<CurrentScanResponse>("/api/files/selection", "PUT", { paths });
   }
 
+  // The server only ever lists inside its configured roots, so anything the
+  // browser showed is already authorized and there is nothing to grant.
+  authorizeBrowsedRoot(): Promise<void> {
+    return Promise.resolve();
+  }
+
   getWebSettings(): Promise<WebSettings> {
     return this.request<WebSettings>("/api/settings");
   }

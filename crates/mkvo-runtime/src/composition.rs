@@ -40,6 +40,25 @@ pub struct RuntimeConfig {
     /// Explicit .NET rename-history source. Legacy history is exposed read-only.
     pub legacy_rename_history_path: Option<PathBuf>,
     pub legacy_migration_enabled: bool,
+    /// How far the file browser may look.
+    ///
+    /// The desktop user owns the machine, and confining the browser there buys
+    /// nothing they could not do in Explorer while making it impossible to
+    /// reach a library outside the configured roots. A network service is the
+    /// opposite case, so the server keeps the browser inside its roots.
+    /// Browsing is read-only either way: mutations always re-check
+    /// authorization, whatever the browser was allowed to show.
+    pub browse_scope: BrowseScope,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum BrowseScope {
+    /// List only inside authorized roots. The default, so a host that forgets
+    /// to choose is confined rather than open.
+    #[default]
+    AuthorizedRootsOnly,
+    /// List anywhere the process can read, including volume roots.
+    Unrestricted,
 }
 
 impl RuntimeConfig {
@@ -60,6 +79,7 @@ impl RuntimeConfig {
             legacy_settings_path: None,
             legacy_rename_history_path: None,
             legacy_migration_enabled: true,
+            browse_scope: BrowseScope::AuthorizedRootsOnly,
         }
     }
 
@@ -399,6 +419,16 @@ impl MkvoRuntimeBuilder {
     #[must_use]
     pub fn authorized_root(mut self, path: impl Into<PathBuf>, writable: bool) -> Self {
         self.config.authorized_roots.push((path.into(), writable));
+        self
+    }
+
+    /// Let the file browser list outside the authorized roots.
+    ///
+    /// For hosts where the user already has full filesystem access, such as the
+    /// desktop app. Mutations are unaffected and still require authorization.
+    #[must_use]
+    pub fn unrestricted_browsing(mut self) -> Self {
+        self.config.browse_scope = BrowseScope::Unrestricted;
         self
     }
 

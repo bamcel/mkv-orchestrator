@@ -116,6 +116,13 @@ export interface BackendClient {
   getCurrentScanFiles(): Promise<CurrentScanResponse>;
   clearCurrentScanFiles(): Promise<CurrentScanResponse>;
   setFileSelection(paths: string[]): Promise<CurrentScanResponse>;
+  /**
+   * Authorize a folder found by browsing so it can be scanned.
+   *
+   * Only meaningful where browsing ranges wider than the authorized roots. A
+   * host that confines browsing has already authorized anything it showed.
+   */
+  authorizeBrowsedRoot(path: string): Promise<void>;
 
   getWebSettings(): Promise<WebSettings>;
   saveWebSettings(request: WebSettingsRequest): Promise<WebSettings>;

@@ -165,6 +165,20 @@ pub async fn clear_current_scan_files(runtime: State<'_, RuntimeState>) -> Comma
     encode_response(runtime.clear_current_scan_files().await)
 }
 
+/// Authorize a folder chosen in the in-app browser so it can be scanned.
+#[tauri::command]
+pub async fn authorize_browsed_root(
+    runtime: State<'_, RuntimeState>,
+    path: String,
+) -> CommandResult {
+    let grant = runtime
+        .authorize_browsed_root(&path)
+        .map_err(CommandError::from)?;
+    serde_json::to_value(grant).map_err(|error| {
+        CommandError::from(mkvo_runtime::RuntimeError::internal(error.to_string()))
+    })
+}
+
 #[tauri::command]
 pub async fn set_file_selection(runtime: State<'_, RuntimeState>, request: Value) -> CommandResult {
     encode_response(runtime.set_file_selection(decode_request(request)?).await)
