@@ -1,6 +1,10 @@
 use std::{
     collections::BTreeMap,
     path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -125,8 +129,15 @@ impl WatchHandle {
         let (raw_sender, raw_receiver) = mpsc::channel(options.channel_capacity.max(1));
         let (sender, receiver) = mpsc::channel(options.channel_capacity.max(1));
         let callback_sender = raw_sender.clone();
+        let overflowed = Arc::new(AtomicBool::new(false));
+        let callback_overflowed = Arc::clone(&overflowed);
         let mut watcher = notify::recommended_watcher(move |event| {
-            let _ = callback_sender.try_send(event);
+            if matches!(
+                callback_sender.try_send(event),
+                Err(mpsc::error::TrySendError::Full(_))
+            ) {
+                callback_overflowed.store(true, Ordering::Release);
+            }
         })?;
         for root in &options.roots {
             watcher.watch(root, RecursiveMode::Recursive)?;
@@ -137,7 +148,9 @@ impl WatchHandle {
             sender,
             cancellation.clone(),
             options.debounce,
+            options.poll_interval,
             options.media_only,
+            overflowed,
         ));
         Ok(Self {
             receiver,
@@ -188,12 +201,17 @@ async fn debounce_native_events(
     sender: mpsc::Sender<WatchEvent>,
     cancellation: CancellationToken,
     debounce: Duration,
+    reconciliation: Duration,
     media_only: bool,
+    overflowed: Arc<AtomicBool>,
 ) {
     let tick_duration = debounce
         .min(Duration::from_secs(1))
         .max(Duration::from_millis(50));
     let mut tick = tokio::time::interval(tick_duration);
+    let mut reconcile = tokio::time::interval(reconciliation.max(Duration::from_secs(1)));
+    reconcile.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    reconcile.tick().await;
     let mut pending = BTreeMap::<PathBuf, (WatchEventKind, Instant)>::new();
     loop {
         tokio::select! {
@@ -211,6 +229,11 @@ async fn debounce_native_events(
                 }
             }
             _ = tick.tick() => {
+                if overflowed.swap(false, Ordering::AcqRel)
+                    && sender.send(WatchEvent { kind: WatchEventKind::RescanRequired, paths: Vec::new() }).await.is_err()
+                {
+                    return;
+                }
                 let now = Instant::now();
                 let ready: Vec<_> = pending
                     .iter()
@@ -222,6 +245,11 @@ async fn debounce_native_events(
                     if sender.send(WatchEvent { kind, paths: vec![path] }).await.is_err() {
                         return;
                     }
+                }
+            }
+            _ = reconcile.tick() => {
+                if sender.send(WatchEvent { kind: WatchEventKind::RescanRequired, paths: Vec::new() }).await.is_err() {
+                    return;
                 }
             }
         }

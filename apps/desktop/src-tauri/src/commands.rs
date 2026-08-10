@@ -223,7 +223,9 @@ pub async fn search_rename_metadata(
         .search_rename_metadata(decode_request(request)?)
         .await
         .map_err(CommandError::from)?;
-    Ok(serde_json::json!({ "results": results }))
+    encode_response(Ok::<_, mkvo_runtime::RuntimeError>(
+        mkvo_runtime::compat::RenameSearchResponse { results },
+    ))
 }
 
 #[tauri::command]
@@ -232,7 +234,9 @@ pub async fn load_rename_scopes(runtime: State<'_, RuntimeState>, request: Value
         .load_rename_scopes(decode_request(request)?)
         .await
         .map_err(CommandError::from)?;
-    Ok(serde_json::json!({ "scopes": scopes }))
+    encode_response(Ok::<_, mkvo_runtime::RuntimeError>(
+        mkvo_runtime::compat::RenameScopesResponse { scopes },
+    ))
 }
 
 #[tauri::command]

@@ -14,7 +14,8 @@ use mkvo_runtime::{
     compat::{
         LibraryAuditRequest, MediaServerConnectionRequest, MuxPreviewRequest,
         PropEditPreviewRequest, PropEditTemplateRequest, RenameApplyRequest, RenamePreviewRequest,
-        RenameProviderTestRequest, RenameScopesRequest, RenameSearchRequest, RenameSearchResult,
+        RenameProviderTestRequest, RenameScopesRequest, RenameScopesResponse, RenameSearchRequest,
+        RenameSearchResponse,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -30,18 +31,6 @@ pub(crate) struct HealthResponse {
 #[derive(Default, Deserialize)]
 struct BrowseQuery {
     path: Option<String>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RenameSearchResponse {
-    results: Vec<RenameSearchResult>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RenameScopesResponse {
-    scopes: Vec<mkvo_contracts::RenameScopeRow>,
 }
 
 pub(crate) fn api_router(state: AppState) -> Router {

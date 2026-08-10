@@ -330,22 +330,20 @@ impl SecretStore for FileSecretStore {
 
     async fn set(&self, key: &str, value: &str) -> Result<(), mkvo_application::PortError> {
         let _persist = self.persist_lock.lock().await;
-        let values = {
-            let mut values = self.values.write().await;
-            values.insert(key.to_owned(), value.to_owned());
-            values.clone()
-        };
-        self.persist(&values).await
+        let mut values = self.values.read().await.clone();
+        values.insert(key.to_owned(), value.to_owned());
+        self.persist(&values).await?;
+        *self.values.write().await = values;
+        Ok(())
     }
 
     async fn remove(&self, key: &str) -> Result<(), mkvo_application::PortError> {
         let _persist = self.persist_lock.lock().await;
-        let values = {
-            let mut values = self.values.write().await;
-            values.remove(key);
-            values.clone()
-        };
-        self.persist(&values).await
+        let mut values = self.values.read().await.clone();
+        values.remove(key);
+        self.persist(&values).await?;
+        *self.values.write().await = values;
+        Ok(())
     }
 }
 
@@ -531,16 +529,16 @@ impl MkvoRuntimeBuilder {
     }
 
     /// Synchronously composes lazy/async services for straightforward Tauri setup.
-    pub fn build(self) -> RuntimeResult<MkvoRuntime> {
+    pub fn build(mut self) -> RuntimeResult<MkvoRuntime> {
         std::fs::create_dir_all(&self.config.config_root)?;
-        let dependencies = match self.dependencies {
+        let dependencies = match self.dependencies.take() {
             Some(dependencies) => dependencies,
             None => self.local_dependencies()?,
         };
         Ok(MkvoRuntime::from_parts(self.config, dependencies))
     }
 
-    fn local_dependencies(&self) -> RuntimeResult<RuntimeDependencies> {
+    fn local_dependencies(&mut self) -> RuntimeResult<RuntimeDependencies> {
         let roots = self
             .config
             .authorized_roots
@@ -553,8 +551,6 @@ impl MkvoRuntimeBuilder {
 
         let repositories = SqliteRepositories::open(self.config.config_root.join("mkvo.db"))
             .map_err(|error| RuntimeError::internal(error.to_string()))?;
-        let file_system = Arc::new(LocalFileSystem::new(authorized.clone(), true));
-        let catalog = Arc::new(LocalMediaCatalog::new(authorized.clone(), true));
         let watcher = Arc::new(WatchService::new(WatchOptions::default()));
         let base_secrets = match self.secret_store.clone() {
             Some(store) => store,
@@ -602,18 +598,41 @@ impl MkvoRuntimeBuilder {
             .map_err(|error| RuntimeError::internal(error.to_string()))?
             .map_or_else(AppSettings::default, |(_, _, settings)| settings)
             .normalized();
-        for path in persisted_settings
+        self.config
+            .scan_worker_override
+            .get_or_insert(persisted_settings.workers.max_scan_workers);
+        self.config
+            .edit_worker_override
+            .get_or_insert(persisted_settings.workers.max_edit_workers);
+        self.config
+            .remux_worker_override
+            .get_or_insert(persisted_settings.workers.max_remux_workers);
+        let quick_hash = persisted_settings
             .scan
-            .default_root
-            .iter()
-            .chain(persisted_settings.watch.roots.iter())
-        {
-            if let Err(error) = authorized.grant(path, true) {
-                tracing::warn!(
-                    path = %path.display(),
-                    error = %error,
-                    "persisted root could not be authorized"
-                );
+            .use_quick_hash_on_unreliable_timestamps;
+        let file_system = Arc::new(LocalFileSystem::new(authorized.clone(), quick_hash));
+        let catalog = Arc::new(LocalMediaCatalog::new(authorized.clone(), quick_hash));
+        if self.config.browse_scope == BrowseScope::Unrestricted {
+            for path in persisted_settings
+                .scan
+                .default_root
+                .iter()
+                .chain(
+                    persisted_settings
+                        .scan
+                        .library_roots
+                        .iter()
+                        .map(|root| &root.path),
+                )
+                .chain(persisted_settings.watch.roots.iter())
+            {
+                if let Err(error) = authorized.grant(path, true) {
+                    tracing::warn!(
+                        path = %path.display(),
+                        error = %error,
+                        "persisted root could not be authorized"
+                    );
+                }
             }
         }
         let (explicit_tools, search_directories) = tool_configuration(
@@ -654,9 +673,6 @@ impl MkvoRuntimeBuilder {
     }
 }
 
-#[allow(dead_code)]
-fn _assert_settings_send_sync(_: &AppSettings) {}
-
 fn read_secret_values(path: &std::path::Path) -> Result<BTreeMap<String, String>, std::io::Error> {
     match std::fs::read(path) {
         Ok(bytes) => serde_json::from_slice(&bytes)
@@ -670,23 +686,46 @@ fn persist_secret_values(
     path: &std::path::Path,
     values: &BTreeMap<String, String>,
 ) -> Result<(), std::io::Error> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
     let bytes = serde_json::to_vec(values)
         .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+    persist_bytes_atomic(path, &bytes, true)
+}
+
+pub(crate) fn persist_bytes_atomic(
+    path: &std::path::Path,
+    bytes: &[u8],
+    private: bool,
+) -> Result<(), std::io::Error> {
+    #[cfg(not(unix))]
+    let _ = private;
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no parent")
+    })?;
+    std::fs::create_dir_all(parent)?;
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("mkvo-data");
+    let temporary = parent.join(format!(".{name}.{}.tmp", uuid::Uuid::new_v4()));
     let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(true)
+        .create_new(true)
         .write(true)
-        .open(path)?;
+        .open(&temporary)?;
     #[cfg(unix)]
-    {
+    if private {
         use std::os::unix::fs::PermissionsExt;
         file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
     }
-    file.write_all(&bytes)?;
-    file.sync_all()
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    drop(file);
+    if let Err(error) = std::fs::rename(&temporary, path) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error);
+    }
+    #[cfg(unix)]
+    std::fs::File::open(parent)?.sync_all()?;
+    Ok(())
 }
 
 fn legacy_app_data_root() -> Option<PathBuf> {

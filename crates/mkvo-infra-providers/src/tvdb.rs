@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
-use crate::common::{response_json, send_with_retry, year_from_date};
+use crate::common::{provider_http_client, response_json, send_with_retry, year_from_date};
 use crate::{
     EpisodeMetadata, MediaKind, MetadataProviderClient, ProviderCredentials, ProviderError,
     ProviderKind, SearchResult, SecretString, SelectedMedia,
@@ -35,7 +35,7 @@ pub struct TvdbClient {
 impl TvdbClient {
     pub fn new() -> Self {
         Self {
-            client: Client::new(),
+            client: provider_http_client(),
             base_url: Url::parse(DEFAULT_BASE_URL).expect("TVDB base URL is valid"),
             token: Arc::new(RwLock::new(None)),
         }

@@ -10,7 +10,7 @@ import type { MediaFileRow } from "../api";
 
 function mediaFile(fileName: string): MediaFileRow {
   return {
-    path: `C:\media\${fileName}`,
+    path: String.raw`C:\media` + "\\" + fileName,
     fileName,
     extension: ".mkv",
     status: "Scanned",

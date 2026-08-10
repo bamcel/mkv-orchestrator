@@ -309,7 +309,7 @@ const fn default_watch_reconciliation_interval_minutes() -> u64 {
 }
 
 fn default_selected_theme_name() -> String {
-    "Dark".to_owned()
+    "Gotham".to_owned()
 }
 
 /// Compatibility view matching the existing React settings page.

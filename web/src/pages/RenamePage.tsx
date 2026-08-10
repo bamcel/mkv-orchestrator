@@ -132,6 +132,7 @@ export function RenamePage() {
     if (storedRenameState.provider === undefined) setProvider(settings.data.renameLookupProvider || "TVDB");
     if (storedRenameState.language === undefined) setLanguage(settings.data.tvdbLanguage || "eng");
     if (storedRenameState.template === undefined) setTemplate(settings.data.renameTemplate || "{series} - S{season:00}E{episode:00} - {episodeTitle}");
+    setCompactPreview(settings.data.renamePreviewCompactView);
     setSettingsDefaultsApplied(true);
   }, [settings.data, settingsDefaultsApplied, storedRenameState]);
 
@@ -368,6 +369,16 @@ export function RenamePage() {
     }).catch(() => undefined);
 
     search.mutate({ query: searchTitle, provider, language });
+  }
+
+  function toggleCompactPreview() {
+    setCompactPreview((current) => {
+      const next = !current;
+      void saveWebSettings({ renamePreviewCompactView: next }).catch((error: unknown) => {
+        setStatusText(error instanceof Error ? error.message : "Compact-view preference could not be saved.");
+      });
+      return next;
+    });
   }
 
   async function refreshScannedFiles() {
@@ -685,7 +696,7 @@ export function RenamePage() {
               </button>
               <button
                 type="button"
-                onClick={() => setCompactPreview((current) => !current)}
+                  onClick={toggleCompactPreview}
                 className="inline-flex h-9 min-w-32 items-center justify-center whitespace-nowrap rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
               >
                 {compactPreview ? "Detailed View" : "Compact View"}

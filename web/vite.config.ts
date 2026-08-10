@@ -12,6 +12,18 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("/src/generated/contracts.ts")) {
+            return "contracts";
+          }
+          if (id.includes("/node_modules/")) {
+            return "vendor";
+          }
+        }
+      }
+    }
   }
 });

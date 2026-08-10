@@ -5,7 +5,7 @@ services for Docker, NAS, and remote-browser deployments.
 
 Configuration is environment-based:
 
-- `MKVO_BIND` (default `0.0.0.0:8080`)
+- `MKVO_BIND` (default `127.0.0.1:8080`)
 - `MKVO_MEDIA_ROOT` (default `/media`)
 - `MKVO_SOURCE_ROOTS` (`label=/path` entries separated by commas or semicolons)
 - `MKVO_CONFIG_DIR` (default `/config`)
@@ -15,7 +15,10 @@ Configuration is environment-based:
 - `MKVO_GRACEFUL_SHUTDOWN_SECONDS` (default `15`)
 
 `/api/health` remains public for container health checks. All other routes and
-the UI are protected when basic authentication is configured.
+the UI are protected when basic authentication is configured. Authentication
+is mandatory for any non-loopback bind; the server refuses to start instead of
+exposing media mutations without credentials. Basic authentication must be
+placed behind HTTPS when traffic leaves the local machine.
 
 The server preserves the React client's polling endpoints and also exposes
 Server-Sent Events at `/api/scans/{id}/events` and

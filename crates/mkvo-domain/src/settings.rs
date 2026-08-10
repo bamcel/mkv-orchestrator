@@ -21,12 +21,14 @@ pub struct AppSettings {
     pub media_server_path_mappings: Vec<PathMapping>,
     pub workers: WorkerSettings,
     pub appearance: AppearanceSettings,
+    #[serde(default)]
+    pub presets: PresetSettings,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            schema_version: 1,
+            schema_version: 2,
             tools: ToolSettings::default(),
             scan: ScanSettings::default(),
             rename: RenameSettings::default(),
@@ -36,6 +38,7 @@ impl Default for AppSettings {
             media_server_path_mappings: Vec::new(),
             workers: WorkerSettings::default(),
             appearance: AppearanceSettings::default(),
+            presets: PresetSettings::default(),
         }
     }
 }
@@ -68,10 +71,114 @@ impl AppSettings {
             .filter(|value| !value.is_empty())
             .filter(|value| seen_templates.insert(value.clone()))
             .collect();
+        self.presets = self.presets.normalized();
         self.watch.roots.sort();
         self.watch.roots.dedup();
         self
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresetSettings {
+    #[serde(default = "default_audio_name_presets")]
+    pub audio_name_presets: Vec<String>,
+    #[serde(default = "default_subtitle_name_presets")]
+    pub subtitle_name_presets: Vec<String>,
+    #[serde(default = "default_language_presets")]
+    pub language_presets: Vec<String>,
+    #[serde(default = "default_mux_audio_languages")]
+    pub mkv_merge_default_audio_languages: String,
+    #[serde(default = "default_mux_subtitle_languages")]
+    pub mkv_merge_default_subtitle_languages: String,
+}
+
+impl Default for PresetSettings {
+    fn default() -> Self {
+        Self {
+            audio_name_presets: default_audio_name_presets(),
+            subtitle_name_presets: default_subtitle_name_presets(),
+            language_presets: default_language_presets(),
+            mkv_merge_default_audio_languages: default_mux_audio_languages(),
+            mkv_merge_default_subtitle_languages: default_mux_subtitle_languages(),
+        }
+    }
+}
+
+impl PresetSettings {
+    #[must_use]
+    pub fn normalized(mut self) -> Self {
+        self.audio_name_presets = normalized_presets(self.audio_name_presets);
+        self.subtitle_name_presets = normalized_presets(self.subtitle_name_presets);
+        self.language_presets = normalized_presets(self.language_presets);
+        self.mkv_merge_default_audio_languages = nonblank_or(
+            self.mkv_merge_default_audio_languages,
+            default_mux_audio_languages,
+        );
+        self.mkv_merge_default_subtitle_languages = nonblank_or(
+            self.mkv_merge_default_subtitle_languages,
+            default_mux_subtitle_languages,
+        );
+        self
+    }
+}
+
+fn normalized_presets(values: Vec<String>) -> Vec<String> {
+    let mut values: Vec<_> = values
+        .into_iter()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .collect();
+    values.sort_by_key(|value| value.to_ascii_lowercase());
+    values.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+    values
+}
+
+fn nonblank_or(value: String, fallback: fn() -> String) -> String {
+    let value = value.trim();
+    if value.is_empty() {
+        fallback()
+    } else {
+        value.to_owned()
+    }
+}
+
+fn default_audio_name_presets() -> Vec<String> {
+    ["English", "Japanese", "Commentary"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
+}
+
+fn default_subtitle_name_presets() -> Vec<String> {
+    [
+        "English",
+        "English Forced",
+        "English SDH",
+        "Dialogue",
+        "Signs & Songs",
+        "Commentary",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
+}
+
+fn default_language_presets() -> Vec<String> {
+    [
+        "eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
+}
+
+fn default_mux_audio_languages() -> String {
+    "eng,jpn".to_owned()
+}
+
+fn default_mux_subtitle_languages() -> String {
+    "eng".to_owned()
 }
 
 /// A blank path is "not configured", never "configured to nothing". An explicit
@@ -357,7 +464,7 @@ pub struct AppearanceSettings {
 impl Default for AppearanceSettings {
     fn default() -> Self {
         Self {
-            selected_theme: "Dark".to_owned(),
+            selected_theme: "Gotham".to_owned(),
             custom_themes: Vec::new(),
         }
     }
@@ -420,5 +527,53 @@ mod tests {
         assert_eq!(normalized.max_scan_workers, 1);
         assert_eq!(normalized.max_edit_workers, 6);
         assert_eq!(normalized.max_remux_workers, 2);
+    }
+
+    #[test]
+    fn schema_one_settings_receive_preset_defaults() {
+        let mut value = serde_json::to_value(AppSettings::default()).unwrap();
+        value["schemaVersion"] = serde_json::json!(1);
+        value.as_object_mut().unwrap().remove("presets");
+
+        let settings: AppSettings = serde_json::from_value(value).unwrap();
+        assert_eq!(settings.schema_version, 1);
+        assert!(!settings.presets.audio_name_presets.is_empty());
+        assert_eq!(
+            settings.presets.mkv_merge_default_audio_languages,
+            "eng,jpn"
+        );
+    }
+
+    #[test]
+    fn preset_defaults_match_the_product_choices() {
+        let presets = PresetSettings::default();
+        assert_eq!(
+            presets.audio_name_presets,
+            ["English", "Japanese", "Commentary"]
+        );
+        assert_eq!(
+            presets.subtitle_name_presets,
+            [
+                "English",
+                "English Forced",
+                "English SDH",
+                "Dialogue",
+                "Signs & Songs",
+                "Commentary"
+            ]
+        );
+    }
+
+    #[test]
+    fn preset_normalization_removes_blanks_and_case_duplicates() {
+        let settings = PresetSettings {
+            audio_name_presets: vec![" English ".to_owned(), "english".to_owned(), String::new()],
+            mkv_merge_default_audio_languages: "   ".to_owned(),
+            ..PresetSettings::default()
+        }
+        .normalized();
+
+        assert_eq!(settings.audio_name_presets, ["English"]);
+        assert_eq!(settings.mkv_merge_default_audio_languages, "eng,jpn");
     }
 }

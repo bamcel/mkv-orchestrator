@@ -36,6 +36,14 @@ describe("working set persistence", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    // Most persistence tests exercise local reconciliation only. Keep their
+    // background transport promise pending so it cannot resolve after the
+    // assertion and update React outside the test's `act` boundary.
+    setBackendClient(
+      createMockBackendClient({
+        setFileSelection: () => new Promise(() => undefined)
+      })
+    );
   });
 
   /// Re-picking files across a large library after every reload is the whole

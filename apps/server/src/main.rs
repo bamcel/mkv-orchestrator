@@ -15,6 +15,22 @@ async fn main() -> Result<()> {
     let config = Arc::new(ServerConfig::from_env()?);
     let runtime = Arc::new(build_runtime(&config)?);
 
+    let migration = runtime
+        .migrate_legacy_data()
+        .await
+        .context("legacy MKVO data migration failed")?;
+    info!(status = ?migration.status, "legacy data migration checked");
+    let recovery = runtime
+        .recover_startup_state()
+        .await
+        .context("startup recovery failed")?;
+    info!(
+        completed = recovery.completed,
+        clean_retry = recovery.clean_retry,
+        manual_review = recovery.manual_review,
+        "startup recovery completed"
+    );
+
     // Watchers are started before the listener so a container that boots with
     // watching enabled is already observing its roots when the first request
     // arrives. A watcher that cannot start is logged, never fatal.

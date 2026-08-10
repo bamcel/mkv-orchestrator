@@ -119,6 +119,54 @@ describe("Settings providers", () => {
 });
 
 describe("Settings library folders", () => {
+  it("automatically saves a changed desktop default directory", async () => {
+    const user = userEvent.setup();
+    const saveWebSettings = vi.fn().mockResolvedValue(
+      settings({ libraryRoots: [{ name: "Default", path: "D:\\Media" }] })
+    );
+
+    renderWithBackend(<SettingsPage />, {
+      transport: "tauri",
+      getStatus: () => Promise.resolve({ ...status, mediaRoot: "" }),
+      getWebSettings: () => Promise.resolve(settings()),
+      saveWebSettings
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^general$/i }));
+    await user.type(await screen.findByRole("textbox", { name: /^default directory$/i }), "D:\\Media");
+
+    await waitFor(() => expect(saveWebSettings).toHaveBeenCalled(), { timeout: 2500 });
+    expect(saveWebSettings.mock.calls.at(-1)?.[0].libraryRoots[0]).toEqual({
+      name: "Default",
+      path: "D:\\Media"
+    });
+  });
+
+  it("saves the desktop default directory as the first library folder", async () => {
+    const user = userEvent.setup();
+    const saveWebSettings = vi.fn().mockResolvedValue(
+      settings({ libraryRoots: [{ name: "Default", path: "D:\\Media" }] })
+    );
+
+    renderWithBackend(<SettingsPage />, {
+      transport: "tauri",
+      getStatus: () => Promise.resolve({ ...status, mediaRoot: "" }),
+      getWebSettings: () => Promise.resolve(settings()),
+      saveWebSettings
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^general$/i }));
+    const directory = await screen.findByRole("textbox", { name: /^default directory$/i });
+    await user.type(directory, "D:\\Media");
+    await user.click(screen.getByRole("button", { name: /save settings/i }));
+
+    await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
+    expect(saveWebSettings.mock.calls[0][0].libraryRoots[0]).toEqual({
+      name: "Default",
+      path: "D:\\Media"
+    });
+  });
+
   /// The container case the setting exists for: one bind mount, several shares
   /// inside it, each wanted as its own entry in the browser.
   it("saves several folders from inside a single mount", async () => {
@@ -138,13 +186,13 @@ describe("Settings library folders", () => {
       saveWebSettings
     });
 
-    await user.click(await screen.findByRole("button", { name: /^library$/i }));
+    await user.click(await screen.findByRole("button", { name: /^general$/i }));
     await user.click(await screen.findByRole("button", { name: /add folder/i }));
-    await user.type(screen.getByLabelText(/library folder 1 name/i), "Anime");
-    await user.type(screen.getByLabelText(/library folder 1 path/i), "/mnt/user/anime");
+    await user.type(screen.getByLabelText(/quick access folder 1 name/i), "Anime");
+    await user.type(screen.getByLabelText(/quick access folder 1 path/i), "/mnt/user/anime");
     await user.click(screen.getByRole("button", { name: /add folder/i }));
-    await user.type(screen.getByLabelText(/library folder 2 name/i), "TV");
-    await user.type(screen.getByLabelText(/library folder 2 path/i), "/mnt/user/tv");
+    await user.type(screen.getByLabelText(/quick access folder 2 name/i), "TV");
+    await user.type(screen.getByLabelText(/quick access folder 2 path/i), "/mnt/user/tv");
 
     await user.click(screen.getByRole("button", { name: /save settings/i }));
 
@@ -173,12 +221,12 @@ describe("Settings library folders", () => {
       saveWebSettings
     });
 
-    await user.click(await screen.findByRole("button", { name: /^library$/i }));
+    await user.click(await screen.findByRole("button", { name: /^general$/i }));
     await waitFor(() =>
-      expect(screen.getByLabelText(/library folder 1 name/i)).toHaveValue("Anime")
+      expect(screen.getByLabelText(/quick access folder 1 name/i)).toHaveValue("Anime")
     );
 
-    await user.click(screen.getByRole("button", { name: /remove library folder 1/i }));
+    await user.click(screen.getByRole("button", { name: /remove quick access folder 1/i }));
     await user.click(screen.getByRole("button", { name: /save settings/i }));
 
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
@@ -198,7 +246,7 @@ describe("Settings library folders", () => {
       saveWebSettings
     });
 
-    await user.click(await screen.findByRole("button", { name: /^library$/i }));
+    await user.click(await screen.findByRole("button", { name: /^general$/i }));
     await user.click(await screen.findByRole("button", { name: /add folder/i }));
     await user.click(screen.getByRole("button", { name: /save settings/i }));
 
@@ -222,9 +270,9 @@ describe("Settings library folders", () => {
         )
     });
 
-    await user.click(await screen.findByRole("button", { name: /^library$/i }));
+    await user.click(await screen.findByRole("button", { name: /^general$/i }));
     await user.click(await screen.findByRole("button", { name: /add folder/i }));
-    await user.click(screen.getByRole("button", { name: /^browse$/i }));
+    await user.click(screen.getByRole("button", { name: /browse for quick access folder 1/i }));
 
     // "D:" is both a sidebar shortcut and a row; the row is the one to open.
     const rows = await screen.findAllByText("D:");
@@ -233,8 +281,66 @@ describe("Settings library folders", () => {
     await user.click(await screen.findByRole("button", { name: /select this folder/i }));
 
     await waitFor(() =>
-      expect(screen.getByLabelText(/library folder 1 path/i)).toHaveValue("D:\\")
+      expect(screen.getByLabelText(/quick access folder 1 path/i)).toHaveValue("D:\\")
     );
+  });
+});
+
+describe("Settings defaults", () => {
+  it("resets rename templates and automatically saves them", async () => {
+    const user = userEvent.setup();
+    const saveWebSettings = vi.fn().mockResolvedValue(settings({
+      renameTemplate: "{series} - S{season:00}E{episode:00} - {episodeTitle}",
+      renameTemplates: ["{title}", "{title} ({year})", "{series} - S{season:00}E{episode:00} - {episodeTitle}", "S{season:00}E{episode:00} - {episodeTitle}", "{series} - {absolute:000} - {episodeTitle}"]
+    }));
+
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings({ renameTemplate: "custom", renameTemplates: ["custom"] })),
+      saveWebSettings
+    });
+
+    await openRenameTab(user);
+    await user.click(await screen.findByRole("button", { name: /reset to defaults/i }));
+
+    await waitFor(() => expect(saveWebSettings).toHaveBeenCalled(), { timeout: 2500 });
+    expect(saveWebSettings.mock.calls.at(-1)?.[0].renameTemplates).toHaveLength(5);
+    expect(saveWebSettings.mock.calls.at(-1)?.[0].renameTemplate).toContain("{episodeTitle}");
+  });
+
+  it("resets every preset list and mux default", async () => {
+    const user = userEvent.setup();
+    const saveWebSettings = vi.fn().mockResolvedValue(settings());
+
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings({
+        audioNamePresets: ["Custom"],
+        subtitleNamePresets: ["Custom"],
+        languagePresets: ["zzz"],
+        mkvMergeDefaultAudioLanguages: "zzz",
+        mkvMergeDefaultSubtitleLanguages: "zzz"
+      })),
+      saveWebSettings
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^presets$/i }));
+    await user.click(await screen.findByRole("button", { name: /reset all presets/i }));
+
+    await waitFor(() => expect(saveWebSettings).toHaveBeenCalled(), { timeout: 2500 });
+    const request = saveWebSettings.mock.calls.at(-1)?.[0];
+    expect(request.audioNamePresets).toEqual(["English", "Japanese", "Commentary"]);
+    expect(request.subtitleNamePresets).toEqual([
+      "English",
+      "English Forced",
+      "English SDH",
+      "Dialogue",
+      "Signs & Songs",
+      "Commentary"
+    ]);
+    expect(request.languagePresets).toContain("eng");
+    expect(request.mkvMergeDefaultAudioLanguages).toBe("eng,jpn");
+    expect(request.mkvMergeDefaultSubtitleLanguages).toBe("eng");
   });
 });
 

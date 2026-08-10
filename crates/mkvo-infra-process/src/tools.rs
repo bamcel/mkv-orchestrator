@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     env,
-    ffi::OsStr,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
     time::Duration,
@@ -311,11 +310,6 @@ fn common_tool_directories() -> Vec<PathBuf> {
         }
     }
     paths
-}
-
-#[allow(dead_code)]
-fn has_path_separator(value: &OsStr) -> bool {
-    Path::new(value).components().count() > 1
 }
 
 #[cfg(test)]

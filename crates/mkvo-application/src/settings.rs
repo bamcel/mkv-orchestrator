@@ -12,6 +12,7 @@ pub struct SettingsService {
     repository: Arc<dyn SettingsRepository>,
     secrets: Arc<dyn SecretStore>,
     watcher: Option<Arc<dyn WatchBackend>>,
+    save_lock: tokio::sync::Mutex<()>,
 }
 
 impl SettingsService {
@@ -25,6 +26,7 @@ impl SettingsService {
             repository,
             secrets,
             watcher,
+            save_lock: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -38,38 +40,58 @@ impl SettingsService {
     }
 
     pub async fn save(&self, request: SaveSettingsRequest) -> ApplicationResult<SettingsResponse> {
+        let _save = self.save_lock.lock().await;
         let (old_settings, old_revision) = self.repository.load().await?;
         let settings = request.settings.normalized();
         validate_settings(&settings)?;
         validate_secret_updates(&request.secrets)?;
 
-        let expected_revision = request.expected_revision.or(Some(old_revision));
-        let revision = self.repository.save(&settings, expected_revision).await?;
-        for update in request.secrets {
-            if update.clear {
-                self.secrets.remove(&update.key).await?;
-            } else if let Some(value) = update.value.as_deref()
-                && !value.is_empty()
-            {
-                self.secrets.set(&update.key, value).await?;
-            }
+        let mut old_secrets = Vec::with_capacity(request.secrets.len());
+        for update in &request.secrets {
+            old_secrets.push((update.key.clone(), self.secrets.get(&update.key).await?));
         }
+        if let Err(error) = apply_secret_updates(&self.secrets, &request.secrets).await {
+            return Err(with_rollback(
+                error.into(),
+                restore_secrets(&self.secrets, &old_secrets).await.err(),
+                "secret update",
+            ));
+        }
+
+        let expected_revision = request.expected_revision.or(Some(old_revision));
+        let revision = match self.repository.save(&settings, expected_revision).await {
+            Ok(revision) => revision,
+            Err(error) => {
+                return Err(with_rollback(
+                    error.into(),
+                    restore_secrets(&self.secrets, &old_secrets).await.err(),
+                    "settings save",
+                ));
+            }
+        };
 
         if old_settings.watch != settings.watch
             && let Some(watcher) = &self.watcher
+            && let Err(error) = restart_watcher(watcher, &settings.watch).await
         {
-            watcher.stop().await?;
-            if settings.watch.enabled
-                && let Err(error) = watcher
-                    .start(&settings.watch.roots, settings.watch.force_polling)
-                    .await
-            {
-                // Settings and watcher state move together. Restore both on
-                // watcher failure; secrets are intentionally independent.
-                let _ = self.repository.save(&old_settings, Some(revision)).await;
-                let _ = restart_watcher(watcher, &old_settings.watch).await;
-                return Err(error.into());
+            let mut rollback_errors = Vec::new();
+            if let Err(rollback) = self.repository.save(&old_settings, Some(revision)).await {
+                rollback_errors.push(format!("settings: {rollback}"));
             }
+            if let Err(rollback) = restore_secrets(&self.secrets, &old_secrets).await {
+                rollback_errors.push(format!("secrets: {rollback}"));
+            }
+            if let Err(rollback) = restart_watcher(watcher, &old_settings.watch).await {
+                rollback_errors.push(format!("watcher: {rollback}"));
+            }
+            return if rollback_errors.is_empty() {
+                Err(error.into())
+            } else {
+                Err(ApplicationError::Internal(format!(
+                    "watcher restart failed: {error}; rollback also failed: {}",
+                    rollback_errors.join("; ")
+                )))
+            };
         }
 
         Ok(SettingsResponse {
@@ -93,15 +115,55 @@ impl SettingsService {
     }
 }
 
+async fn apply_secret_updates(
+    secrets: &Arc<dyn SecretStore>,
+    updates: &[mkvo_contracts::SecretUpdate],
+) -> Result<(), crate::PortError> {
+    for update in updates {
+        if update.clear {
+            secrets.remove(&update.key).await?;
+        } else if let Some(value) = update.value.as_deref()
+            && !value.is_empty()
+        {
+            secrets.set(&update.key, value).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn restore_secrets(
+    secrets: &Arc<dyn SecretStore>,
+    values: &[(String, Option<String>)],
+) -> Result<(), crate::PortError> {
+    for (key, value) in values {
+        match value {
+            Some(value) => secrets.set(key, value).await?,
+            None => secrets.remove(key).await?,
+        }
+    }
+    Ok(())
+}
+
+fn with_rollback(
+    error: ApplicationError,
+    rollback: Option<crate::PortError>,
+    operation: &str,
+) -> ApplicationError {
+    match rollback {
+        None => error,
+        Some(rollback) => ApplicationError::Internal(format!(
+            "{operation} failed: {error}; secret rollback also failed: {rollback}"
+        )),
+    }
+}
+
 async fn restart_watcher(
     watcher: &Arc<dyn WatchBackend>,
     settings: &WatchSettings,
 ) -> Result<(), crate::PortError> {
     watcher.stop().await?;
     if settings.enabled {
-        watcher
-            .start(&settings.roots, settings.force_polling)
-            .await?;
+        watcher.start(settings).await?;
     }
     Ok(())
 }
@@ -125,6 +187,16 @@ fn validate_settings(settings: &AppSettings) -> ApplicationResult<()> {
     {
         return Err(ApplicationError::InvalidRequest(
             "watch roots must not be blank".to_owned(),
+        ));
+    }
+    if !(50..=60_000).contains(&settings.watch.debounce_millis) {
+        return Err(ApplicationError::InvalidRequest(
+            "watch debounce must be between 50 and 60000 milliseconds".to_owned(),
+        ));
+    }
+    if !(1..=1_440).contains(&settings.watch.reconciliation_interval_minutes) {
+        return Err(ApplicationError::InvalidRequest(
+            "watch reconciliation must be between 1 and 1440 minutes".to_owned(),
         ));
     }
     if settings

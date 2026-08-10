@@ -136,7 +136,7 @@
       },
       "expected": {
         "publicSettings": {
-          "schemaVersion": 1,
+          "schemaVersion": 2,
           "tools": {
             "mkvtoolnixDirectory": "${TOOLS}/MKVToolNix",
             "ffmpegDirectory": "${TOOLS}/ffmpeg",
@@ -241,6 +241,23 @@
                 }
               }
             ]
+          },
+          "presets": {
+            "audioNamePresets": [
+              "English",
+              "Japanese"
+            ],
+            "subtitleNamePresets": [
+              "English",
+              "Signs & Songs"
+            ],
+            "languagePresets": [
+              "eng",
+              "jpn",
+              "und"
+            ],
+            "mkvMergeDefaultAudioLanguages": "eng,jpn",
+            "mkvMergeDefaultSubtitleLanguages": "eng"
           }
         },
         "secretWrites": [
@@ -263,12 +280,7 @@
         ],
         "ignoredLegacyFields": [
           "SourceFolderStartMode",
-          "LastFolderPath",
-          "AudioNamePresets",
-          "SubtitleNamePresets",
-          "LanguagePresets",
-          "MkvMergeDefaultAudioLanguages",
-          "MkvMergeDefaultSubtitleLanguages"
+          "LastFolderPath"
         ],
         "backupRequiredBeforeCommit": true
       }

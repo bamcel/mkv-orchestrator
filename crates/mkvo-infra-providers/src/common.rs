@@ -6,6 +6,17 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 
+pub(crate) fn provider_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        // Provider requests can contain bearer tokens or API keys. Following a
+        // redirect could forward them to a host the application did not choose.
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("provider HTTP client configuration must be valid")
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct SecretString(String);
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
@@ -24,16 +24,28 @@ import {
   testMediaServerConnection,
   testRenameProvider
 } from "../api";
-import type { SourceRoot, WebMediaServer, WebMediaServerPathMapping, WebSettings } from "../api";
+import type { SourceRoot, WebMediaServer, WebMediaServerPathMapping, WebSettings, WebSettingsRequest } from "../api";
 import { FileBrowser } from "../components/FileBrowser";
 import { SectionHeader } from "../components/SectionHeader";
 import ffmpegLogo from "../assets/logos/ffmpeg.png";
 import mkvtoolnixLogo from "../assets/logos/mkvtoolnix.png";
 import tmdbLogo from "../assets/logos/tmdb.png";
 import tvdbLogo from "../assets/logos/tvdb.png";
-import { applyWebTheme, getAllWebThemes, getStoredWebThemeName, getWebTheme, removeCustomWebTheme, saveCustomWebTheme } from "../theme";
+import { applyWebTheme, getAllWebThemes, getStoredWebThemeName, getWebTheme, loadCustomWebThemes, removeCustomWebTheme, replaceCustomWebThemes, saveCustomWebTheme, webThemes } from "../theme";
 
 const settingsTabStorageKey = "mkvo.web.settingsTab";
+const defaultRenameTemplate = "{series} - S{season:00}E{episode:00} - {episodeTitle}";
+const defaultRenameTemplates = [
+  "{title}",
+  "{title} ({year})",
+  defaultRenameTemplate,
+  "S{season:00}E{episode:00} - {episodeTitle}",
+  "{series} - {absolute:000} - {episodeTitle}"
+];
+const defaultAudioNamePresets = ["English", "Japanese", "Commentary"];
+const defaultSubtitleNamePresets = ["English", "English Forced", "English SDH", "Dialogue", "Signs & Songs", "Commentary"];
+const defaultLanguagePresets = ["eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de"];
+const autoSaveDelayMillis = 900;
 
 /**
  * Third-party notices shown in About.
@@ -94,7 +106,7 @@ export function SettingsPage() {
   const [isTestingProvider, setIsTestingProvider] = useState(false);
   const [language, setLanguage] = useState("eng");
   const [provider, setProvider] = useState("TVDB");
-  const [template, setTemplate] = useState("{series} - S{season:00}E{episode:00} - {episodeTitle}");
+  const [template, setTemplate] = useState(defaultRenameTemplate);
   const [renameTemplatesText, setRenameTemplatesText] = useState("");
   const [audioNamePresetsText, setAudioNamePresetsText] = useState("");
   const [subtitleNamePresetsText, setSubtitleNamePresetsText] = useState("");
@@ -118,6 +130,7 @@ export function SettingsPage() {
   const [themeJson, setThemeJson] = useState(() => JSON.stringify(getWebTheme(getStoredWebThemeName()), null, 2));
   const [customThemeName, setCustomThemeName] = useState("My Theme");
   const [settingsStatus, setSettingsStatus] = useState("");
+  const lastSavedFingerprint = useRef("");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -129,7 +142,7 @@ export function SettingsPage() {
     if (!webSettings.data) return;
     setLanguage(webSettings.data.tvdbLanguage || "eng");
     setProvider(webSettings.data.renameLookupProvider || "TVDB");
-    setTemplate(webSettings.data.renameTemplate || "{series} - S{season:00}E{episode:00} - {episodeTitle}");
+    setTemplate(webSettings.data.renameTemplate || defaultRenameTemplate);
     setRenameTemplatesText((webSettings.data.renameTemplates ?? []).join("\n"));
     setAudioNamePresetsText((webSettings.data.audioNamePresets ?? []).join("\n"));
     setSubtitleNamePresetsText((webSettings.data.subtitleNamePresets ?? []).join("\n"));
@@ -141,47 +154,72 @@ export function SettingsPage() {
     setLiveWatcherEnabled(Boolean(webSettings.data.enableLiveWatchFolderMonitoring));
     setMediaServers((webSettings.data.mediaServers ?? []).map((server) => ({ ...server, apiKey: "" })));
     setMediaServerMappingsText(formatPathMappings(webSettings.data.mediaServerPathMappings ?? []));
+    const themes = replaceCustomWebThemes(webSettings.data.customThemes ?? []);
+    setAvailableThemes(themes);
+    const selectedTheme = getWebTheme(webSettings.data.selectedThemeName).name;
+    setThemeName(selectedTheme);
+    const applied = applyWebTheme(selectedTheme);
+    setThemeJson(JSON.stringify(applied, null, 2));
+    lastSavedFingerprint.current = settingsFingerprint(settingsRequestFromSaved(webSettings.data));
   }, [webSettings.data]);
 
-  async function saveSettings(): Promise<WebSettings | null> {
+  const pendingSettingsRequest: WebSettingsRequest = {
+    tvdbApiKey: clearTvdbApiKey ? "" : tvdbApiKey || undefined,
+    tvdbPin: clearTvdbPin ? "" : tvdbPin || undefined,
+    tmdbApiKey: clearTmdbApiKey ? "" : tmdbApiKey || undefined,
+    anidbClient: clearAnidbClient ? "" : anidbClient || undefined,
+    tvdbLanguage: language,
+    renameLookupProvider: provider,
+    renameTemplate: template,
+    renameTemplates: normalizeRenameTemplates(renameTemplatesText, template),
+    audioNamePresets: normalizeLineList(audioNamePresetsText),
+    subtitleNamePresets: normalizeLineList(subtitleNamePresetsText),
+    languagePresets: normalizeLineList(languagePresetsText),
+    mkvMergeDefaultAudioLanguages: muxAudioDefaults,
+    mkvMergeDefaultSubtitleLanguages: muxSubtitleDefaults,
+    libraryRoots: libraryRoots
+      .map((root) => ({ name: root.name.trim(), path: root.path.trim() }))
+      .filter((root) => root.name && root.path),
+    watchFolders: normalizeLineList(watchFoldersText),
+    enableLiveWatchFolderMonitoring: liveWatcherEnabled,
+    selectedThemeName: themeName,
+    customThemes: loadCustomWebThemes(),
+    mediaServers: mediaServers.map((server) => ({
+      id: server.id,
+      name: server.name,
+      type: server.type,
+      serverUrl: server.serverUrl,
+      apiKey: server.apiKey || undefined,
+      isDefault: server.isDefault,
+      libraries: server.libraries
+    })),
+    mediaServerPathMappings: parsePathMappings(mediaServerMappingsText)
+  };
+  const pendingSettingsFingerprint = settingsFingerprint(pendingSettingsRequest);
+
+  async function saveSettings(
+    request: WebSettingsRequest = pendingSettingsRequest,
+    automatic = false
+  ): Promise<WebSettings | null> {
     try {
-      const saved = await saveWebSettings({
-        tvdbApiKey: clearTvdbApiKey ? "" : tvdbApiKey || undefined,
-        tvdbPin: clearTvdbPin ? "" : tvdbPin || undefined,
-        tmdbApiKey: clearTmdbApiKey ? "" : tmdbApiKey || undefined,
-        anidbClient: clearAnidbClient ? "" : anidbClient || undefined,
-        tvdbLanguage: language,
-        renameLookupProvider: provider,
-        renameTemplate: template,
-        renameTemplates: normalizeRenameTemplates(renameTemplatesText, template),
-        audioNamePresets: normalizeLineList(audioNamePresetsText),
-        subtitleNamePresets: normalizeLineList(subtitleNamePresetsText),
-        languagePresets: normalizeLineList(languagePresetsText),
-        mkvMergeDefaultAudioLanguages: muxAudioDefaults,
-        mkvMergeDefaultSubtitleLanguages: muxSubtitleDefaults,
-        libraryRoots: libraryRoots
-          .map((root) => ({ name: root.name.trim(), path: root.path.trim() }))
-          .filter((root) => root.name && root.path),
-        watchFolders: normalizeLineList(watchFoldersText),
-        enableLiveWatchFolderMonitoring: liveWatcherEnabled,
-        mediaServers: mediaServers.map((server) => ({
-          id: server.id,
-          name: server.name,
-          type: server.type,
-          serverUrl: server.serverUrl,
-          apiKey: server.apiKey || undefined,
-          isDefault: server.isDefault,
-          libraries: server.libraries
-        })),
-        mediaServerPathMappings: parsePathMappings(mediaServerMappingsText)
-      });
+      if (automatic) setSettingsStatus("Saving changes...");
+      const saved = await saveWebSettings(request);
+      lastSavedFingerprint.current = settingsFingerprint(request);
+
+      if (automatic) {
+        setSettingsStatus("Settings saved automatically.");
+        status.refetch();
+        return saved;
+      }
 
       setTvdbApiKey("");
       setTvdbPin("");
       setTmdbApiKey("");
+      setAnidbClient("");
       setClearTvdbApiKey(false);
       setClearTvdbPin(false);
       setClearTmdbApiKey(false);
+      setClearAnidbClient(false);
       setSettingsStatus("Settings saved.");
       webSettings.refetch();
       setLanguage(saved.tvdbLanguage);
@@ -198,6 +236,10 @@ export function SettingsPage() {
       setLiveWatcherEnabled(saved.enableLiveWatchFolderMonitoring);
       setMediaServers(saved.mediaServers.map((server) => ({ ...server, apiKey: "" })));
       setMediaServerMappingsText(formatPathMappings(saved.mediaServerPathMappings));
+      const themes = replaceCustomWebThemes(saved.customThemes);
+      setAvailableThemes(themes);
+      setThemeName(saved.selectedThemeName);
+      setThemeJson(JSON.stringify(applyWebTheme(saved.selectedThemeName), null, 2));
       status.refetch();
       return saved;
     } catch (error) {
@@ -205,6 +247,15 @@ export function SettingsPage() {
       return null;
     }
   }
+
+  useEffect(() => {
+    if (!webSettings.data || pendingSettingsFingerprint === lastSavedFingerprint.current) return;
+    setSettingsStatus("Changes pending...");
+    const timer = window.setTimeout(() => {
+      void saveSettings(pendingSettingsRequest, true);
+    }, autoSaveDelayMillis);
+    return () => window.clearTimeout(timer);
+  }, [pendingSettingsFingerprint, webSettings.data]);
 
   function addMediaServer() {
     if (!newServerUrl.trim()) {
@@ -347,7 +398,7 @@ export function SettingsPage() {
             <span className="max-w-[22.5rem] truncate text-sm text-success" title={settingsStatus}>{settingsStatus}</span>
             <button
               type="button"
-              onClick={saveSettings}
+              onClick={() => void saveSettings()}
               className="h-9 rounded-md bg-accent px-4 text-sm font-semibold text-window transition hover:bg-accent-hover"
             >
               Save Settings
@@ -355,21 +406,142 @@ export function SettingsPage() {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto p-5">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-5">
           {activeTab === "general" ? (
-            <div className="grid gap-5 lg:grid-cols-[minmax(22.5rem,32.5rem)_1fr]">
+            <div className="grid min-w-0 gap-5">
               <SettingsCard
-                title={isDesktop ? "Desktop storage" : "Server storage"}
+                title={isDesktop ? "Dashboard" : "Server storage"}
                 description={isDesktop
-                  ? "Paths are resolved by the native Tauri host and restricted to authorized media roots."
+                  ? "Choose the default folder the Dashboard opens for browsing and scans."
                   : "Paths are resolved inside the server or Docker host, not from the browser device."}
               >
-                <dl className="grid grid-cols-[8.75rem_1fr] gap-x-4 gap-y-3 text-sm">
-                  <dt className="text-muted">Media Root</dt>
-                  <dd className="font-mono text-text">{status.data?.mediaRoot ?? "/media"}</dd>
-                  <dt className="text-muted">Config Root</dt>
-                  <dd className="font-mono text-text">{status.data?.configRoot ?? "/config"}</dd>
+                <dl className="grid min-w-0 gap-x-4 gap-y-3 text-sm sm:grid-cols-[8.75rem_minmax(0,1fr)]">
+                  <dt className="self-center text-muted">{isDesktop ? "Default Directory" : "Media Root"}</dt>
+                  <dd className="min-w-0">
+                    {isDesktop ? (
+                      <div className="flex min-w-0 flex-wrap gap-2">
+                        <input
+                          aria-label="Default Directory"
+                          value={libraryRoots[0]?.path ?? ""}
+                          onChange={(event) => {
+                            const path = event.target.value;
+                            setLibraryRoots((current) => {
+                              const first = current[0] ?? { name: "", path: "" };
+                              const next = {
+                                ...first,
+                                name: first.name || "Default",
+                                path
+                              };
+                              return current.length === 0 ? [next] : [next, ...current.slice(1)];
+                            });
+                          }}
+                          placeholder="Choose the folder where browsing and scans should start"
+                          className="h-9 min-w-[15rem] flex-1 rounded-md border border-border bg-input px-3 font-mono text-xs text-text outline-none placeholder:font-sans placeholder:text-subtle focus:border-accent"
+                        />
+                        <button
+                          type="button"
+                          aria-label="Browse for Default Directory"
+                          onClick={() => {
+                            if (libraryRoots.length === 0) {
+                              setLibraryRoots([{ name: "", path: "" }]);
+                            }
+                            setBrowsingRow(0);
+                          }}
+                          className="h-9 shrink-0 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                        >
+                          Browse
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="break-all font-mono text-text">{status.data?.mediaRoot ?? "/media"}</span>
+                    )}
+                  </dd>
+                  {!isDesktop ? (
+                    <>
+                      <dt className="text-muted">Config Root</dt>
+                      <dd className="min-w-0 break-all font-mono text-text">{status.data?.configRoot ?? "/config"}</dd>
+                    </>
+                  ) : null}
                 </dl>
+
+                <div className="mt-5 border-t border-border pt-4">
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold text-text">Quick Access</h3>
+                    <p className="mt-1 text-xs leading-5 text-subtle">
+                      {isDesktop
+                        ? "Add named folder shortcuts for faster browsing. The first shortcut is also the Dashboard default directory."
+                        : "Add named folder shortcuts for faster browsing inside the server's mounted storage."}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {libraryRoots.length === 0 ? (
+                      <div className="rounded-lg border border-border bg-input p-3 text-sm text-subtle">
+                        {isDesktop
+                          ? "No quick-access folders yet. Browsing starts at This PC until you add one."
+                          : "No quick-access folders yet. Browsing starts at the media root until you add one."}
+                      </div>
+                    ) : null}
+
+                    {libraryRoots.map((root, index) => (
+                      <div key={index} className="flex flex-wrap items-center gap-2">
+                        <input
+                          value={root.name}
+                          onChange={(event) =>
+                            setLibraryRoots((current) =>
+                              current.map((item, position) =>
+                                position === index ? { ...item, name: event.target.value } : item
+                              )
+                            )
+                          }
+                          placeholder="Anime"
+                          aria-label={`Quick access folder ${index + 1} name`}
+                          className="h-9 w-32 shrink-0 rounded-md border border-border bg-input px-2 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
+                        />
+                        <input
+                          value={root.path}
+                          onChange={(event) =>
+                            setLibraryRoots((current) =>
+                              current.map((item, position) =>
+                                position === index ? { ...item, path: event.target.value } : item
+                              )
+                            )
+                          }
+                          placeholder={isDesktop ? "D:\\Anime" : "/mnt/user/anime"}
+                          aria-label={`Quick access folder ${index + 1} path`}
+                          className="h-9 min-w-[11.25rem] flex-1 rounded-md border border-border bg-input px-2 font-mono text-xs text-text outline-none placeholder:text-subtle focus:border-accent"
+                        />
+                        <button
+                          type="button"
+                          aria-label={`Browse for quick access folder ${index + 1}`}
+                          onClick={() => setBrowsingRow(index)}
+                          className="h-9 shrink-0 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                        >
+                          Browse
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setLibraryRoots((current) =>
+                              current.filter((_, position) => position !== index)
+                            )
+                          }
+                          aria-label={`Remove quick access folder ${index + 1}`}
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-subtle transition hover:bg-button-hover hover:text-text"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => setLibraryRoots((current) => [...current, { name: "", path: "" }])}
+                      className="h-9 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                    >
+                      Add folder
+                    </button>
+                  </div>
+                </div>
               </SettingsCard>
 
               <SettingsCard
@@ -378,8 +550,14 @@ export function SettingsPage() {
                   ? "MKVO resolves installed MKVToolNix and FFmpeg commands for scan, remux, extraction, and property workflows."
                   : "The server image provides MKVToolNix and FFmpeg for scan, remux, extraction, and property workflows."}
               >
-                <div className="overflow-auto rounded-lg border border-border bg-panel">
-                  <table className="w-full min-w-[38.75rem] border-collapse text-left text-sm">
+                <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-panel">
+                  <table className="w-full table-fixed border-collapse text-left text-sm">
+                    <colgroup>
+                      <col className="w-[8.75rem]" />
+                      <col className="w-[8.5rem]" />
+                      <col />
+                      <col className="w-[9rem]" />
+                    </colgroup>
                     <thead className="bg-panel text-xs uppercase tracking-wide text-subtle">
                       <tr>
                         <th className="border-b border-border px-3 py-2">Tool</th>
@@ -398,8 +576,8 @@ export function SettingsPage() {
                               {tool.available ? "Available" : "Missing"}
                             </span>
                           </td>
-                          <td className="border-b border-border px-3 py-2 font-mono text-xs text-muted">{tool.resolvedPath}</td>
-                          <td className="border-b border-border px-3 py-2 text-muted">{tool.version || "-"}</td>
+                          <td className="break-all border-b border-border px-3 py-2 font-mono text-xs leading-5 text-muted">{tool.resolvedPath}</td>
+                          <td className="break-words border-b border-border px-3 py-2 text-muted">{tool.version || "-"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -410,9 +588,9 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "rename" ? (
-            <div className="grid gap-5 lg:grid-cols-[minmax(22.5rem,32.5rem)_1fr]">
+            <div className="grid min-w-0 gap-5">
               <SettingsCard title="API Providers" description="TVDB and TMDB lookup requires your own API keys. Leave saved key fields blank to keep existing values.">
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 xl:grid-cols-2">
                   <div>
                     <label className="block">
                       <span className="text-xs font-semibold text-muted">TVDB API Key</span>
@@ -533,6 +711,19 @@ export function SettingsPage() {
               </SettingsCard>
 
               <SettingsCard title="Rename Templates" description="One template per line. The selected default template is always preserved when settings are saved.">
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTemplate(defaultRenameTemplate);
+                      setRenameTemplatesText(defaultRenameTemplates.join("\n"));
+                    }}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                  >
+                    <RefreshCw size={14} />
+                    Reset to Defaults
+                  </button>
+                </div>
                 <p className="text-xs leading-5 text-muted">
                   Series templates can use {"{series}"}, {"{season:00}"}, {"{episode:00}"}, {"{episodeTitle}"}, and {"{absolute:000}"}. Movie templates can use {"{title}"} and {"{year}"}.
                 </p>
@@ -547,9 +738,25 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "presets" ? (
-            <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
+            <div className="grid min-w-0 gap-5">
               <SettingsCard title="Track Presets" description="These lists feed Rename language choices and Track Properties name/language selectors.">
-                <div className="grid gap-4 lg:grid-cols-3">
+                <div className="mb-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAudioNamePresetsText(defaultAudioNamePresets.join("\n"));
+                      setSubtitleNamePresetsText(defaultSubtitleNamePresets.join("\n"));
+                      setLanguagePresetsText(defaultLanguagePresets.join("\n"));
+                      setMuxAudioDefaults("eng,jpn");
+                      setMuxSubtitleDefaults("eng");
+                    }}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                  >
+                    <RefreshCw size={14} />
+                    Reset All Presets
+                  </button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   <PresetEditor label="Audio Name Presets" value={audioNamePresetsText} onChange={setAudioNamePresetsText} />
                   <PresetEditor label="Subtitle Name Presets" value={subtitleNamePresetsText} onChange={setSubtitleNamePresetsText} />
                   <PresetEditor label="Language Presets" value={languagePresetsText} onChange={setLanguagePresetsText} />
@@ -580,85 +787,8 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "library" ? (
-            <div className="grid gap-5 lg:grid-cols-[minmax(26.25rem,37.5rem)_1fr]">
-              <SettingsCard
-                title="Library Folders"
-                description={
-                  isDesktop
-                    ? "The folders that make up your library. They appear as shortcuts when browsing, and the first one is where browsing starts."
-                    : "Folders inside a mount, listed separately. Add each share you care about and it becomes a shortcut when browsing."
-                }
-              >
-                <div className="space-y-2">
-                  {libraryRoots.length === 0 ? (
-                    <div className="rounded-lg border border-border bg-input p-3 text-sm text-subtle">
-                      {isDesktop
-                        ? "No library folders yet. Browsing starts at This PC until you add one."
-                        : "No library folders yet. Browsing starts at the mount."}
-                    </div>
-                  ) : null}
-
-                  {libraryRoots.map((root, index) => (
-                    <div key={index} className="flex flex-wrap items-center gap-2">
-                      <input
-                        value={root.name}
-                        onChange={(event) =>
-                          setLibraryRoots((current) =>
-                            current.map((item, position) =>
-                              position === index ? { ...item, name: event.target.value } : item
-                            )
-                          )
-                        }
-                        placeholder="Anime"
-                        aria-label={`Library folder ${index + 1} name`}
-                        className="h-9 w-32 shrink-0 rounded-md border border-border bg-input px-2 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
-                      />
-                      <input
-                        value={root.path}
-                        onChange={(event) =>
-                          setLibraryRoots((current) =>
-                            current.map((item, position) =>
-                              position === index ? { ...item, path: event.target.value } : item
-                            )
-                          )
-                        }
-                        placeholder={isDesktop ? "D:\\Anime" : "/mnt/user/anime"}
-                        aria-label={`Library folder ${index + 1} path`}
-                        className="h-9 min-w-[11.25rem] flex-1 rounded-md border border-border bg-input px-2 font-mono text-xs text-text outline-none placeholder:text-subtle focus:border-accent"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setBrowsingRow(index)}
-                        className="h-9 shrink-0 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-                      >
-                        Browse
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setLibraryRoots((current) =>
-                            current.filter((_, position) => position !== index)
-                          )
-                        }
-                        aria-label={`Remove library folder ${index + 1}`}
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-subtle transition hover:bg-button-hover hover:text-text"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={() => setLibraryRoots((current) => [...current, { name: "", path: "" }])}
-                    className="h-9 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-                  >
-                    Add folder
-                  </button>
-                </div>
-              </SettingsCard>
-
-              <SettingsCard title="Manual Watch Folders" description="Default fallback paths. These are always available even when no media server is configured.">
+            <div className="grid min-w-0 gap-5">
+              <SettingsCard className="order-3" title="Manual Watch Folders" description="Default fallback paths. These are always available even when no media server is configured.">
                 <label className="block">
                   <span className="text-xs font-semibold text-muted">Watch folders</span>
                   <textarea
@@ -682,7 +812,7 @@ export function SettingsPage() {
                 </div>
               </SettingsCard>
 
-              <SettingsCard title="Media Servers" description="Optional discovery for Emby, Jellyfin, or Plex library paths. Add path mappings here when server paths differ from Docker container paths.">
+              <SettingsCard className="order-2" title="Media Servers" description="Optional discovery for Emby, Jellyfin, or Plex library paths. Add path mappings here when server paths differ from Docker container paths.">
                 <div className="space-y-3">
                   {mediaServers.length === 0 ? (
                     <div className="rounded-lg border border-border bg-input p-3 text-sm text-subtle">
@@ -870,8 +1000,8 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "appearance" ? (
-            <div className="grid gap-5 lg:grid-cols-[minmax(26.25rem,1fr)_17.5rem]">
-              <SettingsCard title="Theme" description="Themes apply to this interface and are remembered locally on this device.">
+            <div className="grid min-w-0 gap-5">
+              <SettingsCard title="Theme" description="Themes are saved by MKVO and shared by the desktop and browser interfaces.">
                 <div className="flex max-w-xl items-end gap-3">
                   <label className="block flex-1">
                     <span className="text-xs font-semibold text-muted">Theme</span>
@@ -880,7 +1010,8 @@ export function SettingsPage() {
                       onChange={(event) => {
                         const nextName = event.target.value;
                         setThemeName(nextName);
-                        setThemeJson(JSON.stringify(getWebTheme(nextName), null, 2));
+                        const applied = applyWebTheme(nextName);
+                        setThemeJson(JSON.stringify(applied, null, 2));
                       }}
                       className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
                     >
@@ -927,7 +1058,7 @@ export function SettingsPage() {
                 <button
                   type="button"
                   onClick={removeSelectedCustomTheme}
-                  disabled={["Dark", "Midnight", "Light"].includes(themeName)}
+                  disabled={webThemes.some((theme) => theme.name === themeName)}
                   className="mt-2 h-10 w-full rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
                 >
                   Remove Custom Theme
@@ -937,7 +1068,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "about" ? (
-            <div className="grid gap-5 lg:grid-cols-[minmax(27.5rem,45rem)_1fr]">
+            <div className="grid min-w-0 gap-5">
               <SettingsCard
                 title={isDesktop ? "About MKV Orchestrator Desktop" : "About MKV Orchestrator Server"}
                 description={isDesktop ? "The native Tauri desktop backed by the shared Rust runtime." : "The Rust server for browser, Docker, and NAS access."}
@@ -1031,6 +1162,38 @@ function folderName(path: string): string {
   return parts[parts.length - 1] ?? "";
 }
 
+function settingsRequestFromSaved(settings: WebSettings): WebSettingsRequest {
+  return {
+    tvdbLanguage: settings.tvdbLanguage,
+    renameLookupProvider: settings.renameLookupProvider,
+    renameTemplate: settings.renameTemplate,
+    renameTemplates: settings.renameTemplates,
+    audioNamePresets: settings.audioNamePresets,
+    subtitleNamePresets: settings.subtitleNamePresets,
+    languagePresets: settings.languagePresets,
+    mkvMergeDefaultAudioLanguages: settings.mkvMergeDefaultAudioLanguages,
+    mkvMergeDefaultSubtitleLanguages: settings.mkvMergeDefaultSubtitleLanguages,
+    libraryRoots: settings.libraryRoots,
+    watchFolders: settings.watchFolders,
+    enableLiveWatchFolderMonitoring: settings.enableLiveWatchFolderMonitoring,
+    selectedThemeName: settings.selectedThemeName,
+    customThemes: settings.customThemes,
+    mediaServers: settings.mediaServers.map((server) => ({
+      id: server.id,
+      name: server.name,
+      type: server.type,
+      serverUrl: server.serverUrl,
+      isDefault: server.isDefault,
+      libraries: server.libraries
+    })),
+    mediaServerPathMappings: settings.mediaServerPathMappings
+  };
+}
+
+function settingsFingerprint(request: WebSettingsRequest): string {
+  return JSON.stringify(request);
+}
+
 function SettingsTabButton({ tab, active, onSelect }: { tab: SettingsTabDefinition; active: boolean; onSelect: (tab: SettingsTabId) => void }) {
   const Icon = tab.Icon;
   return (
@@ -1049,12 +1212,12 @@ function SettingsTabButton({ tab, active, onSelect }: { tab: SettingsTabDefiniti
   );
 }
 
-function SettingsCard({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+function SettingsCard({ title, description, children, className = "" }: { title: string; description?: string; children: React.ReactNode; className?: string }) {
   return (
-    <section className="rounded-lg border border-border bg-panel p-4">
+    <section className={`min-w-0 rounded-lg border border-border bg-panel p-4 ${className}`}>
       <h2 className="text-base font-semibold">{title}</h2>
       {description ? <p className="mt-2 text-sm leading-6 text-muted">{description}</p> : null}
-      <div className="mt-4">{children}</div>
+      <div className="mt-4 min-w-0">{children}</div>
     </section>
   );
 }

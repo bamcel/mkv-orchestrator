@@ -3,6 +3,7 @@ use std::future::Future;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::Utc;
@@ -42,8 +43,8 @@ pub struct JobSupervisor {
     registration: Mutex<()>,
     leases: Arc<ResourceLeaseManager>,
     live: RwLock<HashMap<JobId, Arc<LiveJob>>>,
-    idempotency: RwLock<HashMap<IdempotencyKey, JobId>>,
     retained_lines: usize,
+    completed_job_retention: Duration,
 }
 
 impl JobSupervisor {
@@ -54,8 +55,8 @@ impl JobSupervisor {
             registration: Mutex::new(()),
             leases: Arc::new(ResourceLeaseManager::default()),
             live: RwLock::new(HashMap::new()),
-            idempotency: RwLock::new(HashMap::new()),
             retained_lines: 500,
+            completed_job_retention: Duration::from_secs(300),
         }
     }
 
@@ -67,6 +68,14 @@ impl JobSupervisor {
     #[must_use]
     pub fn with_retained_lines(mut self, retained_lines: usize) -> Self {
         self.retained_lines = retained_lines.max(1);
+        self
+    }
+
+    /// Keep terminal jobs available for late event subscribers briefly, then
+    /// rely on the durable repository for history and idempotent replay.
+    #[must_use]
+    pub fn with_completed_job_retention(mut self, retention: Duration) -> Self {
+        self.completed_job_retention = retention;
         self
     }
 
@@ -135,30 +144,6 @@ impl JobSupervisor {
         }
 
         let id = JobId::new();
-        {
-            let mut keys = self.idempotency.write().await;
-            if let Some(existing_id) = keys.get(&spec.idempotency_key).copied() {
-                drop(keys);
-                let existing = self.get(existing_id).await?.ok_or_else(|| {
-                    ApplicationError::Internal(
-                        "idempotency index referenced a missing job".to_owned(),
-                    )
-                })?;
-                if existing.request_fingerprint != spec.request_fingerprint {
-                    return Err(ApplicationError::Conflict(
-                        "The idempotency key is already bound to a different request fingerprint."
-                            .to_owned(),
-                    ));
-                }
-                return Ok(JobAccepted {
-                    id: existing.id,
-                    correlation_id: existing.correlation_id,
-                    status: existing.status,
-                    idempotent_replay: true,
-                });
-            }
-            keys.insert(spec.idempotency_key.clone(), id);
-        }
 
         let correlation_id = CorrelationId::new();
         let now = Utc::now();
@@ -195,10 +180,7 @@ impl JobSupervisor {
             retained_lines: self.retained_lines,
         });
 
-        if let Err(error) = self.repository.insert(&snapshot).await {
-            self.idempotency.write().await.remove(&spec.idempotency_key);
-            return Err(error.into());
-        }
+        self.repository.insert(&snapshot).await?;
         self.live.write().await.insert(id, Arc::clone(&live));
         live.publish(JobEvent::Snapshot {
             snapshot: snapshot.clone(),
@@ -219,6 +201,23 @@ impl JobSupervisor {
     }
 
     async fn run<F, Fut>(
+        self: Arc<Self>,
+        live: Arc<LiveJob>,
+        resources: Vec<ResourceClaim>,
+        task: F,
+    ) where
+        F: FnOnce(JobContext) -> Fut + Send + 'static,
+        Fut: Future<Output = ApplicationResult<JobCompletion>> + Send + 'static,
+    {
+        let id = live.snapshot.lock().await.id;
+        Arc::clone(&self)
+            .run_to_completion(live, resources, task)
+            .await;
+        tokio::time::sleep(self.completed_job_retention).await;
+        self.live.write().await.remove(&id);
+    }
+
+    async fn run_to_completion<F, Fut>(
         self: Arc<Self>,
         live: Arc<LiveJob>,
         resources: Vec<ResourceClaim>,
@@ -830,6 +829,30 @@ mod tests {
             error.to_string(),
             "conflict: The idempotency key is already bound to a different request fingerprint."
         );
+    }
+
+    #[tokio::test]
+    async fn completed_jobs_leave_live_memory_but_remain_durable() {
+        let supervisor = Arc::new(
+            JobSupervisor::new(Arc::new(InMemoryJobRepository::default()))
+                .with_completed_job_retention(Duration::from_millis(5)),
+        );
+        let accepted = supervisor
+            .start(spec("evicted-key", Vec::new()), |_| async move {
+                Ok(JobCompletion::default())
+            })
+            .await
+            .unwrap();
+
+        for _ in 0..20 {
+            if !supervisor.live.read().await.contains_key(&accepted.id) {
+                let snapshot = supervisor.get(accepted.id).await.unwrap().unwrap();
+                assert_eq!(snapshot.status, JobStatus::Completed);
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        panic!("terminal job was not evicted from live memory");
     }
 
     #[tokio::test]

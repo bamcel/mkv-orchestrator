@@ -7,26 +7,24 @@ in three places: `version` under `[workspace.package]` in the root `Cargo.toml`,
 `version` in `apps/desktop/src-tauri/tauri.conf.json` (which sets the installer
 and window metadata), and `web/package.json` with its lock file.
 
-These currently disagree -- the Rust workspace and Tauri host say `0.1.0` while
-the web package still says `1.1.0`, a leftover of the .NET tree carrying the
-product version in `Directory.Build.props` before the cutover removed it. Settle
-on one number before the first Tauri release and set all three together.
+All three currently use `0.1.0`. Update them together for every release.
 
 ## Settings schema
 
-`AppSettings.SettingsSchemaVersion` tracks the JSON settings schema.
+`AppSettings::schema_version` tracks the persisted settings document schema.
 
 Current version:
 
 ```text
-1
+2
 ```
 
-The settings loader calls a migration hook before returning settings. Future schema changes should add migration steps in `AppSettingsService.Migrate`.
+Future settings-schema changes must add a Rust migration step before returning
+the document and a fixture covering the previous persisted representation.
 
 ## Metadata cache schema
 
-`MetadataCacheDatabase.CurrentCacheSchemaVersion` tracks the SQLite cache schema.
+SQLite migrations in `mkvo-infra-sqlite` track the metadata cache schema.
 
 Current version:
 
@@ -34,12 +32,13 @@ Current version:
 1
 ```
 
-The cache database stores the version in:
+The database stores its current migration number in:
 
 ```sql
-cache_metadata(key, value)
+PRAGMA user_version
 ```
 
-Future cache changes should add migration logic in `MetadataCacheDatabase.EnsureSchema`.
-
-If a cache is detected from a newer app version, MKVO clears cached media rows rather than risking incompatible reads. This is safe because the metadata cache is rebuildable.
+Future cache changes should add a numbered migration in `mkvo-infra-sqlite`.
+Destructive cache rebuilds are acceptable only for rebuildable scan metadata;
+settings, plans, journals, job history, and secrets must be migrated without
+silent data loss.
