@@ -2,13 +2,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.Input;
-using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Platform.Storage;
 using MKVOrchestrator.Core.Models;
 using MKVOrchestrator.Core.Services;
 using MKVOrchestrator.Core.Services.Rename;
@@ -85,10 +82,7 @@ public partial class MainWindowViewModel
         TvdbSeriesResults.Clear();
         TvdbSeasonScopeOptions.Clear();
         EpisodeScopeSummary = string.Empty;
-        _cachedTvdbEpisodes.Clear();
-        _cachedTvdbSeriesId = null;
-        _cachedTvdbLanguage = string.Empty;
-        _cachedLookupProvider = string.Empty;
+        _renameMetadata.Clear();
         RenameStatusText = "Linked to Dashboard: waiting for scan to finish";
     }
 
@@ -342,17 +336,14 @@ public partial class MainWindowViewModel
     }
 
     [RelayCommand]
-    private async Task CopySelectedDatabaseUrl(Window window)
+    private async Task CopySelectedDatabaseUrl()
     {
         var url = SelectedDatabaseUrl;
         if (string.IsNullOrWhiteSpace(url)) return;
 
-        if (window.Clipboard is not null)
-        {
-            await window.Clipboard.SetTextAsync(url);
-            RenameStatusText = "Database URL copied to clipboard.";
-            RenameLog(RenameStatusText);
-        }
+        await _userInteraction.CopyTextAsync(url);
+        RenameStatusText = "Database URL copied to clipboard.";
+        RenameLog(RenameStatusText);
     }
 
     [RelayCommand]
@@ -361,19 +352,13 @@ public partial class MainWindowViewModel
         var url = SelectedDatabaseUrl;
         if (string.IsNullOrWhiteSpace(url)) return;
 
-        try
+        if (_userInteraction.OpenUrl(url))
         {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true
-            });
+            return;
         }
-        catch (Exception ex)
-        {
-            RenameStatusText = "Could not open database URL.";
-            RenameLog($"Could not open database URL: {ex.Message}");
-        }
+
+        RenameStatusText = "Could not open database URL.";
+        RenameLog(RenameStatusText);
     }
 
     private void BuildRenamePreviewSummary(int filesChanged, int filesSkipped)
@@ -451,23 +436,24 @@ public partial class MainWindowViewModel
         var language = string.IsNullOrWhiteSpace(TvdbLanguage) ? "eng" : TvdbLanguage.Trim();
         var provider = NormalizeLookupProvider(RenameLookupProvider);
         if (!forceReload
-            && _cachedTvdbSeriesId == SelectedTvdbSeries.Id
-            && string.Equals(_cachedTvdbLanguage, language, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(_cachedLookupProvider, provider, StringComparison.OrdinalIgnoreCase)
-            && _cachedTvdbEpisodes.Count > 0)
+            && _renameMetadata.TryGetCached(
+                SelectedTvdbSeries.Id,
+                language,
+                provider,
+                out var cachedEpisodes))
         {
-            return _cachedTvdbEpisodes;
+            return cachedEpisodes.ToList();
         }
 
         var settings = BuildCurrentSettingsSnapshot();
         var metadataProvider = GetRenameMetadataProvider(provider);
         IReadOnlyList<TvdbEpisode> loaded = await metadataProvider.GetEpisodesAsync(SelectedTvdbSeries, language, settings, token);
 
-        _cachedTvdbEpisodes = OrderEpisodesForProvider(loaded, provider).ToList();
-        _cachedTvdbSeriesId = SelectedTvdbSeries.Id;
-        _cachedTvdbLanguage = language;
-        _cachedLookupProvider = provider;
-        return _cachedTvdbEpisodes;
+        return _renameMetadata.Store(
+            SelectedTvdbSeries.Id,
+            language,
+            provider,
+            OrderEpisodesForProvider(loaded, provider)).ToList();
     }
 
     private void RebuildTvdbSeasonScopeOptions(IReadOnlyList<TvdbEpisode> episodes)
@@ -819,10 +805,7 @@ public partial class MainWindowViewModel
 
     private IRenameMetadataProvider GetRenameMetadataProvider(string provider)
     {
-        var key = NormalizeLookupProvider(provider);
-        return _renameMetadataProviders.TryGetValue(key, out var metadataProvider)
-            ? metadataProvider
-            : _renameMetadataProviders["TVDB"];
+        return _renameMetadata.GetProvider(NormalizeLookupProvider(provider));
     }
 
     private AppSettings BuildCurrentSettingsSnapshot()
@@ -844,10 +827,7 @@ public partial class MainWindowViewModel
 
     private void ClearRenameProviderCache()
     {
-        _cachedTvdbEpisodes.Clear();
-        _cachedTvdbSeriesId = null;
-        _cachedTvdbLanguage = string.Empty;
-        _cachedLookupProvider = string.Empty;
+        _renameMetadata.Clear();
     }
 
     private static string NormalizeLookupProvider(string? provider)
@@ -909,13 +889,13 @@ public partial class MainWindowViewModel
                 continue;
             }
 
-            _executionQueue.MarkRunning(job);
+            _executionWorkflow.Queue.MarkRunning(job);
             RefreshExecutionSummary();
 
             if (string.IsNullOrWhiteSpace(item.NewFileName))
             {
                 item.Status = "Skipped - no preview filename";
-                _executionQueue.Skip(job, item.Status);
+                _executionWorkflow.Queue.Skip(job, item.Status);
                 skipped++;
                 RefreshExecutionSummary();
                 continue;
@@ -927,7 +907,7 @@ public partial class MainWindowViewModel
             if (string.Equals(item.FilePath, targetPath, StringComparison.OrdinalIgnoreCase))
             {
                 item.Status = "No change";
-                _executionQueue.Skip(job, item.Status);
+                _executionWorkflow.Queue.Skip(job, item.Status);
                 skipped++;
                 RefreshExecutionSummary();
                 continue;
@@ -965,14 +945,14 @@ public partial class MainWindowViewModel
                     OriginalPath = oldPath,
                     RenamedPath = targetPath
                 });
-                _executionQueue.Complete(job, $"Renamed to {Path.GetFileName(targetPath)}");
+                _executionWorkflow.Queue.Complete(job, $"Renamed to {Path.GetFileName(targetPath)}");
                 renamed++;
             }
             catch (Exception ex)
             {
                 item.Status = "Failed";
                 RenameLog($"Rename failed for {item.CurrentFileName}: {ex.Message}");
-                _executionQueue.Fail(job, ex.Message);
+                _executionWorkflow.Queue.Fail(job, ex.Message);
                 skipped++;
             }
 

@@ -5,9 +5,7 @@ using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.Input;
-using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using MKVOrchestrator.Core.Models;
 using MKVOrchestrator.Core.Services;
@@ -111,7 +109,7 @@ public partial class MainWindowViewModel
                     var fileName = Path.GetFileName(action.FilePath);
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        _executionQueue.MarkRunning(job);
+                        _executionWorkflow.Queue.MarkRunning(job);
                         RefreshExecutionSummary();
                         Log($"APPLY: {fileName}");
                         Log("  " + action.Description);
@@ -133,7 +131,7 @@ public partial class MainWindowViewModel
                         {
                             UpdateGlobalOperation(processed, plan.Actions.Count, fileName);
                             Log($"  SUCCESS: {fileName}");
-                            _executionQueue.Complete(job, "SUCCESS");
+                            _executionWorkflow.Queue.Complete(job, "SUCCESS");
                             var file = Files.FirstOrDefault(f => f.FilePath == action.FilePath);
                             if (file is not null) file.Status = "Updated - refresh pending";
                             RefreshExecutionSummary();
@@ -152,7 +150,7 @@ public partial class MainWindowViewModel
                         {
                             UpdateGlobalOperation(processed, plan.Actions.Count, fileName);
                             Log($"  FAILED: {fileName} - {error}");
-                            _executionQueue.Fail(job, error);
+                            _executionWorkflow.Queue.Fail(job, error);
                             var file = Files.FirstOrDefault(f => f.FilePath == action.FilePath);
                             if (file is not null) file.Status = "Failed";
                             RefreshExecutionSummary();
@@ -188,7 +186,7 @@ public partial class MainWindowViewModel
         {
             StatusText = "Apply canceled";
             Log(StatusText);
-            _executionQueue.CancelPending(StatusText);
+            _executionWorkflow.Queue.CancelPending(StatusText);
             RefreshExecutionSummary();
         }
         finally
@@ -389,21 +387,7 @@ public partial class MainWindowViewModel
         Log("Cancel requested.");
     }
 
-    private async Task<string?> PickExecutableAsync(Window window, string title)
-    {
-        var files = await window.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = title,
-            AllowMultiple = false,
-            FileTypeFilter = new[]
-            {
-                new FilePickerFileType("Executable files") { Patterns = new[] { "*.exe" } },
-                FilePickerFileTypes.All
-            }
-        });
-
-        return files.Count > 0 ? files[0].Path.LocalPath : null;
-    }
+    private Task<string?> PickExecutableAsync(string title) => _userInteraction.PickExecutableAsync(title);
 
     private PropEditPlan BuildCurrentPlan()
     {

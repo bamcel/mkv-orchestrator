@@ -124,11 +124,13 @@
       </Border>
 
       <Grid Grid.Row="1">
-        <dashboard:DashboardPanel IsVisible="{Binding IsDashboardSection}" />
+        <dashboard:DashboardPanel DataContext="{Binding Dashboard}"
+                                  IsVisible="{Binding Dashboard.IsDashboardSection}" />
         <rename:RenamePanel IsVisible="{Binding IsRenameSection}" />
         <merge:MergePanel IsVisible="{Binding IsMergeSection}" />
         <propedit:PropEditPanel IsVisible="{Binding IsPropertiesSection}" />
-        <audit:LibraryAuditPanel IsVisible="{Binding IsLibraryAuditSection}" />
+        <audit:LibraryAuditPanel DataContext="{Binding LibraryAudit}"
+                                 IsVisible="{Binding LibraryAudit.IsLibraryAuditSection}" />
         <settings:SettingsPanel IsVisible="{Binding IsSettingsSection}" />
 
         <Border Classes="card"

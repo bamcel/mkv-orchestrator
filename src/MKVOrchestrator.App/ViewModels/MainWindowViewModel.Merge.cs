@@ -103,7 +103,7 @@ public partial class MainWindowViewModel
                     continue;
                 }
 
-                _executionQueue.MarkRunning(job);
+                _executionWorkflow.Queue.MarkRunning(job);
                 RefreshExecutionSummary();
                 var fileName = Path.GetFileName(action.SourceFilePath);
                 UpdateGlobalOperation(i + 1, plan.Actions.Count, fileName);
@@ -116,7 +116,7 @@ public partial class MainWindowViewModel
                     action,
                     percent => Dispatcher.UIThread.Post(() =>
                     {
-                        _executionQueue.UpdateProgress(job, percent);
+                        _executionWorkflow.Queue.UpdateProgress(job, percent);
                         RefreshExecutionSummary();
 
                         var progressText = $"{action.ToolName} {i + 1}/{plan.Actions.Count}: {percent}% - {fileName}";
@@ -129,7 +129,7 @@ public partial class MainWindowViewModel
                 {
                     completed++;
                     AddMkvMergeLine("  SUCCESS");
-                    _executionQueue.Complete(job, "SUCCESS");
+                    _executionWorkflow.Queue.Complete(job, "SUCCESS");
                     var file = Files.FirstOrDefault(f => string.Equals(f.FilePath, action.SourceFilePath, StringComparison.OrdinalIgnoreCase));
                     if (string.Equals(action.Operation, "convert-mkv", StringComparison.OrdinalIgnoreCase))
                     {
@@ -152,7 +152,7 @@ public partial class MainWindowViewModel
                     failed++;
                     var error = string.IsNullOrWhiteSpace(result.StandardError) ? $"FAILED exit code {result.ExitCode}" : result.StandardError.Trim();
                     AddMkvMergeLine("  FAILED: " + error);
-                    _executionQueue.Fail(job, error);
+                    _executionWorkflow.Queue.Fail(job, error);
                     var file = Files.FirstOrDefault(f => string.Equals(f.FilePath, action.SourceFilePath, StringComparison.OrdinalIgnoreCase));
                     if (file is not null) file.Status = "Remux failed";
                 }
@@ -170,7 +170,7 @@ public partial class MainWindowViewModel
         {
             StatusText = "mkvmerge canceled";
             AddMkvMergeLine(StatusText);
-            _executionQueue.CancelPending(StatusText);
+            _executionWorkflow.Queue.CancelPending(StatusText);
             RefreshExecutionSummary();
         }
         catch (Exception ex)

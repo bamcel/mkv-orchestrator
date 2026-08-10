@@ -151,80 +151,35 @@ public partial class MainWindowViewModel
 
     private async Task EnsureWatchersInitializedAsync()
     {
-        if (_watchersInitialized) return;
         await RestartWatchersAsync(force: false);
     }
 
     private async Task RestartWatchersAsync(bool force = true)
     {
-        await _watcherInitGate.WaitAsync();
-        try
+        if (!EnableLiveWatchFolderMonitoring)
         {
-            if (!force && _watchersInitialized)
-            {
-                return;
-            }
-
-            StopWatchers();
-            if (!EnableLiveWatchFolderMonitoring)
-            {
-                _watchersInitialized = true;
-                RefreshCacheLifecycleStatus();
-                CacheStatusText = $"Live watcher disabled. Watch entries: {CacheWatchEntryCountText}. Temp entries: {CacheTempEntryCountText}.";
-                return;
-            }
-
-            CacheStatusText = "Initializing live watcher...";
-
-        // Directory.Exists can block on offline or sleeping SMB/UNC paths, so validate roots off the UI thread.
-            var configuredRoots = ParseWatchFolderText(WatchFolderText).ToList();
-            var roots = await Task.Run(() => configuredRoots.Where(Directory.Exists).ToList());
-
-            foreach (var root in roots)
-            {
-            try
-            {
-                var watcher = new FileSystemWatcher(root, "*.*")
-                {
-                    IncludeSubdirectories = true,
-                    EnableRaisingEvents = true,
-                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size,
-                    InternalBufferSize = 64 * 1024
-                };
-                watcher.Created += (_, e) => QueueWatchedPathRefresh(e.FullPath);
-                watcher.Changed += (_, e) => QueueWatchedPathRefresh(e.FullPath);
-                watcher.Deleted += (_, e) => RemoveWatchedPathFromCache(e.FullPath);
-                watcher.Renamed += (_, e) =>
-                {
-                    RemoveWatchedPathFromCache(e.OldFullPath);
-                    QueueWatchedPathRefresh(e.FullPath);
-                };
-                _watchers.Add(watcher);
-            }
-            catch (Exception ex)
-            {
-                Log($"Watcher failed for {root}: {ex.Message}");
-            }
-        }
-
-            _watchersInitialized = true;
             RefreshCacheLifecycleStatus();
-            CacheStatusText = $"Recursive live watcher active: {_watchers.Count} root(s). Watch entries: {CacheWatchEntryCountText}. Temp entries: {CacheTempEntryCountText}.";
-            Log(CacheStatusText);
+            CacheStatusText = $"Live watcher disabled. Watch entries: {CacheWatchEntryCountText}. Temp entries: {CacheTempEntryCountText}.";
+            await _watchFolders.RestartAsync(force, false, Array.Empty<string>(), QueueWatchedPathRefresh, RemoveWatchedPathFromCache, Log);
+            return;
         }
-        finally
-        {
-            _watcherInitGate.Release();
-        }
+
+        CacheStatusText = "Initializing live watcher...";
+        var count = await _watchFolders.RestartAsync(
+            force,
+            true,
+            ParseWatchFolderText(WatchFolderText),
+            QueueWatchedPathRefresh,
+            RemoveWatchedPathFromCache,
+            Log);
+        RefreshCacheLifecycleStatus();
+        CacheStatusText = $"Recursive live watcher active: {count} root(s). Watch entries: {CacheWatchEntryCountText}. Temp entries: {CacheTempEntryCountText}.";
+        Log(CacheStatusText);
     }
 
     private void StopWatchers()
     {
-        foreach (var watcher in _watchers)
-        {
-            try { watcher.EnableRaisingEvents = false; watcher.Dispose(); } catch { }
-        }
-        _watchers.Clear();
+        _watchFolders.Stop();
 
         lock (_watchGate)
         {

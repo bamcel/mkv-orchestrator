@@ -113,7 +113,6 @@
                           Classes="inline-glyph"
                           Content="⧉"
                           Command="{Binding CopySelectedDatabaseUrlCommand}"
-                          CommandParameter="{Binding $parent[Window]}"
                           ToolTip.Tip="Copy" />
                 </Grid>
               </StackPanel>

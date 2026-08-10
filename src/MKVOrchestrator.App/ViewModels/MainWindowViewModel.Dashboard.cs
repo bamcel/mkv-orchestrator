@@ -5,8 +5,6 @@ using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.Input;
-using Avalonia.Controls;
-using Avalonia.Platform.Storage;
 using MKVOrchestrator.Core.Models;
 using MKVOrchestrator.Core.Services;
 using MKVOrchestrator.Core.Services.Pipeline;
@@ -174,25 +172,13 @@ public partial class MainWindowViewModel
     }
 
     [RelayCommand]
-    private async Task BrowseFolder(Window window)
+    private async Task BrowseFolder()
     {
-        var options = new FolderPickerOpenOptions
-        {
-            Title = "Select MKV folder(s)",
-            AllowMultiple = true
-        };
-
         var startFolder = GetPreferredSourceFolderPath();
-        if (!string.IsNullOrWhiteSpace(startFolder))
-        {
-            options.SuggestedStartLocation = await window.StorageProvider.TryGetFolderFromPathAsync(startFolder);
-        }
-
-        var folders = await window.StorageProvider.OpenFolderPickerAsync(options);
+        var folders = await _userInteraction.PickFoldersAsync("Select MKV folder(s)", true, startFolder);
         if (folders.Count > 0)
         {
             var paths = folders
-                .Select(folder => folder.Path.LocalPath)
                 .Where(path => !string.IsNullOrWhiteSpace(path))
                 .Distinct(CrossPlatformRuntime.PathComparer)
                 .ToList();
@@ -209,16 +195,12 @@ public partial class MainWindowViewModel
     }
 
     [RelayCommand]
-    private async Task BrowseRootFolder(Window window)
+    private async Task BrowseRootFolder()
     {
-        var folders = await window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Select startup root folder",
-            AllowMultiple = false
-        });
+        var folders = await _userInteraction.PickFoldersAsync("Select startup root folder", false);
         if (folders.Count > 0)
         {
-            RootFolderPath = folders[0].Path.LocalPath;
+            RootFolderPath = folders[0];
             if (string.IsNullOrWhiteSpace(FolderPath) || !Directory.Exists(FolderPath))
             {
                 _selectedScanFolderPaths = new List<string> { RootFolderPath };
@@ -231,17 +213,13 @@ public partial class MainWindowViewModel
     }
 
     [RelayCommand]
-    private async Task BrowseMkvToolNixDirectory(Window window)
+    private async Task BrowseMkvToolNixDirectory()
     {
-        var folders = await window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Select MKVToolNix folder",
-            AllowMultiple = false
-        });
+        var folders = await _userInteraction.PickFoldersAsync("Select MKVToolNix folder", false);
 
         if (folders.Count > 0)
         {
-            MkvToolNixDirectory = folders[0].Path.LocalPath;
+            MkvToolNixDirectory = folders[0];
             SaveSettingsIfReady();
             Log($"MKVToolNix directory saved: {MkvToolNixDirectory}");
         }
@@ -272,17 +250,13 @@ public partial class MainWindowViewModel
     }
 
     [RelayCommand]
-    private async Task BrowseFfmpegDirectory(Window window)
+    private async Task BrowseFfmpegDirectory()
     {
-        var folders = await window.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Select FFmpeg bin folder",
-            AllowMultiple = false
-        });
+        var folders = await _userInteraction.PickFoldersAsync("Select FFmpeg bin folder", false);
 
         if (folders.Count > 0)
         {
-            FfmpegDirectory = folders[0].Path.LocalPath;
+            FfmpegDirectory = folders[0];
             SaveSettingsIfReady();
             Log($"FFmpeg directory saved: {FfmpegDirectory}");
         }

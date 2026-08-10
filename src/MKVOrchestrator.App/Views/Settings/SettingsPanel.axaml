@@ -25,7 +25,7 @@
                               <TextBlock Grid.Row="1" Grid.Column="0" Text="Default root folder" VerticalAlignment="Center" />
                               <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                 <TextBox Grid.Column="0" Text="{Binding RootFolderPath}" Watermark="Root folder used at startup" />
-                                <Button Grid.Column="1" Content="Browse" Command="{Binding BrowseRootFolderCommand}" CommandParameter="{Binding $parent[Window]}" />
+                                <Button Grid.Column="1" Content="Browse" Command="{Binding BrowseRootFolderCommand}" />
                               </Grid>
                             </Grid>
                           </StackPanel>
@@ -39,7 +39,7 @@
                       <Grid ColumnDefinitions="170,*,Auto,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="8">
                           <TextBlock Grid.Row="0" Grid.Column="0" Text="MKVToolNix folder" VerticalAlignment="Center" />
                           <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding MkvToolNixDirectory}" Watermark="full path to MKVToolNix" />
-                          <Button Grid.Row="0" Grid.Column="2" Content="Browse" Command="{Binding BrowseMkvToolNixDirectoryCommand}" CommandParameter="{Binding $parent[Window]}" />
+                          <Button Grid.Row="0" Grid.Column="2" Content="Browse" Command="{Binding BrowseMkvToolNixDirectoryCommand}" />
                           <Button Grid.Row="0" Grid.Column="3" Content="Auto Find" Command="{Binding AutoFindMkvToolNixDirectoryCommand}" />
 
                           <TextBlock Grid.Row="1" Grid.Column="0" Text="Resolved tools" VerticalAlignment="Top" />
@@ -82,7 +82,7 @@
                       <Grid ColumnDefinitions="170,*,Auto,Auto" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="8">
                           <TextBlock Grid.Row="0" Grid.Column="0" Text="FFmpeg folder" VerticalAlignment="Center" />
                           <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding FfmpegDirectory}" Watermark="full path to FFmpeg bin folder" />
-                          <Button Grid.Row="0" Grid.Column="2" Content="Browse" Command="{Binding BrowseFfmpegDirectoryCommand}" CommandParameter="{Binding $parent[Window]}" />
+                          <Button Grid.Row="0" Grid.Column="2" Content="Browse" Command="{Binding BrowseFfmpegDirectoryCommand}" />
                           <Button Grid.Row="0" Grid.Column="3" Content="Auto Find" Command="{Binding AutoFindFfmpegDirectoryCommand}" />
 
                           <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3"

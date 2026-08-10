@@ -7,10 +7,9 @@ using System.Text;
 using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Platform.Storage;
 using MKVOrchestrator.App.Services;
+using MKVOrchestrator.App.Workflows;
 using MKVOrchestrator.Core.Models;
 using MKVOrchestrator.Core.Services;
 using MKVOrchestrator.Core.Services.Pipeline;
@@ -22,32 +21,29 @@ using MKVOrchestrator.Core.Services.Operations;
 
 namespace MKVOrchestrator.App.ViewModels;
 
-public partial class MainWindowViewModel : ObservableObject
+public partial class MainWindowViewModel : ObservableObject, IDisposable
 {
-    private readonly MkvScannerService _scanner = new(new MetadataCacheDatabase("metadata_cache.db"));
-    private readonly MkvScannerService _tempScanner = new(new MetadataCacheDatabase("metadata_cache_temp.db"));
+    private readonly MkvScannerService _scanner;
+    private readonly MkvScannerService _tempScanner;
     private readonly MetadataCacheServiceAdapter _mediaCache;
     private readonly MetadataCacheServiceAdapter _tempMediaCache;
     private readonly MediaLibraryService _mediaLibrary;
     private readonly MediaLibraryService _tempMediaLibrary;
     private readonly LibraryAuditService _libraryAudit;
-    private readonly MkvMergeService _mkvMerge = new();
+    private readonly MkvMergeService _mkvMerge;
     private readonly ScanPipeline _scanPipeline;
     private readonly ScanPipeline _tempScanPipeline;
-    public AppStateService AppState { get; } = new();
-    private readonly ActionPlanner _planner = new();
-    private readonly MkvPropEditService _propEdit = new();
-    private readonly MkvPropEditCommandBuilder _propEditCommandBuilder = new();
-    private readonly GlobalOperationStatusService _operationStatus = new();
-    private readonly AppSettingsService _settingsService = new();
-    private readonly ExecutionQueueService _executionQueue = new();
-    private readonly FileConflictService _fileConflict = new();
-    private readonly RenameBatchHistoryService _renameBatchHistory = new();
-    private readonly Dictionary<string, IRenameMetadataProvider> _renameMetadataProviders = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["TVDB"] = new TvdbRenameMetadataProvider(),
-        ["TMDB"] = new TmdbRenameMetadataProvider()
-    };
+    public AppStateService AppState { get; }
+    private readonly ActionPlanner _planner;
+    private readonly MkvPropEditService _propEdit;
+    private readonly MkvPropEditCommandBuilder _propEditCommandBuilder;
+    private readonly GlobalOperationStatusService _operationStatus;
+    private readonly SettingsWorkflowCoordinator _settingsWorkflow;
+    private readonly ExecutionWorkflowCoordinator _executionWorkflow;
+    private readonly RenameBatchHistoryService _renameBatchHistory;
+    private readonly RenameMetadataCoordinator _renameMetadata;
+    private readonly WatchFolderCoordinator _watchFolders;
+    private readonly IUserInteractionService _userInteraction;
     private WorkerSettings _workerSettings = WorkerSettings.Defaults;
     private bool _isLoadingSettings;
     private string _lastBrowseFolderPath = string.Empty;
@@ -56,31 +52,53 @@ public partial class MainWindowViewModel : ObservableObject
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _cacheCts;
     private CancellationTokenSource? _auditCts;
-    private List<TvdbEpisode> _cachedTvdbEpisodes = new();
-    private int? _cachedTvdbSeriesId;
-    private string _cachedTvdbLanguage = string.Empty;
-    private string _cachedLookupProvider = string.Empty;
     private bool _suppressSelectedSeriesAutoLoad;
     private bool _suppressScopeSelectionCascade;
-    private readonly List<FileSystemWatcher> _watchers = new();
     private readonly Dictionary<string, CancellationTokenSource> _watchDebounce = new(CrossPlatformRuntime.PathComparer);
     private readonly object _watchGate = new();
-    private readonly SemaphoreSlim _watcherInitGate = new(1, 1);
-    private bool _watchersInitialized;
+    private bool _disposed;
+    public LibraryAuditViewModel LibraryAudit { get; }
+    public DashboardViewModel Dashboard { get; }
 
-    public MainWindowViewModel()
+    public MainWindowViewModel() : this(MainWindowViewModelDependencies.CreateDefault())
     {
-        _mediaCache = new MetadataCacheServiceAdapter(_scanner.Cache);
-        _tempMediaCache = new MetadataCacheServiceAdapter(_tempScanner.Cache);
-        _mediaLibrary = new MediaLibraryService(new MkvScannerServiceAdapter(_scanner), _mediaCache);
-        _tempMediaLibrary = new MediaLibraryService(new MkvScannerServiceAdapter(_tempScanner), _tempMediaCache);
-        _libraryAudit = new LibraryAuditService(_mediaCache);
-        _scanPipeline = new ScanPipeline(_mediaLibrary);
-        _tempScanPipeline = new ScanPipeline(_tempMediaLibrary);
-        AppState.DashboardFileSelectionChanged += (_, _) => SyncRenameFromDashboardSelection(preserveSearchTitle: true, writeLog: false);
+    }
+
+    public MainWindowViewModel(MainWindowViewModelDependencies dependencies, bool initializeSettings = true)
+    {
+        ArgumentNullException.ThrowIfNull(dependencies);
+        _scanner = dependencies.Scanner;
+        _tempScanner = dependencies.TempScanner;
+        _mediaCache = dependencies.MediaCache;
+        _tempMediaCache = dependencies.TempMediaCache;
+        _mediaLibrary = dependencies.MediaLibrary;
+        _tempMediaLibrary = dependencies.TempMediaLibrary;
+        _libraryAudit = dependencies.LibraryAudit;
+        _mkvMerge = dependencies.MkvMerge;
+        _scanPipeline = dependencies.ScanPipeline;
+        _tempScanPipeline = dependencies.TempScanPipeline;
+        AppState = dependencies.AppState;
+        _planner = dependencies.Planner;
+        _propEdit = dependencies.PropEdit;
+        _propEditCommandBuilder = dependencies.PropEditCommandBuilder;
+        _operationStatus = dependencies.OperationStatus;
+        _settingsWorkflow = dependencies.SettingsWorkflow;
+        _executionWorkflow = dependencies.ExecutionWorkflow;
+        _renameBatchHistory = dependencies.RenameBatchHistory;
+        _renameMetadata = dependencies.RenameMetadata;
+        _watchFolders = dependencies.WatchFolders;
+        _mediaServerDiscovery = dependencies.MediaServerDiscovery;
+        _userInteraction = dependencies.UserInteraction;
+        Dashboard = new DashboardViewModel(this);
+        LibraryAudit = new LibraryAuditViewModel(this);
+
+        AppState.DashboardFileSelectionChanged += OnDashboardFileSelectionChanged;
         AppState.Files.CollectionChanged += OnDashboardFilesChanged;
-        LoadSettings();
-        PruneExpiredTempMetadataCache();
+        if (initializeSettings)
+        {
+            LoadSettings();
+            PruneExpiredTempMetadataCache();
+        }
     }
 
     public ObservableCollection<MkvFileItem> Files => AppState.Files;
@@ -111,10 +129,8 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<LibraryAuditSeasonItem> LibraryAuditItems { get; } = new();
     public ObservableCollection<LibraryAuditSeasonItem> DisplayedLibraryAuditItems { get; } = new();
     public ObservableCollection<LibraryAuditIssueLine> SelectedLibraryAuditIssueLines { get; } = new();
-    public ObservableCollection<ExecutionJob> ExecutionJobs => _executionQueue.Jobs;
+    public ObservableCollection<ExecutionJob> ExecutionJobs => _executionWorkflow.Jobs;
     public ObservableCollection<string> ExecutionSummaryLines { get; } = new();
-    public Action<string, IReadOnlyList<string>>? ShowOutputWindow { get; set; }
-    public Func<IReadOnlyList<RenameBatchRecord>, Action, Func<RenameBatchRecord, RenameBatchUndoPreview>, Func<RenameBatchRecord, Task<RenameBatchUndoResult>>, Task>? ShowRenameUndoWindowAsync { get; set; }
     public ObservableCollection<string> RenameTemplateOptions { get; } = new();
     public ObservableCollection<string> DisplayedRenameTemplateOptions { get; } = new();
     public bool IsTvdbConfigured => !string.IsNullOrWhiteSpace(TvdbApiKey);
@@ -136,6 +152,29 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<string> AudioNamePresets { get; } = new();
     public ObservableCollection<string> SubtitleNamePresets { get; } = new();
     public ObservableCollection<string> LanguagePresets { get; } = new();
+
+    private void OnDashboardFileSelectionChanged(object? sender, EventArgs e) =>
+        SyncRenameFromDashboardSelection(preserveSearchTitle: true, writeLog: false);
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        AppState.DashboardFileSelectionChanged -= OnDashboardFileSelectionChanged;
+        AppState.Files.CollectionChanged -= OnDashboardFilesChanged;
+        Dashboard.Dispose();
+        LibraryAudit.Dispose();
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cacheCts?.Cancel();
+        _cacheCts?.Dispose();
+        _auditCts?.Cancel();
+        _auditCts?.Dispose();
+        StopWatchers();
+        _watchFolders.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
 
 
@@ -312,14 +351,12 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task OpenRenameUndoBatch()
     {
-        if (ShowRenameUndoWindowAsync is null)
-        {
-            RenameLog("Undo Batch window is not available.");
-            return;
-        }
-
         var batches = _renameBatchHistory.Load();
-        await ShowRenameUndoWindowAsync(batches, ClearRenameBatchHistory, PreviewRenameBatchUndo, UndoRenameBatchAsync);
+        await _userInteraction.ShowRenameUndoAsync(
+            batches,
+            ClearRenameBatchHistory,
+            PreviewRenameBatchUndo,
+            UndoRenameBatchAsync);
     }
 
     private void ClearRenameBatchHistory()

@@ -23,7 +23,9 @@ var tests = new (string Name, Action Test)[]
     ("MkvPropEditCommandBuilder uses type ordinal selectors", MkvPropEditCommandBuilderUsesTrackSelectors),
     ("MkvMergeService muxes multiple matching external subtitles", MkvMergeServiceMuxesMultipleMatchingExternalSubtitles),
     ("MkvMergeService leaves MP4 files read-only", MkvMergeServiceLeavesMp4ReadOnly),
-    ("MkvMergeService converts MP4 files to MKV losslessly", MkvMergeServiceBuildsConvertToMkvPlan)
+    ("MkvMergeService converts MP4 files to MKV losslessly", MkvMergeServiceBuildsConvertToMkvPlan),
+    ("App state signals dashboard selection changes", AppStateSignalsDashboardSelectionChanges),
+    ("Execution queue owns workflow lifecycle", ExecutionQueueOwnsWorkflowLifecycle)
 };
 
 var failures = 0;
@@ -411,6 +413,37 @@ static void MkvMergeServiceBuildsConvertToMkvPlan()
     AssertContains(mp4.FilePath, action.Arguments);
     AssertContains(action.TempOutputPath, action.Arguments);
     AssertContains(mkv.FilePath, plan.NoChangeFiles);
+}
+
+static void AppStateSignalsDashboardSelectionChanges()
+{
+    var state = new MKVOrchestrator.Core.Services.State.AppStateService();
+    var changes = 0;
+    state.DashboardFileSelectionChanged += (_, _) => changes++;
+    var file = new MkvFileItem { FilePath = "episode.mkv" };
+
+    state.Files.Add(file);
+    file.Selected = false;
+    file.Selected = true;
+
+    AssertEqual(1, state.DashboardSelectedFileCount);
+    AssertTrue(changes >= 2, "collection and selection mutations should signal the coordinator");
+}
+
+static void ExecutionQueueOwnsWorkflowLifecycle()
+{
+    var queue = new ExecutionQueueService();
+    var job = new ExecutionJob { Workflow = "test", FilePath = "episode.mkv", Description = "Test operation" };
+
+    var started = queue.BeginWorkflow("test", new[] { job });
+    AssertEqual(1, started.Total);
+    AssertEqual(ExecutionJobStatus.Pending, job.Status);
+
+    queue.MarkRunning(job);
+    queue.Complete(job);
+    var completed = queue.CompleteWorkflow();
+    AssertEqual(1, completed.Completed);
+    AssertTrue(completed.CompletedAt.HasValue, "completed workflow should have a completion timestamp");
 }
 
 static void AssertEqual<T>(T expected, T actual)

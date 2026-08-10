@@ -26,7 +26,7 @@ public partial class MainWindowViewModel
         WriteIndented = true
     };
 
-    private readonly MediaServerDiscoveryService _mediaServerDiscovery = new();
+    private readonly MediaServerDiscoveryService _mediaServerDiscovery;
 
     public ObservableCollection<MediaServerItemViewModel> MediaServers { get; } = new();
     public IReadOnlyList<string> MediaServerTypeOptions { get; } = new[] { "Emby", "Jellyfin", "Plex" };
@@ -42,7 +42,7 @@ public partial class MainWindowViewModel
     private void LoadSettings()
     {
         _isLoadingSettings = true;
-        var settings = _settingsService.Load();
+        var settings = _settingsWorkflow.Load();
         _workerSettings = (settings.Workers ?? WorkerSettings.Defaults).CloneNormalized();
         MaxScanWorkers = _workerSettings.MaxScanWorkers;
         MaxEditWorkers = _workerSettings.MaxEditWorkers;
@@ -94,7 +94,7 @@ public partial class MainWindowViewModel
         _isLoadingSettings = false;
         
         IsRenamePreviewDirty = false;
-Log($"Settings loaded from {_settingsService.SettingsPath}");
+Log($"Settings loaded from {_settingsWorkflow.SettingsPath}");
         RefreshCacheLifecycleStatus();
         CacheStatusText = EnableLiveWatchFolderMonitoring
             ? "Live watcher pending startup initialization."
@@ -281,7 +281,7 @@ Log($"Settings loaded from {_settingsService.SettingsPath}");
     private void SaveSettingsIfReady()
     {
         if (_isLoadingSettings) return;
-        _settingsService.Save(new AppSettings
+        _settingsWorkflow.Save(new AppSettings
         {
             MkvToolNixDirectory = CrossPlatformRuntime.NormalizeUserPath(MkvToolNixDirectory),
             FfmpegDirectory = CrossPlatformRuntime.NormalizeUserPath(FfmpegDirectory),
