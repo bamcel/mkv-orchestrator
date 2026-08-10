@@ -234,6 +234,49 @@ cargo test --workspace
 npm --prefix web test
 ```
 
+## Command Line
+
+The `mkvo` binary drives the same runtime as the app, so it sees the same
+cache, settings, and provider keys.
+
+```powershell
+cargo run --package mkvo-cli -- scan "D:\Media\Show"
+```
+
+```text
+mkvo scan <folder>    [--json] [--ignore Extras,Backdrops] [--force-refresh]
+mkvo inspect <folder> [--ignore ...]                       # scan --json
+mkvo cleanup <folder> [--apply] [--keep-container-title] [--keep-video-title]
+                      [--remove-audio-titles] [--remove-subtitle-titles]
+                      [--set-audio-language eng] [--set-subtitle-language eng]
+mkvo rename <folder>  [--query "Series"] [--provider AniList] [--pick 2]
+                      [--list-matches] [--template "..."] [--apply]
+```
+
+`cleanup` and `rename` only print a plan until you pass `--apply`.
+
+Exit codes: `0` success, `1` error, `2` ran fine but found nothing to do, `130`
+canceled. The `2` is what lets a script skip a follow-up step.
+
+Settings come from `--config`, then `MKVO_CONFIG_DIR`, then the OS
+configuration directory -- the same store the other hosts use, so provider keys
+and the metadata cache are shared with them.
+
+What is not shared is the working set: the list of files a running app has on
+screen is that process's own state, so `mkvo scan` will not populate the
+dashboard of a server or desktop that is already running. The cache it writes
+does make that app's next scan faster.
+
+Renaming goes through a provider lookup, so it needs something to search for;
+without `--query` the folder name is used. AniList needs no credentials, the
+others need keys configured in Settings.
+
+The container carries the same binary:
+
+```bash
+docker exec mkvo mkvo scan /media --json
+```
+
 ## Docker Web Container
 
 The Docker build runs as one container. It serves the React web UI and the Rust API from the same process and installs MKVToolNix plus FFmpeg inside the image.

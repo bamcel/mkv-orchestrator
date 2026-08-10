@@ -186,6 +186,17 @@ jobs:
           if not any(t["type"] == "video" for t in tracks):
               sys.exit(f"no video track parsed: {tracks}")
           PY
+      - name: The bundled CLI runs inside the container
+        run: |
+          docker exec mkvo-ci mkvo --version
+          docker exec mkvo-ci mkvo scan /media --json > cli.json
+          python3 - <<'PY'
+          import json, sys
+          files = json.load(open("cli.json"))
+          if len(files) != 1 or not files[0]["tracks"]:
+              sys.exit(f"the CLI did not scan the mounted media: {files}")
+          print(files[0]["fileName"], files[0]["videoSummary"])
+          PY
       - name: Container logs
         if: always()
         run: docker logs mkvo-ci || true

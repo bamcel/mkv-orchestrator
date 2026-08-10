@@ -21,7 +21,9 @@ COPY .cargo/ .cargo/
 COPY crates/ crates/
 COPY apps/ apps/
 COPY tools/ tools/
-RUN cargo build --locked --release --package mkvo-server
+# The CLI ships alongside the server so `docker exec mkvo mkvo scan /media`
+# works without a second image.
+RUN cargo build --locked --release --package mkvo-server --package mkvo-cli
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
@@ -29,6 +31,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=rust-build /src/target/release/mkvo-server /app/mkvo-server
+COPY --from=rust-build /src/target/release/mkvo /usr/local/bin/mkvo
 COPY --from=web-build /src/web/dist/ /app/web/
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh \
