@@ -1168,7 +1168,7 @@ fn classify_recovery(
 /// arguments, where it is what lifts the `MAX_PATH` limit, but showing it to the
 /// user is wrong: it is not what they typed and not what they can paste back.
 /// It is only removed when doing so still yields a valid path.
-fn display_path(path: &Path) -> String {
+pub(crate) fn display_path(path: &Path) -> String {
     mkvo_domain::normalized_path_text(path)
 }
 

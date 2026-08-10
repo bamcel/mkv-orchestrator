@@ -30,7 +30,7 @@ use crate::compat::{
     PropEditPreviewResponse, PropEditTemplateRequest, PropEditTemplateResponse, RenameApplyRequest,
     RenamePreviewRequest, RenamePreviewResponse,
 };
-use crate::runtime::{parse_provider, provider_name};
+use crate::runtime::{display_path, parse_provider, provider_name};
 use crate::{MkvoRuntime, RuntimeError, RuntimeResult};
 
 impl MkvoRuntime {
@@ -385,8 +385,8 @@ impl MkvoRuntime {
                                 .lines
                                 .push(format!("Restored {}", entry.original_path.display()));
                             response.restored.push(RenameBatchRestoreMove {
-                                original_path: entry.original_path.to_string_lossy().into_owned(),
-                                renamed_path: entry.renamed_path.to_string_lossy().into_owned(),
+                                original_path: display_path(&entry.original_path),
+                                renamed_path: display_path(&entry.renamed_path),
                                 original_file_name: file_name(&entry.original_path),
                             });
                         }
@@ -451,7 +451,7 @@ impl MkvoRuntime {
             .map(|(index, track)| prop_track_row(index, track))
             .collect();
         Ok(PropEditTemplateResponse {
-            template_path: template.path.to_string_lossy().into_owned(),
+            template_path: display_path(&template.path),
             template_file_name: template.file_name(),
             audio_tracks,
             subtitle_tracks,
@@ -485,12 +485,7 @@ impl MkvoRuntime {
             .groups
             .iter()
             .map(|group| LibraryAuditRow {
-                folder_path: self
-                    .config()
-                    .media_root
-                    .join(&group.relative_folder)
-                    .to_string_lossy()
-                    .into_owned(),
+                folder_path: display_path(&self.config().media_root.join(&group.relative_folder)),
                 folder_name: if group.season_folder.is_empty() {
                     group.show_name.clone()
                 } else {
@@ -503,7 +498,7 @@ impl MkvoRuntime {
                 template_file_path: group
                     .template_file_path
                     .as_deref()
-                    .map_or_else(String::new, |path| path.to_string_lossy().into_owned()),
+                    .map_or_else(String::new, display_path),
                 template_file_name: group
                     .template_file_path
                     .as_deref()
@@ -522,12 +517,12 @@ impl MkvoRuntime {
                 issue_file_paths: group
                     .issue_file_paths
                     .iter()
-                    .map(|path| path.to_string_lossy().into_owned())
+                    .map(|path| display_path(path))
                     .collect(),
                 all_file_paths: group
                     .all_file_paths
                     .iter()
-                    .map(|path| path.to_string_lossy().into_owned())
+                    .map(|path| display_path(path))
                     .collect(),
             })
             .collect();
@@ -1679,7 +1674,7 @@ fn rename_preview_response(
                 .map_or_else(|| "Ready".to_owned(), |conflict| conflict.message.clone());
             RenamePreviewRow {
                 selected: item.can_apply(),
-                source_path: item.source.to_string_lossy().into_owned(),
+                source_path: display_path(&item.source),
                 current_file_name: file_name(&item.source),
                 detected: String::new(),
                 episode_name: String::new(),
@@ -1718,9 +1713,9 @@ fn rename_apply_response(plan: &RenamePlan, replay: bool) -> RenameApplyResponse
         .map(|item| RenamePreviewRow {
             selected: item.can_apply(),
             source_path: if item.can_apply() {
-                item.target.to_string_lossy().into_owned()
+                display_path(&item.target)
             } else {
-                item.source.to_string_lossy().into_owned()
+                display_path(&item.source)
             },
             current_file_name: file_name(&item.source),
             detected: String::new(),
@@ -1783,8 +1778,8 @@ fn rename_batch_dto(record: &RenameBatchRecord) -> RenameBatchRecordDto {
             .entries
             .iter()
             .map(|entry| RenameBatchEntryDto {
-                original_path: entry.original_path.to_string_lossy().into_owned(),
-                renamed_path: entry.renamed_path.to_string_lossy().into_owned(),
+                original_path: display_path(&entry.original_path),
+                renamed_path: display_path(&entry.renamed_path),
                 original_file_name: file_name(&entry.original_path),
                 renamed_file_name: file_name(&entry.renamed_path),
             })
@@ -1813,8 +1808,8 @@ fn legacy_rename_batch_dto(
         .entries
         .iter()
         .map(|entry| RenameBatchEntryDto {
-            original_path: entry.original_path.to_string_lossy().into_owned(),
-            renamed_path: entry.renamed_path.to_string_lossy().into_owned(),
+            original_path: display_path(&entry.original_path),
+            renamed_path: display_path(&entry.renamed_path),
             original_file_name: file_name(&entry.original_path),
             renamed_file_name: file_name(&entry.renamed_path),
         })

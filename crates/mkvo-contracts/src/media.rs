@@ -43,7 +43,7 @@ impl From<&MediaFile> for MediaFileDto {
             .map_or_else(String::new, |value| format!("{value}bit"));
         let extension = file.extension();
         Self {
-            path: file.path.to_string_lossy().into_owned(),
+            path: mkvo_domain::normalized_path_text(&file.path),
             file_name: file.file_name(),
             extension: if extension.is_empty() {
                 String::new()
@@ -143,7 +143,7 @@ pub struct FileFingerprintDto {
 impl From<&FileFingerprint> for FileFingerprintDto {
     fn from(value: &FileFingerprint) -> Self {
         Self {
-            path: value.path.to_string_lossy().into_owned(),
+            path: mkvo_domain::normalized_path_text(&value.path),
             size_bytes: value.size_bytes,
             modified_utc: value.modified_at,
             quick_hash: value.quick_hash.clone(),
