@@ -7,7 +7,6 @@ import {
   getCurrentScanFiles,
   getOperationJob,
   getWebSettings,
-  loadPropEditTemplate,
   PropEditPreviewRequest,
   PropEditPreviewResponse,
   PropEditTemplateResponse,
@@ -17,6 +16,7 @@ import {
 import { OutputModal } from "../components/OutputModal";
 import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
+import { useInvalidatePropEditTemplate, usePropEditTemplate } from "../state/propEditTemplate";
 
 type TitleMode = "keep" | "remove" | "file" | "custom";
 type TrackType = "audio" | "subtitle";
@@ -74,30 +74,43 @@ export function TrackPropertiesPage() {
   const mkvFiles = useMemo(() => files.filter((file) => file.extension.toLowerCase() === ".mkv"), [files]);
   const nonMkvCount = files.length - mkvFiles.length;
 
-  const templateLoad = useMutation({
-    mutationFn: loadPropEditTemplate,
-    onSuccess: (response) => {
-      setTemplate(response);
-      setAudioTracks(response.audioTracks);
-      setSubtitleTracks(response.subtitleTracks);
-      setDefaultAudio(response.defaultAudio || "Keep existing");
-      setForcedAudio(response.forcedAudio || "Keep existing");
-      setDefaultSubtitle(response.defaultSubtitle || "Keep existing");
-      setForcedSubtitle(response.forcedSubtitle || "Keep existing");
-      setCustomTrackKeys(new Set());
-      setCustomContainerTitle(response.templateFileName.replace(/\.[^.]+$/, ""));
-      setCustomVideoTitle(response.templateFileName.replace(/\.[^.]+$/, ""));
-      setStatusText(`Template loaded: ${response.templateFileName}`);
-    },
-    onError: (error) => setStatusText(error instanceof Error ? error.message : "Template load failed.")
-  });
+  // Cached and warmed while the library loads, so arriving here usually finds
+  // the tracks already read rather than starting the read.
+  const templateLoad = usePropEditTemplate(templatePath, files);
+  const invalidateTemplate = useInvalidatePropEditTemplate();
 
   useEffect(() => {
-    if (files.length === 0 || !templatePath) return;
-    templateLoad.mutate({ files, templatePath });
+    if (!templatePath) return;
     setTemplateFilePath(templatePath);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templatePath, files.length]);
+  }, [templatePath]);
+
+  // Seeds the editable copies from whatever the cache holds. The query returns
+  // the same object until the template genuinely changes, so this does not
+  // clobber edits in progress; when it does change, re-seeding is exactly the
+  // reload that reflects it.
+  const loadedTemplate = templateLoad.data;
+  useEffect(() => {
+    if (!loadedTemplate) return;
+    setTemplate(loadedTemplate);
+    setAudioTracks(loadedTemplate.audioTracks);
+    setSubtitleTracks(loadedTemplate.subtitleTracks);
+    setDefaultAudio(loadedTemplate.defaultAudio || "Keep existing");
+    setForcedAudio(loadedTemplate.forcedAudio || "Keep existing");
+    setDefaultSubtitle(loadedTemplate.defaultSubtitle || "Keep existing");
+    setForcedSubtitle(loadedTemplate.forcedSubtitle || "Keep existing");
+    setCustomTrackKeys(new Set());
+    setCustomContainerTitle(loadedTemplate.templateFileName.replace(/\.[^.]+$/, ""));
+    setCustomVideoTitle(loadedTemplate.templateFileName.replace(/\.[^.]+$/, ""));
+    setStatusText(`Template loaded: ${loadedTemplate.templateFileName}`);
+  }, [loadedTemplate]);
+
+  useEffect(() => {
+    if (!templateLoad.error) return;
+    setStatusText(
+      templateLoad.error instanceof Error ? templateLoad.error.message : "Template load failed."
+    );
+  }, [templateLoad.error]);
 
   const preview = useMutation({
     mutationFn: buildPropEditPreview,
@@ -140,6 +153,10 @@ export function TrackPropertiesPage() {
       setStatusText(`Applying ${runningJob.completed + runningJob.failed + runningJob.skipped}/${runningJob.total}${progress}`);
       return;
     }
+
+    // The edits have landed on disk, so the cached track layout now describes
+    // how the files used to look. Dropping it re-reads them.
+    void invalidateTemplate();
 
     if (runningJob.propEditResult) {
       setPreviewResult(runningJob.propEditResult);

@@ -8,10 +8,14 @@ import { RenamePage } from "./pages/RenamePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TrackPropertiesPage } from "./pages/TrackPropertiesPage";
 import { MediaLibraryProvider } from "./state/MediaLibraryContext";
+import { PropEditTemplateWarmer } from "./state/propEditTemplate";
 
 export default function App() {
   return (
     <MediaLibraryProvider>
+      {/* Reads the track layout as soon as a scan lands, so Track Properties
+          opens with it rather than starting the read on arrival. */}
+      <PropEditTemplateWarmer />
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
