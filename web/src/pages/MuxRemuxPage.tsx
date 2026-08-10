@@ -16,10 +16,9 @@ import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
 export function MuxRemuxPage() {
-  const { files, setFiles } = useMediaLibrary();
+  const { files, setFiles, selectedPaths, setSelectedPaths, toggleSelectedPath } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
-  const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"remux" | "subtitles">("remux");
   const [detailTab, setDetailTab] = useState<"tracks" | "attachments">("tracks");
   const [selectedDetailPath, setSelectedDetailPath] = useState("");
@@ -60,11 +59,12 @@ export function MuxRemuxPage() {
   }, [settings.data, settingsDefaultsApplied]);
 
   useEffect(() => {
-    setSelectedPaths((current) => {
-      if (files.length === 0) return [];
-      const existing = current.filter((path) => files.some((file) => file.path === path));
-      return existing.length > 0 ? existing : files.map((file) => file.path);
-    });
+    // The shared selection already drops paths a job removed. Only fill in a
+    // default when nothing is selected, so a deliberate selection — including
+    // one restored after a reload — is never overwritten.
+    if (files.length > 0 && selectedPaths.length === 0) {
+      setSelectedPaths(files.map((file) => file.path));
+    }
 
     setSelectedDetailPath((current) => current && files.some((file) => file.path === current) ? current : files[0]?.path ?? "");
   }, [files]);
@@ -178,9 +178,7 @@ export function MuxRemuxPage() {
   }
 
   function togglePath(path: string) {
-    setSelectedPaths((current) =>
-      current.includes(path) ? current.filter((item) => item !== path) : [...current, path]
-    );
+    toggleSelectedPath(path);
   }
 
   function runPreview() {

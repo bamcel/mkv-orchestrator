@@ -26,10 +26,9 @@ const subtitleNamePresets = ["English", "English Forced", "English SDH", "Signs 
 const languagePresets = ["eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de"];
 
 export function TrackPropertiesPage() {
-  const { files, setFiles, templateFilePath, setTemplateFilePath } = useMediaLibrary();
+  const { files, setFiles, selectedPaths, setSelectedPaths, templateFilePath, setTemplateFilePath } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
-  const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [templatePath, setTemplatePath] = useState("");
   const [containerMode, setContainerMode] = useState<TitleMode>("keep");
   const [videoMode, setVideoMode] = useState<TitleMode>("keep");
@@ -54,12 +53,14 @@ export function TrackPropertiesPage() {
   }, [currentScan.data, files.length, setFiles]);
 
   useEffect(() => {
-    setSelectedPaths((current) => {
-      if (files.length === 0) return [];
-      const mkvPaths = files.filter((file) => file.extension.toLowerCase() === ".mkv").map((file) => file.path);
-      const existing = current.filter((path) => mkvPaths.includes(path));
-      return existing.length > 0 ? existing : mkvPaths;
-    });
+    // Only mkvpropedit-capable files can be edited here, and a default is
+    // filled in only when nothing is selected, so a restored or deliberate
+    // selection survives.
+    if (files.length > 0 && selectedPaths.length === 0) {
+      setSelectedPaths(
+        files.filter((file) => file.extension.toLowerCase() === ".mkv").map((file) => file.path)
+      );
+    }
 
     if (!templatePath) {
       const nextTemplate = templateFilePath || files.find((file) => file.extension.toLowerCase() === ".mkv")?.path || "";
