@@ -1367,6 +1367,18 @@ impl MkvoRuntime {
         journal.detail = Some("property-edit plan completed".to_owned());
         journal.updated_utc = Utc::now();
         self.dependencies().journal.advance(&journal).await?;
+        // The edits changed the files in place, so the working set still
+        // describes their old track names and languages. Re-reading them is
+        // what lets the app show the result without the user scanning again.
+        let edited: Vec<_> = plan
+            .payload
+            .items
+            .iter()
+            .filter(|item| item.can_apply())
+            .map(|item| item.path.clone())
+            .collect();
+        self.refresh_working_set(&edited).await;
+
         let mut response = propedit_preview_response(plan);
         response.status = "Track-properties operation completed".to_owned();
         self.append_log(

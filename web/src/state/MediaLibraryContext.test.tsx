@@ -164,3 +164,100 @@ describe("working set persistence", () => {
     expect(result.current.selectedPaths).toEqual([]);
   });
 });
+
+describe("adopting the backend working set", () => {
+  /// Pages used to adopt the backend only while holding nothing, so the first
+  /// scan won and every later change -- a rename, a property edit -- stayed
+  /// invisible until the app restarted.
+  it("adopts a set newer than the one it holds", () => {
+    const { result } = library();
+
+    act(() =>
+      result.current.syncFromBackend({
+        updatedUtc: "2026-08-09T10:00:00Z",
+        files: [file("/media/before.mkv")],
+        selectedPaths: []
+      })
+    );
+    act(() =>
+      result.current.syncFromBackend({
+        updatedUtc: "2026-08-09T10:05:00Z",
+        files: [file("/media/after.mkv")],
+        selectedPaths: []
+      })
+    );
+
+    expect(result.current.files.map((item) => item.fileName)).toEqual(["after.mkv"]);
+  });
+
+  /// A property edit leaves paths alone and changes what is inside them, which
+  /// is the case a path comparison would miss.
+  it("adopts a newer set even when the paths are unchanged", () => {
+    const { result } = library();
+    const edited = { ...file("/media/show.mkv"), audioSummary: "eng x2" };
+
+    act(() =>
+      result.current.syncFromBackend({
+        updatedUtc: "2026-08-09T10:00:00Z",
+        files: [file("/media/show.mkv")],
+        selectedPaths: []
+      })
+    );
+    act(() =>
+      result.current.syncFromBackend({
+        updatedUtc: "2026-08-09T10:05:00Z",
+        files: [edited],
+        selectedPaths: []
+      })
+    );
+
+    expect(result.current.files[0].audioSummary).toBe("eng x2");
+  });
+
+  /// Refetches repeat the same answer constantly; re-adopting each time would
+  /// discard local state for nothing.
+  it("ignores a repeat of the set it already adopted", () => {
+    const { result } = library();
+    const stamp = "2026-08-09T10:00:00Z";
+
+    act(() =>
+      result.current.syncFromBackend({
+        updatedUtc: stamp,
+        files: [file("/media/first.mkv")],
+        selectedPaths: []
+      })
+    );
+    act(() =>
+      result.current.syncFromBackend({
+        updatedUtc: stamp,
+        files: [file("/media/second.mkv")],
+        selectedPaths: []
+      })
+    );
+
+    expect(result.current.files.map((item) => item.fileName)).toEqual(["first.mkv"]);
+  });
+
+  /// An empty response is a cleared or not-yet-scanned host, not a reason to
+  /// throw away what the page is showing.
+  it("does not empty the library on an empty response", () => {
+    const { result } = library();
+
+    act(() =>
+      result.current.syncFromBackend({
+        updatedUtc: "2026-08-09T10:00:00Z",
+        files: [file("/media/kept.mkv")],
+        selectedPaths: []
+      })
+    );
+    act(() =>
+      result.current.syncFromBackend({
+        updatedUtc: "2026-08-09T10:05:00Z",
+        files: [],
+        selectedPaths: []
+      })
+    );
+
+    expect(result.current.files.map((item) => item.fileName)).toEqual(["kept.mkv"]);
+  });
+});

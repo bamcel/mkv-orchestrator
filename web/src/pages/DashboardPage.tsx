@@ -10,7 +10,7 @@ const lastBrowsePathStorageKey = "mkvo.web.lastBrowsePath";
 
 export function DashboardPage() {
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
-  const { files, setFiles, templateFilePath, setTemplateFilePath, hydrateSelection } = useMediaLibrary();
+  const { files, setFiles, templateFilePath, setTemplateFilePath, syncFromBackend } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const [sources, setSources] = useState<string[]>([]);
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
@@ -191,14 +191,20 @@ export function DashboardPage() {
     }
   }, [currentScanJob]);
 
+  // Rust owns the working set and stamps it whenever an operation changes it,
+  // so this adopts anything newer rather than only filling an empty page.
   useEffect(() => {
-    if (files.length > 0 || !currentScan.data?.files.length) return;
-    setFiles(currentScan.data.files);
-    // Rust owns the selection, so adopt what it reports rather than keeping
-    // whatever this tab happened to have.
-    hydrateSelection(currentScan.data.selectedPaths);
-    setSelectedFilePath(currentScan.data.files[0]?.path ?? "");
-  }, [currentScan.data, files.length, setFiles]);
+    if (!currentScan.data) return;
+    syncFromBackend(currentScan.data);
+  }, [currentScan.data]);
+
+  useEffect(() => {
+    if (files.length === 0) {
+      setSelectedFilePath("");
+    } else if (!files.some((file) => file.path === selectedFilePath)) {
+      setSelectedFilePath(files[0].path);
+    }
+  }, [files, selectedFilePath]);
 
   function runScan() {
     if (!hasSources) return;
