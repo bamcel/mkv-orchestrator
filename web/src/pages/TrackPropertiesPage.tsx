@@ -21,8 +21,8 @@ import { useInvalidatePropEditTemplate, usePropEditTemplate } from "../state/pro
 type TitleMode = "keep" | "remove" | "file" | "custom";
 type TrackType = "audio" | "subtitle";
 
-const audioNamePresets = ["English", "Japanese", "Commentary", "Director Commentary", "Signs & Songs"];
-const subtitleNamePresets = ["English", "English Forced", "English SDH", "Signs & Songs", "Commentary"];
+const audioNamePresets = ["English", "Japanese", "Commentary"];
+const subtitleNamePresets = ["English", "English Forced", "English SDH", "Dialogue", "Signs & Songs", "Commentary"];
 const languagePresets = ["eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de"];
 
 export function TrackPropertiesPage() {

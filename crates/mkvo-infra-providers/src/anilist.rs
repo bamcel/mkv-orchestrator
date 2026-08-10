@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::common::{
     EpisodeMetadata, MediaKind, MetadataProviderClient, ProviderCredentials, ProviderError,
-    ProviderKind, SearchResult, SelectedMedia, send_with_retry,
+    ProviderKind, SearchResult, SelectedMedia, provider_http_client, send_with_retry,
 };
 
 const ENDPOINT: &str = "https://graphql.anilist.co";
@@ -68,7 +68,7 @@ impl AniListClient {
     #[must_use]
     pub fn with_endpoint(endpoint: impl Into<String>) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http: provider_http_client(),
             endpoint: endpoint.into(),
         }
     }

@@ -91,19 +91,30 @@ impl MkvoRuntime {
         }
 
         for root in &settings.watch.roots {
-            if let Err(error) = self.grant_authorized_root(root, true) {
-                tracing::warn!(
-                    path = %root.display(),
-                    error = %error,
-                    "watch root could not be authorized"
-                );
+            let authorization = if self.config().browse_scope == crate::BrowseScope::Unrestricted {
+                self.grant_authorized_root(root, true).map(|_| ())
+            } else {
+                self.dependencies()
+                    .paths
+                    .authorize_read(root)
+                    .await
+                    .map(|_| ())
+                    .map_err(RuntimeError::from)
+            };
+            if let Err(error) = authorization {
+                return Ok(WatchStartReport {
+                    enabled: true,
+                    roots,
+                    started: false,
+                    error: Some(format!(
+                        "watch root {} is outside the host authorization boundary: {error}",
+                        root.display()
+                    )),
+                });
             }
         }
 
-        match watcher
-            .start(&settings.watch.roots, settings.watch.force_polling)
-            .await
-        {
+        match watcher.start(&settings.watch).await {
             Ok(()) => {
                 tracing::info!(
                     roots = settings.watch.roots.len(),
@@ -146,7 +157,7 @@ impl MkvoRuntime {
     ) {
         let dependencies = self.dependencies().clone();
         let mut roots = settings.watch.roots.clone();
-        let ignored = settings.scan.ignored_folder_names.clone();
+        let mut ignored = settings.scan.ignored_folder_names.clone();
 
         tokio::spawn(async move {
             loop {
@@ -170,6 +181,7 @@ impl MkvoRuntime {
                 // up without needing to respawn this task.
                 if let Ok((loaded, _revision)) = dependencies.settings.load().await {
                     roots = loaded.watch.roots.clone();
+                    ignored = loaded.scan.ignored_folder_names.clone();
                 }
             }
         });

@@ -13,7 +13,7 @@ use mkvo_application::{
     PortError, RequiredAccess, WatchBackend, WatchBackendKind, WatchChange, WatchChangeKind,
     WatchHealth,
 };
-use mkvo_domain::FileFingerprint;
+use mkvo_domain::{FileFingerprint, WatchSettings};
 use tokio::{
     sync::{Mutex, broadcast},
     task::JoinHandle,
@@ -359,11 +359,17 @@ impl WatchBackend for WatchService {
         WatchService::subscribe(self)
     }
 
-    async fn start(&self, roots: &[PathBuf], force_polling: bool) -> Result<(), PortError> {
+    async fn start(&self, settings: &WatchSettings) -> Result<(), PortError> {
         self.stop_inner().await;
         let mut options = self.options.clone();
-        options.roots = roots.to_vec();
-        options.mode = if force_polling {
+        options.roots = settings.roots.clone();
+        options.debounce = std::time::Duration::from_millis(settings.debounce_millis.max(50));
+        if settings.reconciliation_interval_minutes > 0 {
+            options.poll_interval = std::time::Duration::from_secs(
+                settings.reconciliation_interval_minutes.saturating_mul(60),
+            );
+        }
+        options.mode = if settings.force_polling {
             WatchMode::Polling
         } else {
             WatchMode::Auto
@@ -410,7 +416,7 @@ impl WatchBackend for WatchService {
         state.cancellation = Some(cancellation);
         state.running = true;
         state.backend = backend;
-        state.watched_roots = roots.len();
+        state.watched_roots = settings.roots.len();
         state.error = None;
         Ok(())
     }
@@ -470,7 +476,13 @@ mod tests {
         });
         let mut changes = WatchBackend::subscribe(&service);
         service
-            .start(std::slice::from_ref(&root), true)
+            .start(&WatchSettings {
+                enabled: true,
+                roots: vec![root.clone()],
+                reconciliation_interval_minutes: 0,
+                force_polling: true,
+                ..WatchSettings::default()
+            })
             .await
             .expect("start polling watcher");
         let created = root.join("episode.mkv");

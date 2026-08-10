@@ -405,6 +405,25 @@ impl OperationJournal for SqliteRepositories {
         })
         .await
     }
+
+    async fn list_incomplete(&self) -> Result<Option<Vec<JournalRecord>>, PortError> {
+        self.blocking(|store| {
+            let connection = store.connection()?;
+            let mut statement = connection.prepare(
+                "SELECT payload_json FROM mutation_journal
+                 WHERE status IN ('\"prepared\"', '\"running\"')
+                 ORDER BY updated_at_ms",
+            )?;
+            let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+            rows.map(|row| {
+                let payload = row?;
+                serde_json::from_str(&payload).map_err(StoreError::from)
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(Some)
+        })
+        .await
+    }
 }
 
 async fn save_journal(
@@ -586,5 +605,45 @@ mod tests {
             .await
             .expect_err("create-only save conflicts");
         assert!(matches!(error, PortError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    async fn incomplete_journals_are_enumerable_with_item_outcomes() {
+        let repositories =
+            SqliteRepositories::from_store(SqliteStore::open_in_memory().expect("store"));
+        let mut record = JournalRecord {
+            idempotency_key: IdempotencyKey::parse("journal-list").unwrap(),
+            plan_id: PlanId::new(),
+            step: 0,
+            status: mkvo_application::JournalStatus::Running,
+            resources: Vec::new(),
+            items: vec![mkvo_application::JournalItemOutcome {
+                key: "episode.mkv".to_owned(),
+                status: mkvo_application::JournalItemStatus::Pending,
+                detail: None,
+            }],
+            detail: None,
+            updated_utc: Utc::now(),
+        };
+        OperationJournal::begin(&repositories, &record)
+            .await
+            .expect("begin");
+        let incomplete = OperationJournal::list_incomplete(&repositories)
+            .await
+            .expect("list")
+            .expect("supported");
+        assert_eq!(incomplete, [record.clone()]);
+
+        record.status = mkvo_application::JournalStatus::Completed;
+        OperationJournal::advance(&repositories, &record)
+            .await
+            .expect("complete");
+        assert!(
+            OperationJournal::list_incomplete(&repositories)
+                .await
+                .expect("list")
+                .expect("supported")
+                .is_empty()
+        );
     }
 }

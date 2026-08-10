@@ -4,7 +4,7 @@ use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
-use crate::common::{response_json, send_with_retry, year_from_date};
+use crate::common::{provider_http_client, response_json, send_with_retry, year_from_date};
 use crate::{
     EpisodeMetadata, MediaKind, MetadataProviderClient, ProviderCredentials, ProviderError,
     ProviderKind, SearchResult, SelectedMedia, normalize_language,
@@ -21,7 +21,7 @@ pub struct TmdbClient {
 impl TmdbClient {
     pub fn new() -> Self {
         Self {
-            client: Client::new(),
+            client: provider_http_client(),
             base_url: Url::parse(DEFAULT_BASE_URL).expect("TMDB base URL is valid"),
         }
     }

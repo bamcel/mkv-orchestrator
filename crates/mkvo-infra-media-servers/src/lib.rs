@@ -3,6 +3,7 @@
 use std::{
     fmt,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 mod adapter;
@@ -135,7 +136,11 @@ pub struct MediaServerDiscoveryClient {
 impl MediaServerDiscoveryClient {
     pub fn new() -> Self {
         Self {
-            client: Client::new(),
+            client: Client::builder()
+                .timeout(Duration::from_secs(20))
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .expect("static media-server HTTP client configuration must build"),
         }
     }
 

@@ -3,6 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getStatus } from "../api";
 import mkvoIcon from "../assets/mkvo-icon-purple.png";
+import { useMediaLibrary } from "../state/MediaLibraryContext";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: Activity },
@@ -17,6 +18,7 @@ const navItems = [
 export function Layout() {
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const missingTools = status.data?.tools.filter((tool) => !tool.available).length ?? 0;
+  const { selectionError } = useMediaLibrary();
 
   return (
     <div className="h-screen overflow-hidden bg-window text-text">
@@ -48,7 +50,7 @@ export function Layout() {
                     [
                       "flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium transition",
                       isActive
-                        ? "bg-selected text-text shadow-[inset_3px_0_0_#24D184]"
+                        ? "bg-selected text-text shadow-[inset_3px_0_0_var(--color-accent)]"
                         : "text-muted hover:bg-input-hover hover:text-text"
                     ].join(" ")
                   }
@@ -72,7 +74,12 @@ export function Layout() {
           </div>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 overflow-hidden px-8 py-8">
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden px-8 py-8">
+          {selectionError ? (
+            <div role="alert" className="mb-3 shrink-0 rounded-md border border-warning bg-panel px-4 py-2 text-sm text-warning">
+              Selection sync failed: {selectionError}
+            </div>
+          ) : null}
           <div className="min-h-0 min-w-0 flex-1 overflow-auto">
             <Outlet />
           </div>

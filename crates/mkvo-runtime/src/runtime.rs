@@ -6,19 +6,19 @@ use std::time::SystemTime;
 use chrono::{DateTime, Utc};
 use mkvo_application::{
     ApplicationError, JobSpec, JobSupervisor, JournalStatus, MediaServerClient,
-    MediaServerConnection, MetadataProviderClient, ScanOutcome, ScanService, SettingsService,
+    MediaServerConnection, MetadataProviderClient, ScanService, SettingsService,
 };
 use mkvo_contracts::{
     AppStatus, CurrentScanResponse, FileSystemEntry, FileSystemEntryKind, FileSystemResponse,
-    JobCompletion, JobEventEnvelope, JobKind, JobSnapshot, JobStatus, LogQuery, MediaFileRow,
-    MediaServerSyncResponse, MediaServerTestResponse, RenameProviderTestResponse, RenameScopeRow,
-    ScanJobResponse, ScanRequest, ScanSummary, SecretUpdate, SourceRoot, WebMediaServer,
-    WebMediaServerLibraryPath, WebMediaServerPathMapping, WebSettings, WebSettingsRequest,
+    JobCompletion, JobKind, JobSnapshot, JobStatus, LogQuery, MediaFileRow,
+    MediaServerSyncResponse, MediaServerTestResponse, ScanJobResponse, ScanRequest, SecretUpdate,
+    SourceRoot, WebMediaServer, WebMediaServerLibraryPath, WebMediaServerPathMapping, WebSettings,
+    WebSettingsRequest,
 };
 use mkvo_domain::{
     AppSettings, CredentialState, IdempotencyKey, JobId, LibraryRoot, MediaFile, MediaServerId,
     MediaServerKind, MediaServerLibrary, MediaServerSettings, MetadataProvider, PathMapping,
-    same_path, stable_fingerprint,
+    PresetSettings, same_path, stable_fingerprint,
 };
 use mkvo_infra_media_servers::{
     ConfiguredMediaServerClient, MediaServerDiscoveryClient, MediaServerPathMapping,
@@ -34,142 +34,34 @@ use mkvo_infra_sqlite::{
     read_legacy_rename_history,
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::{RwLock, broadcast, oneshot};
+use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
-use crate::compat::{
-    MediaServerConnectionRequest, OperationJobResponse, OperationLogResponse,
-    RenameProviderTestRequest, RenameScopesRequest, RenameSearchRequest, RenameSearchResult,
-};
+use crate::compat::{MediaServerConnectionRequest, RenameSearchResult};
 use crate::{BrowseScope, RuntimeConfig, RuntimeDependencies, RuntimeError, RuntimeResult};
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ScanResultState {
-    files: Vec<MediaFile>,
-    rows: Vec<MediaFileRow>,
-    skipped: Vec<String>,
-    summary: ScanSummary,
-}
-
-#[derive(Clone, Debug, Default)]
-struct CurrentScanState {
-    updated_utc: Option<DateTime<Utc>>,
-    files: Vec<MediaFile>,
-    summary: ScanSummary,
-    /// Selected paths, stored by normalized key so a selection made against one
-    /// spelling of a path still matches the file it names.
-    selected: BTreeSet<String>,
-}
-
-impl CurrentScanState {
-    /// Drop selections whose file is no longer in the working set.
-    ///
-    /// A job that remuxes, converts, or renames changes which paths exist, and a
-    /// selection left pointing at a path that is gone would otherwise be handed
-    /// to the next operation.
-    /// Move the working set with the files a rename just moved.
-    ///
-    /// The working set is authoritative -- operations run against what Rust
-    /// holds, not what a page happens to be showing -- so a rename that is not
-    /// reflected here leaves every later operation pointed at paths that no
-    /// longer exist. The selection follows each file to its new path, because
-    /// a renamed file is still the file the user picked.
-    fn apply_renames(&mut self, renames: &[(PathBuf, PathBuf)]) {
-        for (source, target) in renames {
-            let source_key = mkvo_application::paths::path_key(source);
-            for file in &mut self.files {
-                if mkvo_application::paths::path_key(&file.path) == source_key {
-                    file.path = target.clone();
-                }
-            }
-            if self.selected.remove(&source_key) {
-                self.selected
-                    .insert(mkvo_application::paths::path_key(target));
-            }
-        }
-        self.files.sort_by(|left, right| left.path.cmp(&right.path));
-    }
-
-    fn reconcile_selection(&mut self) {
-        if self.files.is_empty() {
-            return;
-        }
-        let available: BTreeSet<String> = self
-            .files
-            .iter()
-            .map(|file| mkvo_application::paths::path_key(&file.path))
-            .collect();
-        self.selected.retain(|path| available.contains(path));
-    }
-
-    /// Selected paths rendered the way the UI shows them, ordered by the working
-    /// set so the list is stable between reads.
-    fn selected_display_paths(&self) -> Vec<String> {
-        self.files
-            .iter()
-            .filter(|file| {
-                self.selected
-                    .contains(&mkvo_application::paths::path_key(&file.path))
-            })
-            .map(|file| display_path(&file.path))
-            .collect()
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CompatibilitySettings {
-    audio_name_presets: Vec<String>,
-    subtitle_name_presets: Vec<String>,
-    language_presets: Vec<String>,
-    mkv_merge_default_audio_languages: String,
-    mkv_merge_default_subtitle_languages: String,
-}
-
-impl Default for CompatibilitySettings {
-    fn default() -> Self {
-        Self {
-            audio_name_presets: [
-                "English",
-                "Japanese",
-                "Commentary",
-                "Director Commentary",
-                "Signs & Songs",
-            ]
-            .into_iter()
-            .map(str::to_owned)
-            .collect(),
-            subtitle_name_presets: [
-                "English",
-                "English Forced",
-                "English SDH",
-                "Signs & Songs",
-                "Commentary",
-            ]
-            .into_iter()
-            .map(str::to_owned)
-            .collect(),
-            language_presets: [
-                "eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de",
-            ]
-            .into_iter()
-            .map(str::to_owned)
-            .collect(),
-            mkv_merge_default_audio_languages: "eng,jpn".to_owned(),
-            mkv_merge_default_subtitle_languages: "eng".to_owned(),
-        }
-    }
-}
+mod browsing_facade;
+mod host_operations;
+mod media_servers;
+mod metadata_facade;
+mod recovery;
+mod scan_state;
+mod settings_facade;
+use media_servers::{
+    media_server_urls_equivalent, parse_server_kind, server_kind_name, validate_media_server_url,
+};
+use recovery::classify_recovery;
+use scan_state::{
+    CurrentScanState, current_scan_response, scan_result_state, scan_state_from_snapshot,
+};
 
 struct RuntimeInner {
     config: RuntimeConfig,
     dependencies: RuntimeDependencies,
     jobs: Arc<JobSupervisor>,
     scan: Arc<ScanService>,
+    settings_service: Arc<SettingsService>,
     current_scan: Arc<RwLock<CurrentScanState>>,
-    scan_results: Arc<RwLock<HashMap<JobId, ScanResultState>>>,
-    compatibility_settings: RwLock<CompatibilitySettings>,
     legacy_rename_history: Vec<LegacyRenameBatchRecord>,
 }
 
@@ -221,6 +113,19 @@ pub struct StartupRecoveryItem {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct OrphanJournalItem {
+    pub idempotency_key: IdempotencyKey,
+    pub plan_id: mkvo_domain::PlanId,
+    pub status: JournalStatus,
+    pub step: u64,
+    pub disposition: RecoveryDisposition,
+    pub reason: String,
+    #[serde(default)]
+    pub items: Vec<mkvo_application::JournalItemOutcome>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StartupRecoveryReport {
     pub inspected_utc: DateTime<Utc>,
     pub completed: usize,
@@ -228,6 +133,8 @@ pub struct StartupRecoveryReport {
     pub manual_review: usize,
     #[serde(default)]
     pub items: Vec<StartupRecoveryItem>,
+    #[serde(default)]
+    pub orphan_journals: Vec<OrphanJournalItem>,
     /// The current journal port supports lookup by idempotency key, not global
     /// enumeration; orphan journals without a job row cannot be discovered.
     pub journal_enumeration_supported: bool,
@@ -270,9 +177,13 @@ impl MkvoRuntime {
             Arc::clone(&dependencies.probe),
             Arc::clone(&dependencies.cache),
             Arc::clone(&dependencies.paths),
-            4,
+            config.scan_worker_override.unwrap_or(4),
         ));
-        let compatibility_settings = load_compatibility_settings(&config.config_root);
+        let settings_service = Arc::new(SettingsService::new(
+            Arc::clone(&dependencies.settings),
+            Arc::clone(&dependencies.secrets),
+            dependencies.watcher.clone(),
+        ));
         let legacy_rename_history =
             config
                 .resolved_legacy_rename_history_path()
@@ -293,9 +204,8 @@ impl MkvoRuntime {
                 dependencies,
                 jobs,
                 scan,
+                settings_service,
                 current_scan: Arc::new(RwLock::new(CurrentScanState::default())),
-                scan_results: Arc::new(RwLock::new(HashMap::new())),
-                compatibility_settings: RwLock::new(compatibility_settings),
                 legacy_rename_history,
             }),
         }
@@ -308,6 +218,12 @@ impl MkvoRuntime {
     /// before the optimistic settings write, so a failed secret handoff never
     /// leaves a settings row that suppresses the next migration attempt.
     pub async fn migrate_legacy_data(&self) -> RuntimeResult<LegacyMigrationReport> {
+        let report = self.migrate_dotnet_legacy_data().await?;
+        self.migrate_compatibility_settings().await?;
+        Ok(report)
+    }
+
+    async fn migrate_dotnet_legacy_data(&self) -> RuntimeResult<LegacyMigrationReport> {
         let legacy_batches = self.inner.legacy_rename_history.len();
         let Some(source) = self.inner.config.resolved_legacy_settings_path() else {
             return Ok(LegacyMigrationReport {
@@ -400,6 +316,56 @@ impl MkvoRuntime {
         })
     }
 
+    async fn migrate_compatibility_settings(&self) -> RuntimeResult<()> {
+        const CURRENT_SETTINGS_SCHEMA: u32 = 2;
+        let path = self
+            .inner
+            .config
+            .config_root
+            .join("web-settings-extra.json");
+        let (mut settings, revision) = self.inner.dependencies.settings.load().await?;
+        if revision > 0 && settings.schema_version >= CURRENT_SETTINGS_SCHEMA {
+            return Ok(());
+        }
+
+        if path.exists() {
+            let import_path = path.clone();
+            settings.presets = tokio::task::spawn_blocking(move || {
+                let bytes = std::fs::read(&import_path)?;
+                serde_json::from_slice::<PresetSettings>(&bytes)
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
+            })
+            .await
+            .map_err(|error| {
+                RuntimeError::internal(format!("compatibility settings import failed: {error}"))
+            })??;
+        }
+        settings.schema_version = CURRENT_SETTINGS_SCHEMA;
+        settings = settings.normalized();
+        self.inner
+            .dependencies
+            .settings
+            .save(&settings, Some(revision))
+            .await?;
+
+        if path.exists() {
+            let archive = self
+                .inner
+                .config
+                .config_root
+                .join("web-settings-extra.migrated.json");
+            if let Err(error) = std::fs::rename(&path, &archive) {
+                tracing::warn!(
+                    path = %path.display(),
+                    archive = %archive.display(),
+                    %error,
+                    "compatibility settings were imported but the legacy file could not be archived"
+                );
+            }
+        }
+        Ok(())
+    }
+
     /// Classifies non-terminal jobs left behind by a previous process without
     /// changing persisted state.
     pub async fn classify_startup_recovery(&self) -> RuntimeResult<StartupRecoveryReport> {
@@ -421,11 +387,9 @@ impl MkvoRuntime {
             clean_retry: 0,
             manual_review: 0,
             items: Vec::new(),
+            orphan_journals: Vec::new(),
             journal_enumeration_supported: false,
-            limitations: vec![
-                "The operation journal can only be queried by idempotency key; orphan journal rows without a corresponding job cannot be enumerated."
-                    .to_owned(),
-            ],
+            limitations: Vec::new(),
         };
         for mut snapshot in self.inner.dependencies.jobs.list_recent(1_000).await? {
             if snapshot.status.is_terminal() {
@@ -474,6 +438,58 @@ impl MkvoRuntime {
                 journal_step: journal.as_ref().map(|record| record.step),
                 persisted_status_updated,
             });
+        }
+        match self.inner.dependencies.journal.list_incomplete().await? {
+            Some(journals) => {
+                report.journal_enumeration_supported = true;
+                for journal in journals {
+                    if self
+                        .inner
+                        .dependencies
+                        .jobs
+                        .find_by_idempotency(&journal.idempotency_key)
+                        .await?
+                        .is_some()
+                    {
+                        continue;
+                    }
+                    let (disposition, reason) = if journal.step == 0
+                        && journal
+                            .items
+                            .iter()
+                            .all(|item| item.status == mkvo_application::JournalItemStatus::Pending)
+                    {
+                        (
+                            RecoveryDisposition::CleanRetry,
+                            "orphan journal has no completed item mutations".to_owned(),
+                        )
+                    } else {
+                        (
+                            RecoveryDisposition::ManualReview,
+                            "orphan journal records completed or uncertain item mutations"
+                                .to_owned(),
+                        )
+                    };
+                    match disposition {
+                        RecoveryDisposition::CleanRetry => report.clean_retry += 1,
+                        RecoveryDisposition::ManualReview => report.manual_review += 1,
+                        RecoveryDisposition::Completed => report.completed += 1,
+                    }
+                    report.orphan_journals.push(OrphanJournalItem {
+                        idempotency_key: journal.idempotency_key,
+                        plan_id: journal.plan_id,
+                        status: journal.status,
+                        step: journal.step,
+                        disposition,
+                        reason,
+                        items: journal.items,
+                    });
+                }
+            }
+            None => report.limitations.push(
+                "The configured operation journal adapter cannot enumerate orphan journals."
+                    .to_owned(),
+            ),
         }
         Ok(report)
     }
@@ -554,7 +570,7 @@ impl MkvoRuntime {
             .unwrap_or_default()
     }
 
-    pub async fn browse_file_system(
+    pub(super) async fn browse_file_system_impl(
         &self,
         path: Option<String>,
     ) -> RuntimeResult<FileSystemResponse> {
@@ -672,6 +688,16 @@ impl MkvoRuntime {
     }
 
     pub async fn start_scan(&self, mut request: ScanRequest) -> RuntimeResult<ScanJobResponse> {
+        if request.max_workers.is_none() {
+            request.max_workers = Some(
+                self.settings_service()
+                    .load()
+                    .await?
+                    .settings
+                    .workers
+                    .max_scan_workers,
+            );
+        }
         if request.all_sources().is_empty() {
             let library_roots = self.library_roots().await;
             let root = self.effective_media_root(&library_roots).ok_or_else(|| {
@@ -686,11 +712,9 @@ impl MkvoRuntime {
         let key = IdempotencyKey::generate();
         let scan = Arc::clone(&self.inner.scan);
         let current = Arc::clone(&self.inner.current_scan);
-        let results = Arc::clone(&self.inner.scan_results);
         // Scanning is the most-run operation, so it has to reach the operation
         // log too; otherwise the Logs page stays empty through normal use.
         let logs = Arc::clone(&self.inner.dependencies.logs);
-        let (result_sender, result_receiver) = oneshot::channel();
         let spec = JobSpec {
             kind: JobKind::Scan,
             idempotency_key: key,
@@ -743,10 +767,8 @@ impl MkvoRuntime {
                 {
                     tracing::warn!(%error, "scan completion could not be logged");
                 }
-                let persisted_state = state.clone();
-                let _ = result_sender.send(state);
                 Ok(JobCompletion {
-                    result: Some(serde_json::to_value(persisted_state).map_err(|error| {
+                    result: Some(serde_json::to_value(state).map_err(|error| {
                         ApplicationError::Internal(format!(
                             "scan result serialization failed: {error}"
                         ))
@@ -755,12 +777,6 @@ impl MkvoRuntime {
                 })
             })
             .await?;
-        let accepted_id = accepted.id;
-        tokio::spawn(async move {
-            if let Ok(state) = result_receiver.await {
-                results.write().await.insert(accepted_id, state);
-            }
-        });
         let snapshot = self
             .inner
             .jobs
@@ -904,15 +920,7 @@ impl MkvoRuntime {
     }
 
     async fn scan_job_response(&self, snapshot: &JobSnapshot) -> RuntimeResult<ScanJobResponse> {
-        let state = self
-            .inner
-            .scan_results
-            .read()
-            .await
-            .get(&snapshot.id)
-            .cloned()
-            .or_else(|| scan_state_from_snapshot(snapshot))
-            .unwrap_or_default();
+        let state = scan_state_from_snapshot(snapshot).unwrap_or_default();
         Ok(ScanJobResponse::from_snapshot(
             snapshot,
             if state.rows.is_empty() {
@@ -923,73 +931,6 @@ impl MkvoRuntime {
             state.skipped,
             state.summary,
         ))
-    }
-
-    pub async fn get_web_settings(&self) -> RuntimeResult<WebSettings> {
-        let response = self.settings_service().load().await?;
-        let compatibility = self.inner.compatibility_settings.read().await.clone();
-        let mut view = web_settings(&response.settings, &response.secret_status, &compatibility);
-        view.has_tvdb_api_key = self
-            .secret_alias(&["provider.tvdb.api_key", "tvdbApiKey"])
-            .await?
-            .is_some();
-        view.has_tvdb_pin = self
-            .secret_alias(&["provider.tvdb.pin", "tvdbPin"])
-            .await?
-            .is_some();
-        view.has_tmdb_api_key = self
-            .secret_alias(&["provider.tmdb.api_key", "tmdbApiKey"])
-            .await?
-            .is_some();
-        view.has_anidb_client = self
-            .secret_alias(&["provider.anidb.client", "anidbClient"])
-            .await?
-            .is_some();
-        Ok(view)
-    }
-
-    pub async fn save_web_settings(
-        &self,
-        request: WebSettingsRequest,
-    ) -> RuntimeResult<WebSettings> {
-        let current_compatibility = self.inner.compatibility_settings.read().await.clone();
-        let compatibility = updated_compatibility_settings(&current_compatibility, &request);
-        if let Some(roots) = request.library_roots.as_deref() {
-            self.validate_library_roots(roots).await?;
-        }
-        let loaded = self.settings_service().load().await?;
-        let mut settings = loaded.settings;
-        let mut secrets = Vec::new();
-        apply_web_settings_request(&mut settings, request, &mut secrets)?;
-        let response = self
-            .settings_service()
-            .save(mkvo_contracts::SaveSettingsRequest {
-                settings,
-                secrets,
-                expected_revision: Some(loaded.revision),
-            })
-            .await?;
-        persist_compatibility_settings(&self.inner.config.config_root, &compatibility).await?;
-        *self.inner.compatibility_settings.write().await = compatibility.clone();
-        self.authorize_configured_roots(&response.settings);
-        let mut view = web_settings(&response.settings, &response.secret_status, &compatibility);
-        view.has_tvdb_api_key = self
-            .secret_alias(&["provider.tvdb.api_key", "tvdbApiKey"])
-            .await?
-            .is_some();
-        view.has_tvdb_pin = self
-            .secret_alias(&["provider.tvdb.pin", "tvdbPin"])
-            .await?
-            .is_some();
-        view.has_tmdb_api_key = self
-            .secret_alias(&["provider.tmdb.api_key", "tmdbApiKey"])
-            .await?
-            .is_some();
-        view.has_anidb_client = self
-            .secret_alias(&["provider.anidb.client", "anidbClient"])
-            .await?
-            .is_some();
-        Ok(view)
     }
 
     pub async fn test_media_server_connection(
@@ -1011,11 +952,24 @@ impl MkvoRuntime {
             .transpose()?
             .or_else(|| stored.map(|server| server.kind))
             .unwrap_or(MediaServerKind::Jellyfin);
-        let url = request
+        let requested_url = request
             .server_url
-            .filter(|value| !value.trim().is_empty())
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        if request.api_key.is_none()
+            && let (Some(requested_url), Some(stored)) = (requested_url, stored)
+            && !media_server_urls_equivalent(requested_url, &stored.server_url)
+        {
+            return Err(RuntimeError::invalid(
+                "Changing a media server URL requires its API key to be entered again.",
+            ));
+        }
+        let url = requested_url
+            .map(str::to_owned)
             .or_else(|| stored.map(|server| server.server_url.clone()))
             .ok_or_else(|| RuntimeError::invalid("Enter a server URL."))?;
+        validate_media_server_url(&url)?;
         let credential = match request.api_key {
             Some(value) => value,
             None => {
@@ -1110,131 +1064,12 @@ impl MkvoRuntime {
         })
     }
 
-    pub async fn search_rename_metadata(
-        &self,
-        request: RenameSearchRequest,
-    ) -> RuntimeResult<Vec<RenameSearchResult>> {
-        if request.query.trim().is_empty() {
-            return Err(RuntimeError::invalid("Enter a title to search."));
-        }
-        let provider = self
-            .provider_client(request.provider.as_deref(), request.language.as_deref())
-            .await?;
-        let results = provider
-            .search(
-                request.query.trim(),
-                request.language.as_deref(),
-                CancellationToken::new(),
-            )
-            .await?;
-        Ok(results.into_iter().map(rename_search_result).collect())
-    }
-
-    pub async fn load_rename_scopes(
-        &self,
-        request: RenameScopesRequest,
-    ) -> RuntimeResult<Vec<RenameScopeRow>> {
-        let provider = self
-            .provider_client(request.provider.as_deref(), request.language.as_deref())
-            .await?;
-        let episodes = provider
-            .episodes(
-                &request.selected_result.media_id(),
-                request.language.as_deref(),
-                CancellationToken::new(),
-            )
-            .await?;
-        let mut seasons: Vec<_> = episodes.iter().map(|episode| episode.season).collect();
-        seasons.sort_unstable();
-        seasons.dedup();
-        let mut scopes = vec![RenameScopeRow {
-            key: "all".to_owned(),
-            label: format!("All episodes ({})", episodes.len()),
-            is_selected: true,
-        }];
-        scopes.extend(seasons.into_iter().map(|season| RenameScopeRow {
-            key: format!("season:{season}"),
-            label: format!("Season {season}"),
-            is_selected: false,
-        }));
-        Ok(scopes)
-    }
-
-    pub async fn test_rename_provider(
-        &self,
-        request: RenameProviderTestRequest,
-    ) -> RuntimeResult<RenameProviderTestResponse> {
-        let provider = self
-            .provider_client(request.provider.as_deref(), request.language.as_deref())
-            .await?;
-        match provider.test(CancellationToken::new()).await {
-            Ok(()) => Ok(RenameProviderTestResponse {
-                success: true,
-                status: "Metadata provider connection successful.".to_owned(),
-            }),
-            Err(error) => Ok(RenameProviderTestResponse {
-                success: false,
-                status: format!("Metadata provider connection failed: {error}"),
-            }),
-        }
-    }
-
-    pub async fn get_operation_job(&self, id: &str) -> RuntimeResult<OperationJobResponse> {
-        let id = parse_job_id(id)?;
-        let snapshot = self
-            .inner
-            .jobs
-            .get(id)
-            .await?
-            .ok_or_else(|| RuntimeError::not_found(format!("operation job {id}")))?;
-        if snapshot.kind == JobKind::Scan {
-            return Err(RuntimeError::not_found(format!("operation job {id}")));
-        }
-        Ok(OperationJobResponse::from_snapshot(&snapshot))
-    }
-
-    pub async fn cancel_operation_job(&self, id: &str) -> RuntimeResult<OperationJobResponse> {
-        let id = parse_job_id(id)?;
-        let snapshot = self.inner.jobs.cancel(id).await?;
-        if snapshot.kind == JobKind::Scan {
-            return Err(RuntimeError::not_found(format!("operation job {id}")));
-        }
-        Ok(OperationJobResponse::from_snapshot(&snapshot))
-    }
-
-    pub async fn subscribe_job_events(
-        &self,
-        id: &str,
-    ) -> RuntimeResult<broadcast::Receiver<JobEventEnvelope>> {
-        self.inner
-            .jobs
-            .subscribe(parse_job_id(id)?)
-            .await
-            .map_err(Into::into)
-    }
-
-    pub async fn get_logs(&self) -> RuntimeResult<OperationLogResponse> {
-        Ok(OperationLogResponse {
-            entries: self
-                .inner
-                .dependencies
-                .logs
-                .query(&LogQuery::default())
-                .await?,
-        })
-    }
-
-    pub async fn clear_logs(&self) -> RuntimeResult<OperationLogResponse> {
-        self.inner.dependencies.logs.clear().await?;
-        self.get_logs().await
-    }
-
     /// Render the operation log as plain text for download.
     ///
     /// The host writes the file, so this returns the content and a suggested
     /// name rather than touching the filesystem itself — the browser and the
     /// desktop save it in different ways.
-    pub async fn export_logs(&self) -> RuntimeResult<LogExport> {
+    pub(super) async fn export_logs_impl(&self) -> RuntimeResult<LogExport> {
         let entries = self
             .inner
             .dependencies
@@ -1266,7 +1101,7 @@ impl MkvoRuntime {
     }
 
     /// Recent jobs across kinds, newest first, for the Logs and Jobs views.
-    pub async fn list_recent_jobs(
+    pub(super) async fn list_recent_jobs_impl(
         &self,
         limit: Option<usize>,
     ) -> RuntimeResult<RecentJobsResponse> {
@@ -1275,12 +1110,8 @@ impl MkvoRuntime {
         Ok(RecentJobsResponse { jobs })
     }
 
-    pub(crate) fn settings_service(&self) -> SettingsService {
-        SettingsService::new(
-            Arc::clone(&self.inner.dependencies.settings),
-            Arc::clone(&self.inner.dependencies.secrets),
-            self.inner.dependencies.watcher.clone(),
-        )
+    pub(crate) fn settings_service(&self) -> Arc<SettingsService> {
+        Arc::clone(&self.inner.settings_service)
     }
 
     pub(crate) async fn provider_client(
@@ -1402,25 +1233,35 @@ impl MkvoRuntime {
     /// which is precisely what the authorized roots exist to prevent. An
     /// unrestricted desktop has no such boundary to breach, since the user
     /// already reaches every one of these paths through their file manager.
-    async fn validate_library_roots(&self, roots: &[SourceRoot]) -> RuntimeResult<()> {
-        for root in roots {
+    async fn validate_configured_roots(&self, settings: &AppSettings) -> RuntimeResult<()> {
+        for root in &settings.scan.library_roots {
             if root.name.trim().is_empty() {
                 return Err(RuntimeError::invalid("a library folder needs a name"));
             }
-            let path = PathBuf::from(root.path.trim());
-            if path.as_os_str().is_empty() {
+            if root.path.as_os_str().is_empty() {
                 return Err(RuntimeError::invalid(format!(
                     "library folder `{}` needs a path",
                     root.name.trim()
                 )));
             }
-            if self.inner.config.browse_scope == BrowseScope::AuthorizedRootsOnly {
-                self.inner.dependencies.paths.authorize_read(&path).await?;
-            }
-            if !path.is_dir() {
+        }
+
+        let configured = settings
+            .scan
+            .default_root
+            .iter()
+            .chain(settings.scan.library_roots.iter().map(|root| &root.path))
+            .chain(settings.watch.roots.iter());
+        for path in configured {
+            let validated = if self.inner.config.browse_scope == BrowseScope::AuthorizedRootsOnly {
+                self.inner.dependencies.paths.authorize_read(path).await?
+            } else {
+                path.clone()
+            };
+            if !validated.is_dir() {
                 return Err(RuntimeError::invalid(format!(
                     "library folder is not a directory: {}",
-                    display_path(&path)
+                    display_path(path)
                 )));
             }
         }
@@ -1428,6 +1269,11 @@ impl MkvoRuntime {
     }
 
     fn authorize_configured_roots(&self, settings: &AppSettings) {
+        // A remote host's operator owns its authorization boundary. Settings
+        // may select descendants of those roots, but must never expand it.
+        if self.inner.config.browse_scope == BrowseScope::AuthorizedRootsOnly {
+            return;
+        }
         for path in settings
             .scan
             .default_root
@@ -1516,90 +1362,6 @@ impl MkvoRuntime {
     }
 }
 
-fn scan_result_state(outcome: &ScanOutcome) -> ScanResultState {
-    ScanResultState {
-        files: outcome.files.clone(),
-        rows: outcome.files.iter().map(MediaFileRow::from).collect(),
-        skipped: outcome
-            .skipped
-            .iter()
-            .map(|skip| format!("{}: {}", skip.path.display(), skip.reason))
-            .collect(),
-        summary: outcome.summary,
-    }
-}
-
-fn current_scan_response(state: &CurrentScanState) -> CurrentScanResponse {
-    CurrentScanResponse {
-        updated_utc: state.updated_utc,
-        files: state.files.iter().map(MediaFileRow::from).collect(),
-        summary: state.summary,
-        selected_paths: state.selected_display_paths(),
-    }
-}
-
-fn scan_state_from_snapshot(snapshot: &JobSnapshot) -> Option<ScanResultState> {
-    serde_json::from_value(snapshot.result.clone()?).ok()
-}
-
-fn classify_recovery(
-    snapshot: &JobSnapshot,
-    journal: Option<&mkvo_application::JournalRecord>,
-) -> (RecoveryDisposition, String) {
-    if let Some(journal) = journal {
-        return match journal.status {
-            JournalStatus::Completed => (
-                RecoveryDisposition::Completed,
-                format!(
-                    "the mutation journal completed at step {}; the stale job record was reconciled",
-                    journal.step
-                ),
-            ),
-            JournalStatus::RolledBack => (
-                RecoveryDisposition::CleanRetry,
-                format!(
-                    "the interrupted operation was rolled back at step {}; it is safe to build a new plan and retry",
-                    journal.step
-                ),
-            ),
-            JournalStatus::Prepared if journal.step == 0 => (
-                RecoveryDisposition::CleanRetry,
-                "the journal was prepared but no mutation step completed; build a new plan and retry"
-                    .to_owned(),
-            ),
-            JournalStatus::Prepared
-            | JournalStatus::Running
-            | JournalStatus::Failed => (
-                RecoveryDisposition::ManualReview,
-                format!(
-                    "the mutation journal stopped in {:?} at step {}; inspect its resources before retrying",
-                    journal.status, journal.step
-                ),
-            ),
-        };
-    }
-
-    if matches!(
-        snapshot.status,
-        JobStatus::Queued | JobStatus::WaitingForResources
-    ) || matches!(
-        snapshot.kind,
-        JobKind::Scan | JobKind::LibraryAudit | JobKind::CacheReconcile
-    ) {
-        (
-            RecoveryDisposition::CleanRetry,
-            "no mutation journal exists and the job had not acquired mutation resources; retry with a new idempotency key"
-                .to_owned(),
-        )
-    } else {
-        (
-            RecoveryDisposition::ManualReview,
-            "a running mutating job has no durable journal; inspect source, staged, backup, and target paths before retrying"
-                .to_owned(),
-        )
-    }
-}
-
 /// Render a path for the UI.
 ///
 /// Authorized roots are canonicalized, and on Windows `fs::canonicalize` returns
@@ -1638,29 +1400,9 @@ pub(crate) fn provider_name(value: MetadataProvider) -> &'static str {
     }
 }
 
-fn parse_server_kind(value: &str) -> RuntimeResult<MediaServerKind> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "emby" => Ok(MediaServerKind::Emby),
-        "jellyfin" => Ok(MediaServerKind::Jellyfin),
-        "plex" => Ok(MediaServerKind::Plex),
-        _ => Err(RuntimeError::invalid(format!(
-            "unknown media server type: {value}"
-        ))),
-    }
-}
-
-fn server_kind_name(value: MediaServerKind) -> &'static str {
-    match value {
-        MediaServerKind::Emby => "emby",
-        MediaServerKind::Jellyfin => "jellyfin",
-        MediaServerKind::Plex => "plex",
-    }
-}
-
 fn web_settings(
     settings: &AppSettings,
     secret_status: &[mkvo_contracts::SecretStatus],
-    compatibility: &CompatibilitySettings,
 ) -> WebSettings {
     let configured = |key: &str| {
         secret_status
@@ -1676,11 +1418,15 @@ fn web_settings(
         rename_lookup_provider: provider_name(settings.rename.provider).to_owned(),
         rename_template: settings.rename.template.clone(),
         rename_templates: settings.rename.templates.clone(),
-        audio_name_presets: compatibility.audio_name_presets.clone(),
-        subtitle_name_presets: compatibility.subtitle_name_presets.clone(),
-        language_presets: compatibility.language_presets.clone(),
-        mkv_merge_default_audio_languages: compatibility.mkv_merge_default_audio_languages.clone(),
-        mkv_merge_default_subtitle_languages: compatibility
+        audio_name_presets: settings.presets.audio_name_presets.clone(),
+        subtitle_name_presets: settings.presets.subtitle_name_presets.clone(),
+        language_presets: settings.presets.language_presets.clone(),
+        mkv_merge_default_audio_languages: settings
+            .presets
+            .mkv_merge_default_audio_languages
+            .clone(),
+        mkv_merge_default_subtitle_languages: settings
+            .presets
             .mkv_merge_default_subtitle_languages
             .clone(),
         mkv_tool_nix_directory: settings
@@ -1781,6 +1527,27 @@ fn apply_web_settings_request(
     }
     if let Some(value) = request.rename_preview_compact_view {
         settings.rename.compact_preview = value;
+    }
+    if let Some(values) = request.audio_name_presets {
+        settings.presets.audio_name_presets = normalized_strings(values);
+    }
+    if let Some(values) = request.subtitle_name_presets {
+        settings.presets.subtitle_name_presets = normalized_strings(values);
+    }
+    if let Some(values) = request.language_presets {
+        settings.presets.language_presets = normalized_strings(values);
+    }
+    if let Some(value) = request
+        .mkv_merge_default_audio_languages
+        .filter(|value| !value.trim().is_empty())
+    {
+        settings.presets.mkv_merge_default_audio_languages = value.trim().to_owned();
+    }
+    if let Some(value) = request
+        .mkv_merge_default_subtitle_languages
+        .filter(|value| !value.trim().is_empty())
+    {
+        settings.presets.mkv_merge_default_subtitle_languages = value.trim().to_owned();
     }
     if let Some(value) = requested_path(request.mkv_tool_nix_directory) {
         settings.tools.mkvtoolnix_directory = value;
@@ -1930,6 +1697,23 @@ fn apply_web_settings_request(
                 last_synced_at: prior.and_then(|value| value.last_synced_at),
             });
         }
+        // Removing a server must remove both current and legacy credential
+        // aliases; otherwise its API key remains recoverable indefinitely.
+        for removed_id in existing
+            .keys()
+            .filter(|id| !updated.iter().any(|server| server.id == **id))
+        {
+            for key in [
+                format!("media_server.{removed_id}.api_key"),
+                format!("mediaServer:{removed_id}"),
+            ] {
+                secrets.push(SecretUpdate {
+                    key,
+                    clear: true,
+                    value: None,
+                });
+            }
+        }
         settings.media_servers = updated;
     }
     Ok(())
@@ -2050,58 +1834,6 @@ fn rename_search_result(value: mkvo_domain::ProviderSearchResult) -> RenameSearc
     }
 }
 
-fn compatibility_settings_path(config_root: &Path) -> PathBuf {
-    config_root.join("web-settings-extra.json")
-}
-
-fn load_compatibility_settings(config_root: &Path) -> CompatibilitySettings {
-    std::fs::read(compatibility_settings_path(config_root))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default()
-}
-
-fn updated_compatibility_settings(
-    current: &CompatibilitySettings,
-    request: &WebSettingsRequest,
-) -> CompatibilitySettings {
-    let mut updated = current.clone();
-    if let Some(values) = request.audio_name_presets.clone() {
-        updated.audio_name_presets = normalized_strings(values);
-    }
-    if let Some(values) = request.subtitle_name_presets.clone() {
-        updated.subtitle_name_presets = normalized_strings(values);
-    }
-    if let Some(values) = request.language_presets.clone() {
-        updated.language_presets = normalized_strings(values);
-    }
-    if let Some(value) = request
-        .mkv_merge_default_audio_languages
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        updated.mkv_merge_default_audio_languages = value.trim().to_owned();
-    }
-    if let Some(value) = request
-        .mkv_merge_default_subtitle_languages
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        updated.mkv_merge_default_subtitle_languages = value.trim().to_owned();
-    }
-    updated
-}
-
-async fn persist_compatibility_settings(
-    config_root: &Path,
-    settings: &CompatibilitySettings,
-) -> RuntimeResult<()> {
-    let path = compatibility_settings_path(config_root);
-    let bytes = serde_json::to_vec_pretty(settings)?;
-    tokio::fs::write(path, bytes).await?;
-    Ok(())
-}
-
 /// The volume list shown above every drive root.
 ///
 /// Windows has no single filesystem root, so "up" from `C:\` is this list
@@ -2188,6 +1920,7 @@ mod library_root_tests {
         _directory: tempfile::TempDir,
         mount: PathBuf,
         outside: PathBuf,
+        config: PathBuf,
         runtime: MkvoRuntime,
     }
 
@@ -2215,6 +1948,7 @@ mod library_root_tests {
             _directory: directory,
             mount,
             outside,
+            config,
             runtime: builder.build().unwrap(),
         }
     }
@@ -2224,6 +1958,92 @@ mod library_root_tests {
             name: name.to_owned(),
             path: display_path(path),
         }
+    }
+
+    #[tokio::test]
+    async fn legacy_web_presets_migrate_once_into_app_settings() {
+        let host = host(false);
+        let legacy = PresetSettings {
+            audio_name_presets: vec!["Legacy Audio".to_owned()],
+            subtitle_name_presets: vec!["Legacy Subtitle".to_owned()],
+            language_presets: vec!["ita".to_owned()],
+            mkv_merge_default_audio_languages: "ita".to_owned(),
+            mkv_merge_default_subtitle_languages: "ita,eng".to_owned(),
+        };
+        std::fs::write(
+            host.config.join("web-settings-extra.json"),
+            serde_json::to_vec_pretty(&legacy).unwrap(),
+        )
+        .unwrap();
+
+        host.runtime.migrate_legacy_data().await.expect("migrate");
+        let migrated = host.runtime.get_web_settings().await.expect("settings");
+        assert_eq!(migrated.audio_name_presets, ["Legacy Audio"]);
+        assert_eq!(migrated.subtitle_name_presets, ["Legacy Subtitle"]);
+        assert_eq!(migrated.language_presets, ["ita"]);
+        assert_eq!(migrated.mkv_merge_default_audio_languages, "ita");
+        assert_eq!(migrated.mkv_merge_default_subtitle_languages, "ita,eng");
+        assert!(!host.config.join("web-settings-extra.json").exists());
+        assert!(
+            host.config
+                .join("web-settings-extra.migrated.json")
+                .exists()
+        );
+
+        host.runtime
+            .save_web_settings(WebSettingsRequest {
+                audio_name_presets: Some(vec!["Current Audio".to_owned()]),
+                ..WebSettingsRequest::default()
+            })
+            .await
+            .expect("save current settings");
+        std::fs::write(
+            host.config.join("web-settings-extra.json"),
+            serde_json::to_vec_pretty(&legacy).unwrap(),
+        )
+        .unwrap();
+        host.runtime
+            .migrate_legacy_data()
+            .await
+            .expect("migrate again");
+        let current = host.runtime.get_web_settings().await.expect("settings");
+        assert_eq!(current.audio_name_presets, ["Current Audio"]);
+    }
+
+    #[tokio::test]
+    async fn startup_recovery_reports_orphan_journals_per_item() {
+        let host = host(false);
+        let record = mkvo_application::JournalRecord {
+            idempotency_key: IdempotencyKey::parse("orphan-journal").unwrap(),
+            plan_id: mkvo_domain::PlanId::new(),
+            step: 1,
+            status: JournalStatus::Running,
+            resources: Vec::new(),
+            items: vec![mkvo_application::JournalItemOutcome {
+                key: "episode.mkv".to_owned(),
+                status: mkvo_application::JournalItemStatus::Completed,
+                detail: None,
+            }],
+            detail: Some("process stopped after mutation".to_owned()),
+            updated_utc: Utc::now(),
+        };
+        host.runtime
+            .inner
+            .dependencies
+            .journal
+            .begin(&record)
+            .await
+            .unwrap();
+
+        let report = host
+            .runtime
+            .classify_startup_recovery()
+            .await
+            .expect("recovery report");
+        assert!(report.journal_enumeration_supported);
+        assert_eq!(report.manual_review, 1);
+        assert_eq!(report.orphan_journals.len(), 1);
+        assert_eq!(report.orphan_journals[0].items, record.items);
     }
 
     /// The whole point of the setting for a container user: several shares
@@ -2392,6 +2212,25 @@ mod library_root_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn media_server_urls_are_compared_without_cosmetic_slashes() {
+        assert!(media_server_urls_equivalent(
+            "https://Media.Example:443/jellyfin/",
+            "https://media.example/jellyfin"
+        ));
+        assert!(!media_server_urls_equivalent(
+            "https://media.example/jellyfin",
+            "https://attacker.example/jellyfin"
+        ));
+    }
+
+    #[test]
+    fn media_server_urls_reject_embedded_credentials_and_queries() {
+        assert!(validate_media_server_url("http://media.example").is_ok());
+        assert!(validate_media_server_url("http://user:secret@media.example").is_err());
+        assert!(validate_media_server_url("http://media.example?token=secret").is_err());
+    }
 
     /// The working set is authoritative in Rust, so a selection naming a file
     /// the backend does not have is refused rather than stored — otherwise a
@@ -2574,6 +2413,11 @@ mod tests {
             rename_lookup_provider: Some("tmdb".to_owned()),
             rename_template: Some("{series} - {episodeTitle}".to_owned()),
             rename_templates: Some(vec!["{title}".to_owned()]),
+            audio_name_presets: Some(vec!["Original Audio".to_owned()]),
+            subtitle_name_presets: Some(vec!["Original Subtitle".to_owned()]),
+            language_presets: Some(vec!["ita".to_owned()]),
+            mkv_merge_default_audio_languages: Some("ita,jpn".to_owned()),
+            mkv_merge_default_subtitle_languages: Some("ita".to_owned()),
             rename_preview_compact_view: Some(true),
             mkv_tool_nix_directory: Some(Some("D:/tools/mkvtoolnix".to_owned())),
             ffmpeg_directory: Some(Some("D:/tools/ffmpeg".to_owned())),
@@ -2600,12 +2444,17 @@ mod tests {
 
         let mut secrets = Vec::new();
         apply_web_settings_request(&mut settings, request, &mut secrets).expect("apply");
-        let view = web_settings(&settings, &[], &CompatibilitySettings::default());
+        let view = web_settings(&settings, &[]);
 
         assert_eq!(view.tvdb_language, "deu");
         assert_eq!(view.rename_lookup_provider, "tmdb");
         assert_eq!(view.rename_template, "{series} - {episodeTitle}");
         assert_eq!(view.rename_templates, vec!["{title}".to_owned()]);
+        assert_eq!(view.audio_name_presets, ["Original Audio"]);
+        assert_eq!(view.subtitle_name_presets, ["Original Subtitle"]);
+        assert_eq!(view.language_presets, ["ita"]);
+        assert_eq!(view.mkv_merge_default_audio_languages, "ita,jpn");
+        assert_eq!(view.mkv_merge_default_subtitle_languages, "ita");
         assert!(view.rename_preview_compact_view);
         assert_eq!(
             view.mkv_tool_nix_directory.as_deref(),
@@ -2695,6 +2544,51 @@ mod tests {
         assert_eq!(settings.workers.max_scan_workers, 1);
         assert_eq!(settings.workers.max_edit_workers, 6);
         assert_eq!(settings.workers.max_remux_workers, 2);
+    }
+
+    #[test]
+    fn removing_a_media_server_clears_all_credential_aliases() {
+        let id = MediaServerId::default();
+        let mut settings = AppSettings::default();
+        settings.media_servers.push(MediaServerSettings {
+            id,
+            name: "Living room".to_owned(),
+            kind: MediaServerKind::Jellyfin,
+            server_url: "http://media.local".to_owned(),
+            credential: CredentialState {
+                configured: true,
+                masked_hint: None,
+                secret_reference: Some(format!("media_server.{id}.api_key")),
+            },
+            is_default: true,
+            libraries: Vec::new(),
+            last_synced_at: None,
+        });
+        let mut secrets = Vec::new();
+
+        apply_web_settings_request(
+            &mut settings,
+            WebSettingsRequest {
+                media_servers: Some(Vec::new()),
+                ..WebSettingsRequest::default()
+            },
+            &mut secrets,
+        )
+        .expect("remove server");
+
+        assert!(settings.media_servers.is_empty());
+        assert_eq!(secrets.len(), 2);
+        assert!(secrets.iter().all(|secret| secret.clear));
+        assert!(
+            secrets
+                .iter()
+                .any(|secret| secret.key == format!("media_server.{id}.api_key"))
+        );
+        assert!(
+            secrets
+                .iter()
+                .any(|secret| secret.key == format!("mediaServer:{id}"))
+        );
     }
 }
 

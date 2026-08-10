@@ -139,6 +139,21 @@ fn convert_legacy_settings(document: &Value) -> (AppSettings, BTreeMap<String, S
     if let Some(compact) = boolean(document, "RenamePreviewCompactView") {
         settings.rename.compact_preview = compact;
     }
+    if let Some(values) = strings(document, "AudioNamePresets") {
+        settings.presets.audio_name_presets = values;
+    }
+    if let Some(values) = strings(document, "SubtitleNamePresets") {
+        settings.presets.subtitle_name_presets = values;
+    }
+    if let Some(values) = strings(document, "LanguagePresets") {
+        settings.presets.language_presets = values;
+    }
+    if let Some(value) = string(document, "MkvMergeDefaultAudioLanguages") {
+        settings.presets.mkv_merge_default_audio_languages = value;
+    }
+    if let Some(value) = string(document, "MkvMergeDefaultSubtitleLanguages") {
+        settings.presets.mkv_merge_default_subtitle_languages = value;
+    }
     if let Some(roots) = strings(document, "WatchFolders") {
         settings.watch.roots = roots.into_iter().map(PathBuf::from).collect();
     }

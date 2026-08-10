@@ -55,6 +55,18 @@ impl RenameSearchResult {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameSearchResponse {
+    pub results: Vec<RenameSearchResult>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameScopesResponse {
+    pub scopes: Vec<RenameScopeRow>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameScopesRequest {

@@ -13,10 +13,10 @@ services:
       MKVO_SOURCE_ROOTS: "${MKVO_SOURCE_ROOTS:-downloads=/downloads}"
       MKVO_CONFIG_DIR: "/config"
       MKVO_UI_DIR: "/app/web"
-      MKVO_AUTH_USERNAME: "${MKVO_AUTH_USERNAME:-}"
-      MKVO_AUTH_PASSWORD: "${MKVO_AUTH_PASSWORD:-}"
-      PUID: "${PUID:-0}"
-      PGID: "${PGID:-0}"
+      MKVO_AUTH_USERNAME: "${MKVO_AUTH_USERNAME:?Set MKVO_AUTH_USERNAME before starting MKVO}"
+      MKVO_AUTH_PASSWORD: "${MKVO_AUTH_PASSWORD:?Set MKVO_AUTH_PASSWORD before starting MKVO}"
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
       UMASK: "${UMASK:-}"
     volumes:
       - ${MKVO_MEDIA_PATH:-./tmp/docker-media}:/media

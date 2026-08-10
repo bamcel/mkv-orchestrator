@@ -142,6 +142,7 @@ jobs:
         run: |
           mkdir -p config
           docker run -d --name mkvo-ci -p 8080:8080 \
+            -e MKVO_AUTH_USERNAME=mkvo-ci -e MKVO_AUTH_PASSWORD=mkvo-ci-password \
             -v "$PWD/media:/media" -v "$PWD/config:/config" mkvo:ci
       - name: Wait for the health check
         run: |
@@ -156,7 +157,7 @@ jobs:
           exit 1
       - name: Every external tool resolves inside the container
         run: |
-          curl -fsS http://127.0.0.1:8080/api/status > status.json
+          curl -fsS -u mkvo-ci:mkvo-ci-password http://127.0.0.1:8080/api/status > status.json
           python3 - <<'PY'
           import json, sys
           tools = json.load(open("status.json"))["tools"]
@@ -167,11 +168,11 @@ jobs:
           PY
       - name: A scan of mounted media returns real tracks
         run: |
-          job=$(curl -fsS -X POST http://127.0.0.1:8080/api/scans \
+          job=$(curl -fsS -u mkvo-ci:mkvo-ci-password -X POST http://127.0.0.1:8080/api/scans \
             -H 'Content-Type: application/json' \
             -d '{"roots":["/media"],"recursive":true}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
           for _ in $(seq 1 30); do
-            curl -fsS "http://127.0.0.1:8080/api/scans/$job" > scan.json
+            curl -fsS -u mkvo-ci:mkvo-ci-password "http://127.0.0.1:8080/api/scans/$job" > scan.json
             status=$(python3 -c 'import json; print(json.load(open("scan.json"))["status"])')
             case "$status" in Completed|Failed|Canceled) break ;; esac
             sleep 2

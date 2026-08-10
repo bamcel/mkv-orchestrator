@@ -21,6 +21,19 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let runtime = state::compose_runtime(app.handle())?;
+            // Migration and crash recovery must finish before the UI can issue
+            // a command. In particular, a usable OS keychain selects the async
+            // migration path, so leaving this in a detached task would let the
+            // first settings read race the one-time import.
+            let migration = tauri::async_runtime::block_on(runtime.migrate_legacy_data())?;
+            tracing::info!(status = ?migration.status, "legacy data migration checked");
+            let recovery = tauri::async_runtime::block_on(runtime.recover_startup_state())?;
+            tracing::info!(
+                completed = recovery.completed,
+                clean_retry = recovery.clean_retry,
+                manual_review = recovery.manual_review,
+                "startup recovery completed"
+            );
             // Watching is started off the setup path: it enumerates configured
             // roots, which on a network share can block, and the window must
             // not wait on it. A watcher that cannot start is logged, never fatal.

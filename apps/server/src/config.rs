@@ -32,8 +32,8 @@ impl ServerConfig {
     }
 
     pub(crate) fn from_lookup(mut get: impl FnMut(&str) -> Option<String>) -> Result<Self> {
-        let bind = get("MKVO_BIND")
-            .unwrap_or_else(|| "0.0.0.0:8080".to_owned())
+        let bind: SocketAddr = get("MKVO_BIND")
+            .unwrap_or_else(|| "127.0.0.1:8080".to_owned())
             .parse()
             .context("MKVO_BIND must be an IP:port socket address")?;
         let media_root =
@@ -60,6 +60,9 @@ impl ServerConfig {
             (Some(username), Some(password)) => Some(BasicAuth { username, password }),
             _ => bail!("MKVO_AUTH_USERNAME and MKVO_AUTH_PASSWORD must be configured together"),
         };
+        if !bind.ip().is_loopback() && auth.is_none() {
+            bail!("MKVO authentication is required when MKVO_BIND is not a loopback address");
+        }
 
         Ok(Self {
             bind,
@@ -146,6 +149,21 @@ mod tests {
             (key == "MKVO_AUTH_USERNAME").then(|| "mkvo".to_owned())
         });
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_unauthenticated_non_loopback_bind() {
+        let result = ServerConfig::from_lookup(|key| {
+            (key == "MKVO_BIND").then(|| "0.0.0.0:8080".to_owned())
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn permits_unauthenticated_loopback_bind() {
+        let config = ServerConfig::from_lookup(|_| None).unwrap();
+        assert!(config.bind.ip().is_loopback());
+        assert!(config.auth.is_none());
     }
 
     #[test]

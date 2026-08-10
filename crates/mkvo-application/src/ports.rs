@@ -7,7 +7,7 @@ use mkvo_contracts::{JobEventEnvelope, JobSnapshot, LogQuery, OperationLogEntry,
 use mkvo_domain::{
     AppSettings, EpisodeMetadata, FileFingerprint, IdempotencyKey, MediaFile, MediaServerKind,
     MediaServerLibrary, MetadataProvider, PlanId, ProviderSearchResult, RenameBatchId,
-    RenameBatchRecord, ResourceClaim, StoredPlan,
+    RenameBatchRecord, ResourceClaim, StoredPlan, WatchSettings,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
@@ -265,7 +265,7 @@ pub trait WatchBackend: Send + Sync {
     /// Subscribe to transport-neutral filesystem changes. Lagged receivers must
     /// trigger reconciliation because individual changes may have been lost.
     fn subscribe(&self) -> broadcast::Receiver<WatchChange>;
-    async fn start(&self, roots: &[PathBuf], force_polling: bool) -> Result<(), PortError>;
+    async fn start(&self, settings: &WatchSettings) -> Result<(), PortError>;
     async fn stop(&self) -> Result<(), PortError>;
     async fn health(&self) -> Result<WatchHealth, PortError>;
 }
@@ -287,6 +287,23 @@ pub enum JournalStatus {
     RolledBack,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JournalItemStatus {
+    Pending,
+    Completed,
+    Failed,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JournalItemOutcome {
+    pub key: String,
+    pub status: JournalItemStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JournalRecord {
@@ -296,9 +313,38 @@ pub struct JournalRecord {
     pub status: JournalStatus,
     #[serde(default)]
     pub resources: Vec<ResourceClaim>,
+    #[serde(default)]
+    pub items: Vec<JournalItemOutcome>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
     pub updated_utc: DateTime<Utc>,
+}
+
+impl JournalRecord {
+    pub fn complete_item(&mut self, key: &str) {
+        if let Some(item) = self.items.iter_mut().find(|item| item.key == key) {
+            item.status = JournalItemStatus::Completed;
+            item.detail = None;
+        }
+    }
+
+    pub fn fail_first_pending_item(&mut self, detail: impl Into<String>) {
+        if let Some(item) = self
+            .items
+            .iter_mut()
+            .find(|item| item.status == JournalItemStatus::Pending)
+        {
+            item.status = JournalItemStatus::Failed;
+            item.detail = Some(detail.into());
+        }
+    }
+
+    pub fn fail_item(&mut self, key: &str, detail: impl Into<String>) {
+        if let Some(item) = self.items.iter_mut().find(|item| item.key == key) {
+            item.status = JournalItemStatus::Failed;
+            item.detail = Some(detail.into());
+        }
+    }
 }
 
 #[async_trait]
@@ -306,4 +352,9 @@ pub trait OperationJournal: Send + Sync {
     async fn begin(&self, record: &JournalRecord) -> Result<(), PortError>;
     async fn advance(&self, record: &JournalRecord) -> Result<(), PortError>;
     async fn get(&self, key: &IdempotencyKey) -> Result<Option<JournalRecord>, PortError>;
+    /// `None` means this adapter cannot enumerate journals. `Some` may be
+    /// empty and contains only prepared/running records.
+    async fn list_incomplete(&self) -> Result<Option<Vec<JournalRecord>>, PortError> {
+        Ok(None)
+    }
 }

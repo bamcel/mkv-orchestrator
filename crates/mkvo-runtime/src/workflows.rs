@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use chrono::{Duration, Utc};
+use futures::{StreamExt, stream};
 use mkvo_application::{
     ApplicationError, FileAccessState, JobSpec, LibraryAuditService, PropertyEditPlanRequest,
     PropertyEditPlanner, RemuxOptions, RemuxPlanRequest, RemuxPlanner, RenamePlanRequest,
@@ -9,18 +10,16 @@ use mkvo_application::{
 };
 use mkvo_contracts::{
     JobCompletion, JobKind, JobLogLevel, LibraryAuditResponse, LibraryAuditRow,
-    LibraryAuditSummary, LogLevel, OperationLogEntry, PropEditActionRow, PropEditNoChangeRow,
-    PropEditSkippedRow, PropEditTrackConfigRow, RenameApplyResponse, RenameBatchEntryDto,
-    RenameBatchListResponse, RenameBatchRecordDto, RenameBatchRestoreMove,
-    RenameBatchUndoPreviewResponse, RenameBatchUndoResponse, RenamePreviewRow, RenameScopeRow,
-    TitleEditMode,
+    LibraryAuditSummary, LogLevel, OperationLogEntry, PropEditTrackConfigRow, RenameApplyResponse,
+    RenameBatchEntryDto, RenameBatchListResponse, RenameBatchRecordDto, RenameBatchRestoreMove,
+    RenameBatchUndoPreviewResponse, RenameBatchUndoResponse, TitleEditMode,
 };
 use mkvo_domain::{
     ContainerKind, ContainerMetadata, EpisodeIdentity, ExternalSubtitle, FileFingerprint,
     IdempotencyKey, MediaAttachment, MediaFile, MediaStatus, MediaTrack, MetadataProvider,
-    OperationPlan, PlanId, PropertyEditPlan, PropertyMutation, ProviderMatch, RemuxMode, RemuxPlan,
-    RenameBatchEntry, RenameBatchId, RenameBatchRecord, RenamePlan, StoredPlan, ToolFingerprint,
-    ToolFingerprints, TrackExtraction, TrackKind, stable_fingerprint,
+    OperationPlan, PlanId, PropertyEditPlan, ProviderMatch, RemuxMode, RemuxPlan, RenameBatchEntry,
+    RenameBatchId, RenameBatchRecord, RenamePlan, StoredPlan, ToolFingerprint, ToolFingerprints,
+    TrackExtraction, TrackKind, stable_fingerprint,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -33,8 +32,25 @@ use crate::compat::{
 use crate::runtime::{display_path, parse_provider, provider_name};
 use crate::{MkvoRuntime, RuntimeError, RuntimeResult};
 
+mod execution_facade;
+mod execution_support;
+mod planning_facade;
+mod rename_presentation;
+mod response_mappers;
+use execution_support::{
+    append_propedit_arguments, append_track_selection, backup_path, extraction_temp_path,
+    require_plan_fields, runtime_application_error, validate_idempotent_job,
+};
+use rename_presentation::{
+    file_name, path_key, remux_mode_label, remux_tool_name, same_path, track_kind_label,
+};
+use rename_presentation::{scope_rows, selected_seasons};
+use response_mappers::{
+    mux_preview_response, propedit_preview_response, rename_apply_response, rename_preview_response,
+};
+
 impl MkvoRuntime {
-    pub async fn build_rename_preview(
+    pub(super) async fn build_rename_preview_impl(
         &self,
         request: RenamePreviewRequest,
     ) -> RuntimeResult<RenamePreviewResponse> {
@@ -212,6 +228,17 @@ impl MkvoRuntime {
                         step: 0,
                         status: mkvo_application::JournalStatus::Prepared,
                         resources: plan.context.resources.clone(),
+                        items: plan
+                            .payload
+                            .items
+                            .iter()
+                            .filter(|item| item.can_apply())
+                            .map(|item| mkvo_application::JournalItemOutcome {
+                                key: item.source.to_string_lossy().into_owned(),
+                                status: mkvo_application::JournalItemStatus::Pending,
+                                detail: None,
+                            })
+                            .collect(),
                         detail: None,
                         updated_utc: Utc::now(),
                     };
@@ -262,6 +289,7 @@ impl MkvoRuntime {
                             // detail this permits deterministic crash reconciliation.
                             runtime.dependencies().rename_history.add(&batch).await?;
                             journal.step = journal.step.saturating_add(1);
+                            journal.complete_item(&item.source.to_string_lossy());
                             journal.detail = Some(format!(
                                 "completed move {} -> {}; batchId={batch_id}",
                                 item.source.display(),
@@ -274,6 +302,7 @@ impl MkvoRuntime {
                     }
                     .await;
                     if let Err(error) = mutation {
+                        journal.fail_first_pending_item(error.to_string());
                         journal.status = mkvo_application::JournalStatus::Failed;
                         journal.detail = Some(format!(
                             "rename failed after {} completed move(s); batchId={batch_id}; {error}",
@@ -493,7 +522,7 @@ impl MkvoRuntime {
         self.get_rename_batches().await
     }
 
-    pub async fn build_mux_preview(
+    pub(super) async fn build_mux_preview_impl(
         &self,
         request: MuxPreviewRequest,
     ) -> RuntimeResult<MuxPreviewResponse> {
@@ -502,7 +531,7 @@ impl MkvoRuntime {
         Ok(mux_preview_response(&plan))
     }
 
-    pub async fn load_propedit_template(
+    pub(super) async fn load_propedit_template_impl(
         &self,
         request: PropEditTemplateRequest,
     ) -> RuntimeResult<PropEditTemplateResponse> {
@@ -547,7 +576,7 @@ impl MkvoRuntime {
         })
     }
 
-    pub async fn build_propedit_preview(
+    pub(super) async fn build_propedit_preview_impl(
         &self,
         request: PropEditPreviewRequest,
     ) -> RuntimeResult<PropEditPreviewResponse> {
@@ -556,7 +585,7 @@ impl MkvoRuntime {
         Ok(propedit_preview_response(&plan))
     }
 
-    pub async fn run_library_audit(
+    pub(super) async fn run_library_audit_impl(
         &self,
         request: LibraryAuditRequest,
     ) -> RuntimeResult<LibraryAuditResponse> {
@@ -1048,7 +1077,7 @@ impl MkvoRuntime {
 }
 
 impl MkvoRuntime {
-    pub async fn start_mux_apply(
+    pub(super) async fn start_mux_apply_impl(
         &self,
         request: MuxPreviewRequest,
     ) -> RuntimeResult<crate::compat::OperationJobResponse> {
@@ -1102,7 +1131,7 @@ impl MkvoRuntime {
         ))
     }
 
-    pub async fn start_propedit_apply(
+    pub(super) async fn start_propedit_apply_impl(
         &self,
         request: PropEditPreviewRequest,
     ) -> RuntimeResult<crate::compat::OperationJobResponse> {
@@ -1189,92 +1218,60 @@ impl MkvoRuntime {
         plan: &RemuxPlan,
         context: &mkvo_application::JobContext,
     ) -> Result<JobCompletion, ApplicationError> {
-        let mut journal = self
-            .begin_journal(
-                plan.metadata.id,
-                &plan.metadata.idempotency_key,
-                &plan.context.resources,
-            )
-            .await?;
         let runnable: Vec<_> = plan
             .payload
             .items
             .iter()
             .filter(|item| item.can_apply())
+            .cloned()
             .collect();
+        let mut journal = self
+            .begin_journal(
+                plan.metadata.id,
+                &plan.metadata.idempotency_key,
+                &plan.context.resources,
+                runnable
+                    .iter()
+                    .map(|item| item.source.to_string_lossy().into_owned()),
+            )
+            .await?;
         let total = u64::try_from(runnable.len()).unwrap_or(u64::MAX);
-        let result = async {
-            for (index, item) in runnable.iter().enumerate() {
-                context.ensure_not_canceled()?;
-                self.revalidate_fingerprint(&item.source_fingerprint)
-                    .await
-                    .map_err(runtime_application_error)?;
-                context
-                    .progress(
-                        u64::try_from(index).unwrap_or(u64::MAX),
-                        total,
-                        item.source.to_string_lossy(),
-                        0,
-                    )
-                    .await?;
-                let invocation = self
-                    .remux_invocation(item, &plan.context.attributes)
-                    .await?;
-                context
-                    .log(
-                        JobLogLevel::Information,
-                        format!("{} {}", remux_mode_label(item.mode), item.source.display()),
-                    )
-                    .await?;
-                let execution = self
-                    .dependencies()
-                    .tool_executor
-                    .execute(&invocation, context.cancellation_token())
-                    .await?;
-                if execution.exit_code != Some(0) {
-                    return Err(ApplicationError::Internal(format!(
-                        "{} exited with {:?}: {}",
-                        invocation.tool,
-                        execution.exit_code,
-                        execution.stderr.trim()
-                    )));
+        let workers = self
+            .settings_service()
+            .load()
+            .await?
+            .settings
+            .workers
+            .max_remux_workers;
+        let mut executions = stream::iter(runnable.into_iter().enumerate())
+            .map(|(index, item)| async move {
+                let key = item.source.to_string_lossy().into_owned();
+                let result = self
+                    .execute_remux_item(&item, &plan.context.attributes, context, index, total)
+                    .await;
+                (key, result)
+            })
+            .buffer_unordered(workers);
+        let mut first_error = None;
+        while let Some((key, result)) = executions.next().await {
+            match result {
+                Ok(()) => {
+                    journal.step = journal.step.saturating_add(1);
+                    journal.complete_item(&key);
+                    context.record_completed().await?;
                 }
-                for expected in &invocation.expected_outputs {
-                    if !execution
-                        .validated_outputs
-                        .iter()
-                        .any(|path| same_path(path, expected))
-                    {
-                        return Err(ApplicationError::Internal(format!(
-                            "{} did not create expected output {}",
-                            invocation.tool,
-                            expected.display()
-                        )));
+                Err(error) => {
+                    journal.fail_item(&key, error.to_string());
+                    context.record_failed().await?;
+                    if first_error.is_none() {
+                        first_error = Some(error);
                     }
                 }
-                if item.mode != RemuxMode::ExtractSubtitles {
-                    self.promote_remux_output(item).await?;
-                } else {
-                    self.promote_extractions(item, &plan.context.attributes)
-                        .await?;
-                }
-                if item.delete_external_subtitles_after_success {
-                    for subtitle in &item.external_subtitles {
-                        self.dependencies()
-                            .file_system
-                            .remove_file(&subtitle.path)
-                            .await?;
-                    }
-                }
-                journal.step = journal.step.saturating_add(1);
-                journal.updated_utc = Utc::now();
-                self.dependencies().journal.advance(&journal).await?;
-                context.record_completed().await?;
             }
-            Ok::<(), ApplicationError>(())
+            journal.updated_utc = Utc::now();
+            self.dependencies().journal.advance(&journal).await?;
         }
-        .await;
-        if let Err(error) = result {
+        if let Some(error) = first_error {
             journal.status = mkvo_application::JournalStatus::Failed;
             journal.detail = Some(error.to_string());
             journal.updated_utc = Utc::now();
@@ -1307,56 +1304,60 @@ impl MkvoRuntime {
         plan: &PropertyEditPlan,
         context: &mkvo_application::JobContext,
     ) -> Result<JobCompletion, ApplicationError> {
-        let mut journal = self
-            .begin_journal(
-                plan.metadata.id,
-                &plan.metadata.idempotency_key,
-                &plan.context.resources,
-            )
-            .await?;
         let runnable: Vec<_> = plan
             .payload
             .items
             .iter()
             .filter(|item| item.can_apply())
+            .cloned()
             .collect();
+        let mut journal = self
+            .begin_journal(
+                plan.metadata.id,
+                &plan.metadata.idempotency_key,
+                &plan.context.resources,
+                runnable
+                    .iter()
+                    .map(|item| item.path.to_string_lossy().into_owned()),
+            )
+            .await?;
         let total = u64::try_from(runnable.len()).unwrap_or(u64::MAX);
-        let result = async {
-            for (index, item) in runnable.iter().enumerate() {
-                context.ensure_not_canceled()?;
-                self.revalidate_fingerprint(&item.source_fingerprint)
-                    .await
-                    .map_err(runtime_application_error)?;
-                context
-                    .progress(
-                        u64::try_from(index).unwrap_or(u64::MAX),
-                        total,
-                        item.path.to_string_lossy(),
-                        0,
-                    )
-                    .await?;
-                let invocation = self.propedit_invocation(item).await?;
-                let execution = self
-                    .dependencies()
-                    .tool_executor
-                    .execute(&invocation, context.cancellation_token())
-                    .await?;
-                if execution.exit_code != Some(0) {
-                    return Err(ApplicationError::Internal(format!(
-                        "mkvpropedit exited with {:?}: {}",
-                        execution.exit_code,
-                        execution.stderr.trim()
-                    )));
+        let workers = self
+            .settings_service()
+            .load()
+            .await?
+            .settings
+            .workers
+            .max_edit_workers;
+        let mut executions = stream::iter(runnable.into_iter().enumerate())
+            .map(|(index, item)| async move {
+                let key = item.path.to_string_lossy().into_owned();
+                let result = self
+                    .execute_propedit_item(&item, context, index, total)
+                    .await;
+                (key, result)
+            })
+            .buffer_unordered(workers);
+        let mut first_error = None;
+        while let Some((key, result)) = executions.next().await {
+            match result {
+                Ok(()) => {
+                    journal.step = journal.step.saturating_add(1);
+                    journal.complete_item(&key);
+                    context.record_completed().await?;
                 }
-                journal.step = journal.step.saturating_add(1);
-                journal.updated_utc = Utc::now();
-                self.dependencies().journal.advance(&journal).await?;
-                context.record_completed().await?;
+                Err(error) => {
+                    journal.fail_item(&key, error.to_string());
+                    context.record_failed().await?;
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                }
             }
-            Ok::<(), ApplicationError>(())
+            journal.updated_utc = Utc::now();
+            self.dependencies().journal.advance(&journal).await?;
         }
-        .await;
-        if let Err(error) = result {
+        if let Some(error) = first_error {
             journal.status = mkvo_application::JournalStatus::Failed;
             journal.detail = Some(error.to_string());
             journal.updated_utc = Utc::now();
@@ -1396,11 +1397,116 @@ impl MkvoRuntime {
         })
     }
 
+    async fn execute_remux_item(
+        &self,
+        item: &mkvo_domain::RemuxPlanItem,
+        attributes: &BTreeMap<String, String>,
+        context: &mkvo_application::JobContext,
+        index: usize,
+        total: u64,
+    ) -> Result<(), ApplicationError> {
+        context.ensure_not_canceled()?;
+        self.revalidate_fingerprint(&item.source_fingerprint)
+            .await
+            .map_err(runtime_application_error)?;
+        context
+            .progress(
+                u64::try_from(index).unwrap_or(u64::MAX),
+                total,
+                item.source.to_string_lossy(),
+                0,
+            )
+            .await?;
+        let invocation = self.remux_invocation(item, attributes).await?;
+        context
+            .log(
+                JobLogLevel::Information,
+                format!("{} {}", remux_mode_label(item.mode), item.source.display()),
+            )
+            .await?;
+        let execution = self
+            .dependencies()
+            .tool_executor
+            .execute(&invocation, context.cancellation_token())
+            .await?;
+        if execution.exit_code != Some(0) {
+            return Err(ApplicationError::Internal(format!(
+                "{} exited with {:?}: {}",
+                invocation.tool,
+                execution.exit_code,
+                execution.stderr.trim()
+            )));
+        }
+        for expected in &invocation.expected_outputs {
+            if !execution
+                .validated_outputs
+                .iter()
+                .any(|path| same_path(path, expected))
+            {
+                return Err(ApplicationError::Internal(format!(
+                    "{} did not create expected output {}",
+                    invocation.tool,
+                    expected.display()
+                )));
+            }
+        }
+        if item.mode == RemuxMode::ExtractSubtitles {
+            self.promote_extractions(item, attributes).await?;
+        } else {
+            self.promote_remux_output(item).await?;
+        }
+        if item.delete_external_subtitles_after_success {
+            for subtitle in &item.external_subtitles {
+                self.dependencies()
+                    .file_system
+                    .remove_file(&subtitle.path)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn execute_propedit_item(
+        &self,
+        item: &mkvo_domain::PropertyEditPlanItem,
+        context: &mkvo_application::JobContext,
+        index: usize,
+        total: u64,
+    ) -> Result<(), ApplicationError> {
+        context.ensure_not_canceled()?;
+        self.revalidate_fingerprint(&item.source_fingerprint)
+            .await
+            .map_err(runtime_application_error)?;
+        context
+            .progress(
+                u64::try_from(index).unwrap_or(u64::MAX),
+                total,
+                item.path.to_string_lossy(),
+                0,
+            )
+            .await?;
+        let invocation = self.propedit_invocation(item).await?;
+        let execution = self
+            .dependencies()
+            .tool_executor
+            .execute(&invocation, context.cancellation_token())
+            .await?;
+        if execution.exit_code != Some(0) {
+            return Err(ApplicationError::Internal(format!(
+                "mkvpropedit exited with {:?}: {}",
+                execution.exit_code,
+                execution.stderr.trim()
+            )));
+        }
+        Ok(())
+    }
+
     async fn begin_journal(
         &self,
         plan_id: PlanId,
         key: &IdempotencyKey,
         resources: &[mkvo_domain::ResourceClaim],
+        items: impl IntoIterator<Item = String>,
     ) -> Result<mkvo_application::JournalRecord, ApplicationError> {
         let mut record = mkvo_application::JournalRecord {
             idempotency_key: key.clone(),
@@ -1408,6 +1514,14 @@ impl MkvoRuntime {
             step: 0,
             status: mkvo_application::JournalStatus::Prepared,
             resources: resources.to_vec(),
+            items: items
+                .into_iter()
+                .map(|key| mkvo_application::JournalItemOutcome {
+                    key,
+                    status: mkvo_application::JournalItemStatus::Pending,
+                    detail: None,
+                })
+                .collect(),
             detail: None,
             updated_utc: Utc::now(),
         };
@@ -1631,245 +1745,6 @@ impl MkvoRuntime {
     }
 }
 
-fn require_plan_fields(
-    plan_id: Option<PlanId>,
-    fingerprint: Option<String>,
-    key: Option<IdempotencyKey>,
-) -> RuntimeResult<(PlanId, String, IdempotencyKey)> {
-    let plan_id = plan_id
-        .ok_or_else(|| RuntimeError::invalid("apply requires planId from a successful preview"))?;
-    let fingerprint = fingerprint
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| {
-            RuntimeError::invalid("apply requires planFingerprint from a successful preview")
-        })?;
-    let key = key.ok_or_else(|| {
-        RuntimeError::invalid("apply requires idempotencyKey from a successful preview")
-    })?;
-    Ok((plan_id, fingerprint, key))
-}
-
-fn runtime_application_error(error: RuntimeError) -> ApplicationError {
-    match error.code {
-        mkvo_contracts::ApiErrorCode::InvalidRequest => {
-            ApplicationError::InvalidRequest(error.message)
-        }
-        mkvo_contracts::ApiErrorCode::UnauthorizedPath => {
-            ApplicationError::UnauthorizedPath(PathBuf::from(error.message))
-        }
-        mkvo_contracts::ApiErrorCode::NotFound => ApplicationError::NotFound(error.message),
-        mkvo_contracts::ApiErrorCode::Conflict
-        | mkvo_contracts::ApiErrorCode::PlanExpired
-        | mkvo_contracts::ApiErrorCode::PlanStale
-        | mkvo_contracts::ApiErrorCode::PlanTampered => ApplicationError::Conflict(error.message),
-        mkvo_contracts::ApiErrorCode::JobCanceled => ApplicationError::Canceled,
-        _ => ApplicationError::Internal(error.message),
-    }
-}
-
-fn validate_idempotent_job(
-    existing: &mkvo_contracts::JobSnapshot,
-    plan_id: PlanId,
-    request_fingerprint: &str,
-) -> RuntimeResult<()> {
-    if existing.plan_id != Some(plan_id) || existing.request_fingerprint != request_fingerprint {
-        return Err(RuntimeError::new(
-            mkvo_contracts::ApiErrorCode::Conflict,
-            "idempotency key was already used for a different plan or request",
-        ));
-    }
-    Ok(())
-}
-
-fn append_propedit_arguments(arguments: &mut Vec<String>, mutation: &PropertyMutation) {
-    match mutation {
-        PropertyMutation::SetContainerTitle { value } => {
-            arguments.extend(["--edit".to_owned(), "info".to_owned()]);
-            arguments.extend(["--set".to_owned(), format!("title={value}")]);
-        }
-        PropertyMutation::DeleteContainerTitle => {
-            arguments.extend(["--edit".to_owned(), "info".to_owned()]);
-            arguments.extend(["--delete".to_owned(), "title".to_owned()]);
-        }
-        PropertyMutation::SetTrackName { selector, value } => {
-            arguments.extend(["--edit".to_owned(), selector.mkvpropedit_value()]);
-            arguments.extend(["--set".to_owned(), format!("name={value}")]);
-        }
-        PropertyMutation::DeleteTrackName { selector } => {
-            arguments.extend(["--edit".to_owned(), selector.mkvpropedit_value()]);
-            arguments.extend(["--delete".to_owned(), "name".to_owned()]);
-        }
-        PropertyMutation::SetTrackLanguage { selector, language } => {
-            arguments.extend(["--edit".to_owned(), selector.mkvpropedit_value()]);
-            arguments.extend(["--set".to_owned(), format!("language={language}")]);
-        }
-        PropertyMutation::SetDefaultFlag { selector, value } => {
-            arguments.extend(["--edit".to_owned(), selector.mkvpropedit_value()]);
-            arguments.extend([
-                "--set".to_owned(),
-                format!("flag-default={}", u8::from(*value)),
-            ]);
-        }
-        PropertyMutation::SetForcedFlag { selector, value } => {
-            arguments.extend(["--edit".to_owned(), selector.mkvpropedit_value()]);
-            arguments.extend([
-                "--set".to_owned(),
-                format!("flag-forced={}", u8::from(*value)),
-            ]);
-        }
-    }
-}
-
-fn backup_path(source: &Path) -> PathBuf {
-    let name = source
-        .file_name()
-        .map_or_else(String::new, |value| value.to_string_lossy().into_owned());
-    source.with_file_name(format!(".{name}.mkvo-backup"))
-}
-
-fn extraction_temp_path(output: &Path, track_id: u64) -> PathBuf {
-    let name = output
-        .file_name()
-        .map_or_else(String::new, |value| value.to_string_lossy().into_owned());
-    output.with_file_name(format!(".{name}.mkvo-extract-{track_id}.tmp"))
-}
-
-fn append_track_selection(arguments: &mut Vec<String>, source: &MediaFile, selected: &[u64]) {
-    let selected: BTreeSet<_> = selected.iter().copied().collect();
-    for (kind, option, empty_option) in [
-        (TrackKind::Video, "--video-tracks", "--no-video"),
-        (TrackKind::Audio, "--audio-tracks", "--no-audio"),
-        (TrackKind::Subtitle, "--subtitle-tracks", "--no-subtitles"),
-    ] {
-        let all_of_kind: Vec<_> = source
-            .tracks
-            .iter()
-            .filter(|track| track.kind == kind)
-            .collect();
-        if all_of_kind.is_empty() {
-            continue;
-        }
-        let selected_of_kind: Vec<_> = all_of_kind
-            .iter()
-            .filter(|track| selected.contains(&track.mkvmerge_id))
-            .map(|track| track.mkvmerge_id.to_string())
-            .collect();
-        if selected_of_kind.is_empty() {
-            arguments.push(empty_option.to_owned());
-        } else if selected_of_kind.len() != all_of_kind.len() {
-            arguments.push(option.to_owned());
-            arguments.push(selected_of_kind.join(","));
-        }
-    }
-}
-
-fn rename_preview_response(
-    plan: &RenamePlan,
-    scopes: Vec<RenameScopeRow>,
-    key: IdempotencyKey,
-) -> RenamePreviewResponse {
-    let items: Vec<_> = plan
-        .payload
-        .items
-        .iter()
-        .map(|item| {
-            let no_change = same_path(&item.source, &item.target);
-            let status = item
-                .conflicts
-                .first()
-                .map_or_else(|| "Ready".to_owned(), |conflict| conflict.message.clone());
-            RenamePreviewRow {
-                selected: item.can_apply(),
-                source_path: display_path(&item.source),
-                current_file_name: file_name(&item.source),
-                detected: String::new(),
-                episode_name: String::new(),
-                new_file_name: item.new_file_name.clone(),
-                confidence: if item.can_apply() {
-                    "High".to_owned()
-                } else {
-                    String::new()
-                },
-                status: if no_change {
-                    "No change".to_owned()
-                } else {
-                    status
-                },
-                can_apply: item.can_apply(),
-            }
-        })
-        .collect();
-    let ready = items.iter().filter(|item| item.can_apply).count();
-    RenamePreviewResponse {
-        summary: format!("{ready} of {} file(s) ready to rename", items.len()),
-        status: format!("Rename preview ready: {ready} change(s)"),
-        items,
-        scopes,
-        plan_id: Some(plan.metadata.id),
-        plan_fingerprint: Some(plan.metadata.fingerprint.clone()),
-        idempotency_key: Some(key),
-    }
-}
-
-fn rename_apply_response(plan: &RenamePlan, replay: bool) -> RenameApplyResponse {
-    let items: Vec<_> = plan
-        .payload
-        .items
-        .iter()
-        .map(|item| RenamePreviewRow {
-            selected: item.can_apply(),
-            source_path: if item.can_apply() {
-                display_path(&item.target)
-            } else {
-                display_path(&item.source)
-            },
-            current_file_name: file_name(&item.source),
-            detected: String::new(),
-            episode_name: String::new(),
-            new_file_name: item.new_file_name.clone(),
-            confidence: String::new(),
-            status: if item.can_apply() {
-                "Renamed".to_owned()
-            } else {
-                "Skipped".to_owned()
-            },
-            can_apply: false,
-        })
-        .collect();
-    let renamed = plan.payload.rename_count();
-    let skipped = plan.payload.skip_count();
-    let replay_label = if replay { " (idempotent replay)" } else { "" };
-    RenameApplyResponse {
-        items,
-        summary: format!("{renamed} renamed, {skipped} skipped{replay_label}"),
-        status: format!("Rename complete: {renamed} renamed, {skipped} skipped"),
-    }
-}
-
-fn selected_seasons(keys: &[String]) -> BTreeSet<u32> {
-    keys.iter()
-        .filter_map(|key| key.strip_prefix("season:"))
-        .filter_map(|value| value.parse().ok())
-        .collect()
-}
-
-fn scope_rows(episodes: &[mkvo_domain::EpisodeMetadata]) -> Vec<RenameScopeRow> {
-    let mut seasons: Vec<_> = episodes.iter().map(|episode| episode.season).collect();
-    seasons.sort_unstable();
-    seasons.dedup();
-    let mut rows = vec![RenameScopeRow {
-        key: "all".to_owned(),
-        label: format!("All episodes ({})", episodes.len()),
-        is_selected: true,
-    }];
-    rows.extend(seasons.into_iter().map(|season| RenameScopeRow {
-        key: format!("season:{season}"),
-        label: format!("Season {season}"),
-        is_selected: false,
-    }));
-    rows
-}
-
 fn rename_batch_dto(record: &RenameBatchRecord) -> RenameBatchRecordDto {
     RenameBatchRecordDto {
         id: record.id.to_string(),
@@ -1935,98 +1810,6 @@ fn legacy_rename_batch_dto(
             record.total_files.max(record.entries.len())
         ),
     })
-}
-
-fn mux_preview_response(plan: &RemuxPlan) -> MuxPreviewResponse {
-    let actions = plan
-        .payload
-        .items
-        .iter()
-        .filter(|item| item.can_apply())
-        .enumerate()
-        .map(|(index, item)| mkvo_contracts::MuxActionRow {
-            index,
-            file_path: item.source.to_string_lossy().into_owned(),
-            file_name: file_name(&item.source),
-            operation: remux_mode_label(item.mode).to_owned(),
-            tool_name: remux_tool_name(item.mode).to_owned(),
-            description: remux_description(item),
-            command: redacted_remux_command(item),
-        })
-        .collect::<Vec<_>>();
-    let no_change_files = plan
-        .payload
-        .items
-        .iter()
-        .filter(|item| !item.can_apply())
-        .map(|item| item.source.to_string_lossy().into_owned())
-        .collect::<Vec<_>>();
-    MuxPreviewResponse {
-        summary: format!(
-            "{} action(s), {} skipped/no-change file(s)",
-            actions.len(),
-            no_change_files.len()
-        ),
-        status: "Mux/remux preview ready".to_owned(),
-        actions,
-        no_change_files,
-        plan_id: Some(plan.metadata.id),
-        plan_fingerprint: Some(plan.metadata.fingerprint.clone()),
-        idempotency_key: Some(plan.metadata.idempotency_key.clone()),
-    }
-}
-
-fn propedit_preview_response(plan: &PropertyEditPlan) -> PropEditPreviewResponse {
-    let mut actions = Vec::new();
-    let mut skipped = Vec::new();
-    let mut no_change = Vec::new();
-    for item in &plan.payload.items {
-        if item.can_apply() {
-            actions.push(PropEditActionRow {
-                index: actions.len(),
-                file_path: item.path.to_string_lossy().into_owned(),
-                file_name: file_name(&item.path),
-                description: format!("Apply {} property mutation(s)", item.mutations.len()),
-                command: format!(
-                    "mkvpropedit \"{}\" [redacted structured edits]",
-                    item.path.display()
-                ),
-            });
-        } else {
-            let row = PropEditSkippedRow {
-                file_path: item.path.to_string_lossy().into_owned(),
-                file_name: file_name(&item.path),
-                reason: item.conflicts.first().map_or_else(
-                    || "No property changes".to_owned(),
-                    |value| value.message.clone(),
-                ),
-            };
-            if item.mutations.is_empty() {
-                no_change.push(PropEditNoChangeRow {
-                    file_path: row.file_path,
-                    file_name: row.file_name,
-                    reason: row.reason,
-                });
-            } else {
-                skipped.push(row);
-            }
-        }
-    }
-    PropEditPreviewResponse {
-        summary: format!(
-            "{} action(s), {} skipped, {} no-change",
-            actions.len(),
-            skipped.len(),
-            no_change.len()
-        ),
-        status: "Track-properties preview ready".to_owned(),
-        actions,
-        skipped,
-        no_change,
-        plan_id: Some(plan.metadata.id),
-        plan_fingerprint: Some(plan.metadata.fingerprint.clone()),
-        idempotency_key: Some(plan.metadata.idempotency_key.clone()),
-    }
 }
 
 fn media_from_row(row: &mkvo_contracts::MediaFileRow, fingerprint: FileFingerprint) -> MediaFile {
@@ -2337,71 +2120,6 @@ fn selected_track_label(
         .map_or_else(String::new, |(index, _)| {
             format!("{} {}", track_kind_label(kind), index + 1)
         })
-}
-
-fn track_kind_label(kind: TrackKind) -> &'static str {
-    match kind {
-        TrackKind::Video => "Video",
-        TrackKind::Audio => "Audio",
-        TrackKind::Subtitle => "Subtitle",
-        TrackKind::Buttons => "Buttons",
-        TrackKind::Other => "Track",
-    }
-}
-
-fn remux_mode_label(mode: RemuxMode) -> &'static str {
-    match mode {
-        RemuxMode::Remux => "Remux",
-        RemuxMode::ConvertToMkv => "Convert to MKV",
-        RemuxMode::MuxSubtitles => "Mux subtitles",
-        RemuxMode::ExtractSubtitles => "Extract subtitles",
-    }
-}
-
-fn remux_tool_name(mode: RemuxMode) -> &'static str {
-    if mode == RemuxMode::ExtractSubtitles {
-        "mkvextract"
-    } else {
-        "mkvmerge"
-    }
-}
-
-fn remux_description(item: &mkvo_domain::RemuxPlanItem) -> String {
-    match item.mode {
-        RemuxMode::ExtractSubtitles => {
-            format!("Extract {} subtitle track(s)", item.extract_tracks.len())
-        }
-        RemuxMode::MuxSubtitles => format!(
-            "Remux with {} matching external subtitle(s)",
-            item.external_subtitles.len()
-        ),
-        RemuxMode::ConvertToMkv => "Losslessly copy streams into MKV".to_owned(),
-        RemuxMode::Remux => format!("Keep {} selected track(s)", item.selected_track_ids.len()),
-    }
-}
-
-fn redacted_remux_command(item: &mkvo_domain::RemuxPlanItem) -> String {
-    format!(
-        "{} [structured arguments] \"{}\"",
-        remux_tool_name(item.mode),
-        item.source.display()
-    )
-}
-
-fn same_path(left: &Path, right: &Path) -> bool {
-    path_key(&left.to_string_lossy()) == path_key(&right.to_string_lossy())
-}
-
-fn path_key(value: &str) -> String {
-    value
-        .replace('\\', "/")
-        .trim_end_matches('/')
-        .to_ascii_lowercase()
-}
-
-fn file_name(path: &Path) -> String {
-    path.file_name()
-        .map_or_else(String::new, |value| value.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]

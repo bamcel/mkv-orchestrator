@@ -569,10 +569,18 @@ export interface RenameScopesRequest {
   "language"?: string | null;
 }
 
+export interface RenameScopesResponse {
+  "scopes": Array<RenameScopeRow>;
+}
+
 export interface RenameSearchRequest {
   "query": string;
   "provider"?: string | null;
   "language"?: string | null;
+}
+
+export interface RenameSearchResponse {
+  "results": Array<RenameSearchResult>;
 }
 
 export interface RenameSearchResult {
@@ -855,7 +863,9 @@ export interface ContractTypes {
   RenameProviderTestResponse: RenameProviderTestResponse;
   RenameScopeRow: RenameScopeRow;
   RenameScopesRequest: RenameScopesRequest;
+  RenameScopesResponse: RenameScopesResponse;
   RenameSearchRequest: RenameSearchRequest;
+  RenameSearchResponse: RenameSearchResponse;
   RenameSearchResult: RenameSearchResult;
   RenameUndoRequest: RenameUndoRequest;
   ScanJobResponse: ScanJobResponse;
@@ -971,7 +981,9 @@ export const contractSchemas: Record<ContractName, ContractSchema> = {
   RenameProviderTestResponse: { kind: "object", fields: { "success": { optional: false, schema: { kind: "boolean" } }, "status": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   RenameScopeRow: { kind: "object", fields: { "key": { optional: false, schema: { kind: "string" } }, "label": { optional: false, schema: { kind: "string" } }, "isSelected": { optional: false, schema: { kind: "boolean" } } }, flatten: [] },
   RenameScopesRequest: { kind: "object", fields: { "selectedResult": { optional: false, schema: { kind: "ref", name: "RenameSearchResult" } }, "provider": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "language": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  RenameScopesResponse: { kind: "object", fields: { "scopes": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "RenameScopeRow" } } } }, flatten: [] },
   RenameSearchRequest: { kind: "object", fields: { "query": { optional: false, schema: { kind: "string" } }, "provider": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "language": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
+  RenameSearchResponse: { kind: "object", fields: { "results": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "RenameSearchResult" } } } }, flatten: [] },
   RenameSearchResult: { kind: "object", fields: { "id": { optional: false, schema: { kind: "unknown" } }, "name": { optional: false, schema: { kind: "string" } }, "year": { optional: false, schema: { kind: "string" } }, "overview": { optional: false, schema: { kind: "string" } }, "provider": { optional: false, schema: { kind: "string" } }, "format": { optional: false, schema: { kind: "string" } }, "databaseUrl": { optional: false, schema: { kind: "string" } }, "displayName": { optional: false, schema: { kind: "string" } }, "providerDisplay": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   RenameUndoRequest: { kind: "object", fields: { "batchId": { optional: false, schema: { kind: "string" } }, "idempotencyKey": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   ScanJobResponse: { kind: "object", fields: { "id": { optional: false, schema: { kind: "string" } }, "status": { optional: false, schema: { kind: "ref", name: "JobStatus" } }, "createdUtc": { optional: false, schema: { kind: "string" } }, "startedUtc": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "completedUtc": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "currentSource": { optional: false, schema: { kind: "string" } }, "completed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "total": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileRow" } } }, "skipped": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "summary": { optional: false, schema: { kind: "ref", name: "ScanSummary" } }, "error": { optional: false, schema: { kind: "string" } } }, flatten: [] },

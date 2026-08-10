@@ -22,7 +22,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::common::{
     EpisodeMetadata, MediaKind, MetadataProviderClient, ProviderCredentials, ProviderError,
-    ProviderKind, SearchResult, SelectedMedia, send_with_retry,
+    ProviderKind, SearchResult, SelectedMedia, provider_http_client, send_with_retry,
 };
 
 const TITLES_URL: &str = "https://anidb.net/api/anime-titles.xml.gz";
@@ -76,7 +76,7 @@ impl AniDbClient {
     #[must_use]
     pub fn with_endpoints(titles_url: impl Into<String>, api_url: impl Into<String>) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http: provider_http_client(),
             titles_url: titles_url.into(),
             api_url: api_url.into(),
             cache: Arc::new(RwLock::new(TitleCache::default())),

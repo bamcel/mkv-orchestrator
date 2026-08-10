@@ -3,8 +3,8 @@ set -eu
 
 # Optional Unraid/LinuxServer-style user mapping. When PUID/PGID are provided,
 # run MKVO as that user so outputs on mounted shares are not root-owned.
-PUID="${PUID:-0}"
-PGID="${PGID:-0}"
+PUID="${PUID:-1000}"
+PGID="${PGID:-1000}"
 
 if [ -n "${UMASK:-}" ]; then
     umask "${UMASK}"
@@ -27,4 +27,3 @@ fi
 
 chown -R "${PUID}:${PGID}" /config 2>/dev/null || true
 exec gosu "${PUID}:${PGID}" /app/mkvo-server "$@"
-

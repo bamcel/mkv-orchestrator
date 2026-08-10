@@ -1,5 +1,5 @@
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
-import { CurrentScanResponse, MediaFileRow, setFileSelection } from "../api";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { CurrentScanResponse, getCurrentScanFiles, MediaFileRow, setFileSelection } from "../api";
 
 type MediaLibraryContextValue = {
   files: MediaFileRow[];
@@ -13,6 +13,7 @@ type MediaLibraryContextValue = {
    * The local copy is a cache that keeps the UI responsive.
    */
   selectedPaths: string[];
+  selectionError: string | null;
   setSelectedPaths: (paths: string[]) => void;
   toggleSelectedPath: (path: string) => void;
   /** Adopt the selection the backend reports, without echoing it back. */
@@ -66,12 +67,6 @@ function pathKey(path: string): string {
  * does not know about, and the next `getCurrentScanFiles` hydrates the UI back
  * to the authoritative answer anyway.
  */
-function pushSelection(paths: string[]): void {
-  void setFileSelection(paths).catch((error: unknown) => {
-    console.warn("selection could not be saved", error);
-  });
-}
-
 export function MediaLibraryProvider({ children }: { children: ReactNode }) {
   const [files, setFilesState] = useState<MediaFileRow[]>(() =>
     readStored<MediaFileRow[]>(sessionStorage, storageKey, [])
@@ -82,6 +77,8 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
   // What the adopted set was stamped with, so a repeat of the same answer does
   // not keep replacing local state on every refetch.
   const [adoptedUpdatedUtc, setAdoptedUpdatedUtc] = useState<string | null>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+  const selectionPush = useRef<Promise<void>>(Promise.resolve());
   const [templateFilePath, setTemplateFilePath] = useState(() => {
     try {
       return sessionStorage.getItem(templateStorageKey) ?? "";
@@ -100,6 +97,27 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
       // Session storage is a convenience cache; scans still work without it.
     }
   }, [templateFilePath]);
+
+  const pushSelection = useCallback((paths: string[]): void => {
+    selectionPush.current = selectionPush.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          const response = await setFileSelection(paths);
+          setSelectedPathsState(response.selectedPaths);
+          setSelectionError(null);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "The selection could not be saved.";
+          setSelectionError(message);
+          try {
+            const authoritative = await getCurrentScanFiles();
+            setSelectedPathsState(authoritative.selectedPaths);
+          } catch {
+            // Keep the visible error; the next successful refresh reconciles it.
+          }
+        }
+      });
+  }, []);
 
   const value = useMemo<MediaLibraryContextValue>(() => ({
     files,
@@ -123,6 +141,7 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
       }
     },
     selectedPaths,
+    selectionError,
     setSelectedPaths: (paths) => {
       setSelectedPathsState(paths);
       pushSelection(paths);
@@ -178,7 +197,7 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
         return rename ? rename.newPath : current;
       });
     }
-  }), [files, selectedPaths, templateFilePath, adoptedUpdatedUtc]);
+  }), [files, selectedPaths, selectionError, templateFilePath, adoptedUpdatedUtc, pushSelection]);
 
   return (
     <MediaLibraryContext.Provider value={value}>
