@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "text.natural-sort.v1",
+  "kind": "legacy_parity",
+  "description": "Case-insensitive natural string ordering without numeric overflow.",
+  "sourceOfTruth": [
+    "src/MKVOrchestrator.Core/Services/Text/NaturalStringComparer.cs",
+    "tests/MKVOrchestrator.Tests/Program.cs"
+  ],
+  "comparison": {
+    "arrayOrder": "significant",
+    "stringComparison": "ordinal_case_insensitive_except_expected_casing"
+  },
+  "cases": [
+    {
+      "id": "embedded-episode-numbers",
+      "input": [
+        "Episode 10",
+        "Episode 2",
+        "Episode 1"
+      ],
+      "expected": [
+        "Episode 1",
+        "Episode 2",
+        "Episode 10"
+      ]
+    },
+    {
+      "id": "leading-zero-tie-break-by-full-length",
+      "input": [
+        "Episode 001",
+        "Episode 1",
+        "Episode 000",
+        "Episode 00",
+        "Episode 01",
+        "Episode 10",
+        "Episode 2"
+      ],
+      "expected": [
+        "Episode 00",
+        "Episode 000",
+        "Episode 1",
+        "Episode 01",
+        "Episode 001",
+        "Episode 2",
+        "Episode 10"
+      ]
+    },
+    {
+      "id": "multiple-numeric-segments",
+      "input": [
+        "Show S2E10 Part 1",
+        "Show S10E1 Part 1",
+        "Show S2E2 Part 10",
+        "Show S2E2 Part 2",
+        "Show S2E2"
+      ],
+      "expected": [
+        "Show S2E2",
+        "Show S2E2 Part 2",
+        "Show S2E2 Part 10",
+        "Show S2E10 Part 1",
+        "Show S10E1 Part 1"
+      ]
+    },
+    {
+      "id": "arbitrarily-large-number-text",
+      "input": [
+        "Episode 100000000000000000000",
+        "Episode 99999999999999999999",
+        "Episode 20"
+      ],
+      "expected": [
+        "Episode 20",
+        "Episode 99999999999999999999",
+        "Episode 100000000000000000000"
+      ]
+    }
+  ]
+}

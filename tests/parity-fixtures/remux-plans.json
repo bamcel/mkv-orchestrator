@@ -1,0 +1,334 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "remux.planning.v1",
+  "kind": "legacy_parity",
+  "description": "Track filtering, matching subtitle sidecars, extraction, and MP4 conversion planning.",
+  "sourceOfTruth": [
+    "src/MKVOrchestrator.Core/Services/Media/MkvMergeService.cs",
+    "src/MKVOrchestrator.Core/Services/Media/MkvTrackSelector.cs",
+    "tests/MKVOrchestrator.Tests/Program.cs"
+  ],
+  "comparison": {
+    "pathSeparator": "/",
+    "arrayOrder": "significant",
+    "objectPropertyOrder": "ignored"
+  },
+  "cases": [
+    {
+      "id": "language-and-track-id-selection",
+      "operation": "MkvMergeService.BuildRemuxPlan",
+      "virtualFilesystem": {
+        "files": [
+          "${ROOT}/Shows/Example/Season 01/Example - S01E01.mkv"
+        ]
+      },
+      "input": {
+        "files": [
+          {
+            "filePath": "${ROOT}/Shows/Example/Season 01/Example - S01E01.mkv",
+            "selected": true,
+            "tracks": [
+              {
+                "mkvMergeId": 0,
+                "type": "video",
+                "language": "und",
+                "codec": "HEVC/H.265",
+                "name": "Main"
+              },
+              {
+                "mkvMergeId": 1,
+                "type": "audio",
+                "language": "jpn",
+                "codec": "AAC",
+                "name": "Japanese"
+              },
+              {
+                "mkvMergeId": 2,
+                "type": "audio",
+                "language": "eng",
+                "codec": "AAC",
+                "name": "English"
+              },
+              {
+                "mkvMergeId": 3,
+                "type": "audio",
+                "language": "spa",
+                "codec": "AC-3",
+                "name": "Spanish"
+              },
+              {
+                "mkvMergeId": 4,
+                "type": "subtitles",
+                "language": "eng",
+                "codec": "SubStationAlpha",
+                "name": "Signs & Songs"
+              },
+              {
+                "mkvMergeId": 5,
+                "type": "subtitles",
+                "language": "jpn",
+                "codec": "SubStationAlpha",
+                "name": "Japanese"
+              },
+              {
+                "mkvMergeId": 6,
+                "type": "subtitles",
+                "language": "eng",
+                "codec": "SubRip/SRT",
+                "name": "SDH"
+              }
+            ]
+          }
+        ],
+        "keepAudioLanguages": "eng,jpn",
+        "keepSubtitleLanguages": "eng",
+        "removeUnwantedAudioLanguages": true,
+        "removeUnwantedSubtitleLanguages": true,
+        "removeUnwantedTrackIds": true,
+        "removeTrackIdsText": "2, 6",
+        "preserveChapters": false,
+        "preserveAttachments": false,
+        "muxMatchingExternalSubtitles": false,
+        "externalSubtitleLanguage": "und",
+        "externalSubtitleTrackName": "{tag}",
+        "externalSubtitleFormats": "ass,srt",
+        "preserveExternalSubtitleFiles": true,
+        "skipMuxIfSubtitleAlreadyExists": true,
+        "extractSubtitles": false,
+        "extractSubtitleLanguages": "eng",
+        "extractOverwriteExistingFiles": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "operation": "remux",
+            "toolName": "mkvmerge",
+            "sourceFilePath": "${ROOT}/Shows/Example/Season 01/Example - S01E01.mkv",
+            "tempOutputPath": "${ROOT}/Shows/Example/Season 01/Example - S01E01.mkvo-remux.tmp.mkv",
+            "finalOutputPath": "",
+            "description": "Remove chapters; Remove attachments/fonts; Keep audio languages: eng, jpn; Keep subtitle languages: eng; Remove track IDs: #2 audio eng:AAC - \"English\", #6 subtitles eng:SubRip/SRT - \"SDH\"",
+            "arguments": [
+              "-o",
+              "${ROOT}/Shows/Example/Season 01/Example - S01E01.mkvo-remux.tmp.mkv",
+              "--no-chapters",
+              "--no-attachments",
+              "--audio-tracks",
+              "1",
+              "--subtitle-tracks",
+              "4",
+              "${ROOT}/Shows/Example/Season 01/Example - S01E01.mkv"
+            ]
+          }
+        ],
+        "noChangeFiles": []
+      }
+    },
+    {
+      "id": "sidecar-discovery-tagging-and-existing-track-skip",
+      "operation": "MkvMergeService.BuildRemuxPlan",
+      "virtualFilesystem": {
+        "files": [
+          "${ROOT}/Shows/Example/Season 01/Episode 01.mkv",
+          "${ROOT}/Shows/Example/Season 01/Episode 01.ass",
+          "${ROOT}/Shows/Example/Season 01/Episode 01.eng.Signs & Songs.ass",
+          "${ROOT}/Shows/Example/Season 01/Episode 01.jpn.Dialogue.srt",
+          "${ROOT}/Shows/Example/Season 01/Episode 01.notes.txt",
+          "${ROOT}/Shows/Example/Season 01/Other Episode.eng.ass"
+        ]
+      },
+      "input": {
+        "files": [
+          {
+            "filePath": "${ROOT}/Shows/Example/Season 01/Episode 01.mkv",
+            "selected": true,
+            "tracks": [
+              {
+                "mkvMergeId": 0,
+                "type": "video",
+                "language": "und",
+                "codec": "HEVC/H.265",
+                "name": ""
+              },
+              {
+                "mkvMergeId": 3,
+                "type": "subtitles",
+                "language": "eng",
+                "codec": "SubStationAlpha",
+                "name": "Signs & Songs"
+              }
+            ]
+          }
+        ],
+        "keepAudioLanguages": "eng,jpn",
+        "keepSubtitleLanguages": "eng",
+        "removeUnwantedAudioLanguages": false,
+        "removeUnwantedSubtitleLanguages": false,
+        "removeUnwantedTrackIds": false,
+        "removeTrackIdsText": "",
+        "preserveChapters": true,
+        "preserveAttachments": true,
+        "muxMatchingExternalSubtitles": true,
+        "externalSubtitleLanguage": "und",
+        "externalSubtitleTrackName": "{tag}",
+        "externalSubtitleFormats": "ass,srt",
+        "preserveExternalSubtitleFiles": true,
+        "skipMuxIfSubtitleAlreadyExists": true,
+        "extractSubtitles": false,
+        "extractSubtitleLanguages": "eng",
+        "extractOverwriteExistingFiles": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "operation": "mux-external-subtitle",
+            "toolName": "mkvmerge",
+            "sourceFilePath": "${ROOT}/Shows/Example/Season 01/Episode 01.mkv",
+            "tempOutputPath": "${ROOT}/Shows/Example/Season 01/Episode 01.mkvo-remux.tmp.mkv",
+            "description": "Mux 2 external subtitles: Episode 01.ass as und; Episode 01.jpn.Dialogue.srt as jpn / \"Dialogue\"",
+            "externalSubtitleFilePath": "${ROOT}/Shows/Example/Season 01/Episode 01.ass",
+            "externalSubtitleFilePaths": [
+              "${ROOT}/Shows/Example/Season 01/Episode 01.ass",
+              "${ROOT}/Shows/Example/Season 01/Episode 01.jpn.Dialogue.srt"
+            ],
+            "deleteExternalSubtitleAfterSuccess": false,
+            "arguments": [
+              "-o",
+              "${ROOT}/Shows/Example/Season 01/Episode 01.mkvo-remux.tmp.mkv",
+              "${ROOT}/Shows/Example/Season 01/Episode 01.mkv",
+              "--language",
+              "0:und",
+              "${ROOT}/Shows/Example/Season 01/Episode 01.ass",
+              "--language",
+              "0:jpn",
+              "--track-name",
+              "0:Dialogue",
+              "${ROOT}/Shows/Example/Season 01/Episode 01.jpn.Dialogue.srt"
+            ]
+          }
+        ],
+        "skippedMatchingSidecars": [
+          "${ROOT}/Shows/Example/Season 01/Episode 01.eng.Signs & Songs.ass"
+        ],
+        "noChangeFiles": []
+      }
+    },
+    {
+      "id": "subtitle-extraction-skips-existing-output",
+      "operation": "MkvMergeService.BuildRemuxPlan",
+      "virtualFilesystem": {
+        "files": [
+          "${ROOT}/Shows/Example/Season 01/Episode 02.mkv",
+          "${ROOT}/Shows/Example/Season 01/Episode 02.eng.track4.ass"
+        ]
+      },
+      "input": {
+        "files": [
+          {
+            "filePath": "${ROOT}/Shows/Example/Season 01/Episode 02.mkv",
+            "selected": true,
+            "tracks": [
+              {
+                "mkvMergeId": 4,
+                "type": "subtitles",
+                "language": "eng",
+                "codec": "ASS",
+                "name": "Signs"
+              },
+              {
+                "mkvMergeId": 5,
+                "type": "subtitle",
+                "language": "eng",
+                "codec": "SubRip/SRT",
+                "name": "Dialogue"
+              },
+              {
+                "mkvMergeId": 6,
+                "type": "subtitles",
+                "language": "jpn",
+                "codec": "ASS",
+                "name": "Japanese"
+              }
+            ]
+          }
+        ],
+        "keepAudioLanguages": "eng,jpn",
+        "keepSubtitleLanguages": "eng",
+        "removeUnwantedAudioLanguages": false,
+        "removeUnwantedSubtitleLanguages": false,
+        "removeUnwantedTrackIds": false,
+        "removeTrackIdsText": "",
+        "preserveChapters": true,
+        "preserveAttachments": true,
+        "muxMatchingExternalSubtitles": false,
+        "externalSubtitleLanguage": "eng",
+        "externalSubtitleTrackName": "{tag}",
+        "externalSubtitleFormats": "ass,srt",
+        "preserveExternalSubtitleFiles": true,
+        "skipMuxIfSubtitleAlreadyExists": true,
+        "extractSubtitles": true,
+        "extractSubtitleLanguages": "eng",
+        "extractOverwriteExistingFiles": false
+      },
+      "expected": {
+        "actions": [
+          {
+            "operation": "extract-subtitle",
+            "toolName": "mkvextract",
+            "sourceFilePath": "${ROOT}/Shows/Example/Season 01/Episode 02.mkv",
+            "tempOutputPath": "${ROOT}/Shows/Example/Season 01/Episode 02.eng.track5.srt",
+            "description": "Extract subtitle #5: eng:SubRip/SRT - \"Dialogue\" -> Episode 02.eng.track5.srt",
+            "arguments": [
+              "tracks",
+              "${ROOT}/Shows/Example/Season 01/Episode 02.mkv",
+              "5:${ROOT}/Shows/Example/Season 01/Episode 02.eng.track5.srt"
+            ]
+          }
+        ],
+        "noChangeFiles": []
+      }
+    },
+    {
+      "id": "mp4-lossless-container-conversion",
+      "operation": "MkvMergeService.BuildConvertToMkvPlan",
+      "virtualFilesystem": {
+        "files": [
+          "${ROOT}/Movies/Example Movie.mp4"
+        ]
+      },
+      "input": {
+        "deleteSourceAfterSuccess": true,
+        "files": [
+          {
+            "filePath": "${ROOT}/Movies/Example Movie.mp4",
+            "selected": true
+          },
+          {
+            "filePath": "${ROOT}/Movies/Already Matroska.mkv",
+            "selected": true
+          }
+        ]
+      },
+      "expected": {
+        "actions": [
+          {
+            "operation": "convert-mkv",
+            "toolName": "mkvmerge",
+            "sourceFilePath": "${ROOT}/Movies/Example Movie.mp4",
+            "tempOutputPath": "${ROOT}/Movies/Example Movie.mkvo-remux.tmp.mkv",
+            "finalOutputPath": "${ROOT}/Movies/Example Movie.mkv",
+            "deleteSourceAfterSuccess": true,
+            "description": "Convert to MKV (lossless container copy): Example Movie.mp4 -> Example Movie.mkv; delete original MP4 after success",
+            "arguments": [
+              "-o",
+              "${ROOT}/Movies/Example Movie.mkvo-remux.tmp.mkv",
+              "${ROOT}/Movies/Example Movie.mp4"
+            ]
+          }
+        ],
+        "noChangeFiles": [
+          "${ROOT}/Movies/Already Matroska.mkv"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+[package]
+name = "mkvo-infra-sqlite"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+chrono.workspace = true
+mkvo-application = { path = "../mkvo-application" }
+mkvo-contracts = { path = "../mkvo-contracts" }
+mkvo-domain = { path = "../mkvo-domain" }
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

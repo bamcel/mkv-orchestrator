@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "properties.mkvpropedit-planning.v1",
+  "kind": "legacy_parity",
+  "description": "Exact mkvpropedit argument ordering and type-ordinal selector behavior.",
+  "sourceOfTruth": [
+    "src/MKVOrchestrator.Core/Services/Media/MkvPropEditCommandBuilder.cs",
+    "src/MKVOrchestrator.Core/Services/Media/MkvTrackSelector.cs",
+    "tests/MKVOrchestrator.Tests/Program.cs"
+  ],
+  "comparison": {
+    "pathSeparator": "/",
+    "arrayOrder": "significant",
+    "objectPropertyOrder": "ignored"
+  },
+  "cases": [
+    {
+      "id": "container-video-audio-subtitle-and-flags",
+      "operation": "MkvPropEditCommandBuilder.Build",
+      "input": {
+        "file": {
+          "filePath": "${ROOT}/Shows/Example/Season 01/Example - S01E01.mkv",
+          "containerTitle": "Old Container Title",
+          "tracks": [
+            {
+              "mkvMergeId": 0,
+              "propEditTrackNumber": 1,
+              "type": "video",
+              "name": "Old Video",
+              "language": "und",
+              "default": true,
+              "forced": false
+            },
+            {
+              "mkvMergeId": 1,
+              "propEditTrackNumber": 2,
+              "type": "audio",
+              "name": "Japanese",
+              "language": "jpn",
+              "default": true,
+              "forced": false
+            },
+            {
+              "mkvMergeId": 2,
+              "propEditTrackNumber": 3,
+              "type": "audio",
+              "name": "Commentary",
+              "language": "eng",
+              "default": false,
+              "forced": true
+            },
+            {
+              "mkvMergeId": 3,
+              "propEditTrackNumber": 4,
+              "type": "subtitles",
+              "name": "Signs & Songs",
+              "language": "eng",
+              "default": false,
+              "forced": false
+            },
+            {
+              "mkvMergeId": 4,
+              "propEditTrackNumber": 5,
+              "type": "subtitle",
+              "name": "Full Dialogue",
+              "language": "eng",
+              "default": true,
+              "forced": false
+            }
+          ]
+        },
+        "audioConfigs": [
+          {
+            "type": "audio",
+            "trackNumber": 2,
+            "trackLabel": "Audio 1",
+            "editedName": "Japanese",
+            "editedLanguage": "jpn"
+          },
+          {
+            "type": "audio",
+            "trackNumber": 3,
+            "trackLabel": "Audio 2",
+            "editedName": "English",
+            "editedLanguage": "eng"
+          }
+        ],
+        "subtitleConfigs": [
+          {
+            "type": "subtitles",
+            "trackNumber": 4,
+            "trackLabel": "Subtitle 1",
+            "editedName": "Signs & Songs",
+            "editedLanguage": "eng"
+          },
+          {
+            "type": "subtitle",
+            "trackNumber": 5,
+            "trackLabel": "Subtitle 2",
+            "editedName": "English SDH",
+            "editedLanguage": "eng"
+          }
+        ],
+        "selectedDefaultAudio": "Audio 2",
+        "selectedForcedAudio": "None",
+        "selectedDefaultSubtitle": "Keep existing",
+        "selectedForcedSubtitle": "Subtitle 1",
+        "containerTitleFromFile": true,
+        "containerTitleCustom": false,
+        "removeContainerTitle": false,
+        "customContainerTitle": "",
+        "videoTitleFromFile": false,
+        "videoTitleCustom": false,
+        "removeVideoTitle": true,
+        "customVideoTitle": ""
+      },
+      "expected": {
+        "arguments": [
+          "${ROOT}/Shows/Example/Season 01/Example - S01E01.mkv",
+          "--edit",
+          "info",
+          "--set",
+          "title=Example - S01E01",
+          "--edit",
+          "track:v1",
+          "--delete",
+          "name",
+          "--edit",
+          "track:a2",
+          "--set",
+          "name=English",
+          "--edit",
+          "track:a1",
+          "--set",
+          "flag-default=0",
+          "--edit",
+          "track:a2",
+          "--set",
+          "flag-default=1",
+          "--edit",
+          "track:s2",
+          "--set",
+          "name=English SDH",
+          "--edit",
+          "track:a1",
+          "--set",
+          "flag-forced=0",
+          "--edit",
+          "track:a2",
+          "--set",
+          "flag-forced=0",
+          "--edit",
+          "track:s1",
+          "--set",
+          "flag-forced=1",
+          "--edit",
+          "track:s2",
+          "--set",
+          "flag-forced=0"
+        ],
+        "descriptions": [
+          "Set MKV container title from file name",
+          "Remove video track name",
+          "Set Audio 2 name to 'English'",
+          "Set Audio 1 default flag to False",
+          "Set Audio 2 default flag to True",
+          "Set Subtitle 2 name to 'English SDH'",
+          "Set Audio 1 forced flag to disabled",
+          "Set Audio 2 forced flag to disabled",
+          "Set Subtitle 1 forced flag to enabled",
+          "Set Subtitle 2 forced flag to disabled"
+        ]
+      }
+    },
+    {
+      "id": "no-op-keeps-only-file-argument",
+      "operation": "MkvPropEditCommandBuilder.Build",
+      "input": {
+        "file": {
+          "filePath": "${ROOT}/Movies/Example.mkv",
+          "containerTitle": "Example",
+          "tracks": [
+            {
+              "mkvMergeId": 0,
+              "propEditTrackNumber": 1,
+              "type": "video",
+              "name": "Example",
+              "language": "und",
+              "default": true,
+              "forced": false
+            }
+          ]
+        },
+        "audioConfigs": [],
+        "subtitleConfigs": [],
+        "selectedDefaultAudio": "Keep existing",
+        "selectedForcedAudio": "Keep existing",
+        "selectedDefaultSubtitle": "Keep existing",
+        "selectedForcedSubtitle": "Keep existing",
+        "containerTitleFromFile": true,
+        "containerTitleCustom": false,
+        "removeContainerTitle": false,
+        "customContainerTitle": "",
+        "videoTitleFromFile": true,
+        "videoTitleCustom": false,
+        "removeVideoTitle": false,
+        "customVideoTitle": ""
+      },
+      "expected": {
+        "arguments": [
+          "${ROOT}/Movies/Example.mkv"
+        ],
+        "descriptions": []
+      }
+    }
+  ]
+}

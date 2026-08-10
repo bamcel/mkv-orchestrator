@@ -1,0 +1,26 @@
+services:
+  mkvo:
+    build:
+      context: .
+      dockerfile: Dockerfile.rust
+    image: mkvo:rust-migration
+    container_name: mkvo-rust
+    ports:
+      - "8887:8080"
+    environment:
+      MKVO_BIND: "0.0.0.0:8080"
+      MKVO_MEDIA_ROOT: "/media"
+      MKVO_SOURCE_ROOTS: "${MKVO_SOURCE_ROOTS:-downloads=/downloads}"
+      MKVO_CONFIG_DIR: "/config"
+      MKVO_UI_DIR: "/app/web"
+      MKVO_AUTH_USERNAME: "${MKVO_AUTH_USERNAME:-}"
+      MKVO_AUTH_PASSWORD: "${MKVO_AUTH_PASSWORD:-}"
+      PUID: "${PUID:-0}"
+      PGID: "${PGID:-0}"
+      UMASK: "${UMASK:-}"
+    volumes:
+      - ${MKVO_MEDIA_PATH:-./tmp/docker-media}:/media
+      - ${MKVO_DOWNLOADS_PATH:-./tmp/docker-downloads}:/downloads
+      - ${MKVO_CONFIG_PATH:-./tmp/docker-config-rust}:/config
+    restart: unless-stopped
+

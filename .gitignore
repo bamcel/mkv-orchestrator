@@ -26,6 +26,11 @@ tmp/
 node_modules/
 web/node_modules/
 web/dist/
+target/
+apps/desktop/src-tauri/gen/
+
+# Analysis tooling output
+graphify-out/
 
 # OS/editor noise
 .DS_Store

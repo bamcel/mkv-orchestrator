@@ -4,6 +4,8 @@
 **/obj
 **/node_modules
 **/dist
+target
+graphify-out
 artifacts
 tmp
 publish

@@ -1,0 +1,300 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "security.path-authorization.v1",
+  "kind": "target_policy",
+  "description": "Authorized-root confinement for existing and future paths, including traversal and symlink escapes.",
+  "sourceOfTruth": [
+    "src/MKVOrchestrator.WebHost/Program.cs:IsPathUnderAllowedRoots",
+    "crates/mkvo-infra-watch/src/paths.rs",
+    "docs/TAURI_RUST_ARCHITECTURE_PLAN.md"
+  ],
+  "comparison": {
+    "pathSeparator": "/",
+    "pathStyle": "posix",
+    "pathCaseSensitive": true,
+    "arrayOrder": "significant",
+    "objectPropertyOrder": "ignored"
+  },
+  "virtualFilesystem": {
+    "directories": [
+      "/fixture",
+      "/fixture/library",
+      "/fixture/library/season",
+      "/fixture/archive",
+      "/fixture/outside"
+    ],
+    "files": [
+      "/fixture/library/season/a.mkv",
+      "/fixture/archive/old.mkv",
+      "/fixture/outside/outside.mkv",
+      "/fixture/root-file"
+    ],
+    "symlinks": [
+      {
+        "path": "/fixture/library/escape",
+        "target": "/fixture/outside"
+      }
+    ]
+  },
+  "authorizedRoots": [
+    {
+      "path": "/fixture/library",
+      "writable": true
+    },
+    {
+      "path": "/fixture/archive",
+      "writable": false
+    }
+  ],
+  "cases": [
+    {
+      "id": "existing-file-read",
+      "operation": "authorize_existing",
+      "input": {
+        "path": "/fixture/library/season/a.mkv",
+        "access": "read"
+      },
+      "expected": {
+        "authorized": true,
+        "canonicalPath": "/fixture/library/season/a.mkv",
+        "root": "/fixture/library",
+        "access": "read"
+      }
+    },
+    {
+      "id": "future-file-write-via-existing-ancestor",
+      "operation": "authorize_candidate",
+      "input": {
+        "path": "/fixture/library/new/output.mkv",
+        "access": "write"
+      },
+      "expected": {
+        "authorized": true,
+        "canonicalPath": "/fixture/library/new/output.mkv",
+        "root": "/fixture/library",
+        "access": "write"
+      }
+    },
+    {
+      "id": "exact-writable-root",
+      "operation": "authorize_existing",
+      "input": {
+        "path": "/fixture/library",
+        "access": "write"
+      },
+      "expected": {
+        "authorized": true,
+        "canonicalPath": "/fixture/library",
+        "root": "/fixture/library",
+        "access": "write"
+      }
+    },
+    {
+      "id": "read-inside-read-only-root",
+      "operation": "authorize_existing",
+      "input": {
+        "path": "/fixture/archive/old.mkv",
+        "access": "read"
+      },
+      "expected": {
+        "authorized": true,
+        "canonicalPath": "/fixture/archive/old.mkv",
+        "root": "/fixture/archive",
+        "access": "read"
+      }
+    },
+    {
+      "id": "write-inside-read-only-root",
+      "operation": "authorize_candidate",
+      "input": {
+        "path": "/fixture/archive/new.mkv",
+        "access": "write"
+      },
+      "expected": {
+        "authorized": false,
+        "error": {
+          "code": "read_only",
+          "path": "/fixture/archive/new.mkv"
+        }
+      }
+    },
+    {
+      "id": "existing-path-outside-roots",
+      "operation": "authorize_existing",
+      "input": {
+        "path": "/fixture/outside/outside.mkv",
+        "access": "read"
+      },
+      "expected": {
+        "authorized": false,
+        "error": {
+          "code": "outside_roots",
+          "path": "/fixture/outside/outside.mkv"
+        }
+      }
+    },
+    {
+      "id": "relative-path-rejected",
+      "operation": "authorize_candidate",
+      "input": {
+        "path": "fixture/library/new.mkv",
+        "access": "write"
+      },
+      "expected": {
+        "authorized": false,
+        "error": {
+          "code": "relative",
+          "path": "fixture/library/new.mkv"
+        }
+      }
+    },
+    {
+      "id": "missing-existing-path-is-not-a-candidate",
+      "operation": "authorize_existing",
+      "input": {
+        "path": "/fixture/library/missing.mkv",
+        "access": "read"
+      },
+      "expected": {
+        "authorized": false,
+        "error": {
+          "code": "canonicalize_failed",
+          "path": "/fixture/library/missing.mkv"
+        }
+      }
+    },
+    {
+      "id": "lexical-parent-escape-normalizes-outside-root",
+      "operation": "authorize_candidate",
+      "input": {
+        "path": "/fixture/library/../outside/new.mkv",
+        "access": "write"
+      },
+      "expected": {
+        "authorized": false,
+        "error": {
+          "code": "outside_roots",
+          "path": "/fixture/outside/new.mkv"
+        }
+      }
+    },
+    {
+      "id": "parent-traversal-above-filesystem-root",
+      "operation": "authorize_candidate",
+      "input": {
+        "path": "/../../escape.mkv",
+        "access": "write"
+      },
+      "expected": {
+        "authorized": false,
+        "error": {
+          "code": "traversal",
+          "path": "/../../escape.mkv"
+        }
+      }
+    },
+    {
+      "id": "existing-symlink-escape",
+      "operation": "authorize_existing",
+      "input": {
+        "path": "/fixture/library/escape/outside.mkv",
+        "access": "read"
+      },
+      "expected": {
+        "authorized": false,
+        "error": {
+          "code": "outside_roots",
+          "path": "/fixture/outside/outside.mkv"
+        }
+      }
+    },
+    {
+      "id": "future-path-under-symlink-escape",
+      "operation": "authorize_candidate",
+      "input": {
+        "path": "/fixture/library/escape/new.mkv",
+        "access": "write"
+      },
+      "expected": {
+        "authorized": false,
+        "error": {
+          "code": "outside_roots",
+          "path": "/fixture/outside/new.mkv"
+        }
+      }
+    },
+    {
+      "id": "candidate-with-file-as-nearest-ancestor",
+      "operation": "authorize_candidate",
+      "input": {
+        "path": "/fixture/library/season/a.mkv/child.mkv",
+        "access": "write"
+      },
+      "expected": {
+        "authorized": false,
+        "error": {
+          "code": "ancestor_not_directory",
+          "path": "/fixture/library/season/a.mkv"
+        }
+      }
+    },
+    {
+      "id": "posix-case-mismatch-is-outside",
+      "operation": "authorize_candidate",
+      "input": {
+        "path": "/fixture/Library/new.mkv",
+        "access": "write"
+      },
+      "expected": {
+        "authorized": false,
+        "error": {
+          "code": "outside_roots",
+          "path": "/fixture/Library/new.mkv"
+        }
+      }
+    },
+    {
+      "id": "relative-configured-root-rejected",
+      "operation": "AuthorizedRoot.new",
+      "input": {
+        "path": "fixture/library",
+        "writable": true
+      },
+      "expected": {
+        "created": false,
+        "error": {
+          "code": "relative",
+          "path": "fixture/library"
+        }
+      }
+    },
+    {
+      "id": "configured-root-must-be-directory",
+      "operation": "AuthorizedRoot.new",
+      "input": {
+        "path": "/fixture/root-file",
+        "writable": true
+      },
+      "expected": {
+        "created": false,
+        "error": {
+          "code": "root_not_directory",
+          "path": "/fixture/root-file"
+        }
+      }
+    },
+    {
+      "id": "at-least-one-root-required",
+      "operation": "AuthorizedRoots.new",
+      "input": {
+        "roots": []
+      },
+      "expected": {
+        "created": false,
+        "error": {
+          "code": "no_roots"
+        }
+      }
+    }
+  ]
+}

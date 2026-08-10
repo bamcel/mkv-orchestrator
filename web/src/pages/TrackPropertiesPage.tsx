@@ -119,19 +119,19 @@ export function TrackPropertiesPage() {
     enabled: applyJobId !== null,
     refetchInterval: (query) => {
       const job = query.state.data;
-      return job && ["Completed", "Failed", "Canceled"].includes(job.status) ? false : 1000;
+      return job && ["Completed", "Failed", "Skipped", "Canceled"].includes(job.status) ? false : 1000;
     }
   });
 
   const cancelApply = useMutation({ mutationFn: cancelOperationJob });
   const runningJob = applyJob.data;
   const isApplying = apply.isPending
-    || (applyJobId !== null && runningJob !== undefined && !["Completed", "Failed", "Canceled"].includes(runningJob.status));
+    || (applyJobId !== null && runningJob !== undefined && !["Completed", "Failed", "Skipped", "Canceled"].includes(runningJob.status));
 
   useEffect(() => {
     if (!runningJob) return;
 
-    if (runningJob.status === "Running" || runningJob.status === "Queued" || runningJob.status === "Canceling") {
+    if (runningJob.status === "Running" || runningJob.status === "Queued" || runningJob.status === "WaitingForResources" || runningJob.status === "Canceling") {
       const progress = runningJob.currentFile ? ` (${runningJob.currentFile})` : "";
       setStatusText(`Applying ${runningJob.completed + runningJob.failed + runningJob.skipped}/${runningJob.total}${progress}`);
       return;
@@ -189,7 +189,12 @@ export function TrackPropertiesPage() {
       return;
     }
 
-    apply.mutate(buildRequest());
+    apply.mutate({
+      ...buildRequest(),
+      planId: previewResult?.planId,
+      planFingerprint: previewResult?.planFingerprint,
+      idempotencyKey: previewResult?.idempotencyKey ?? crypto.randomUUID()
+    });
   }
 
   function cancelRunningApply() {

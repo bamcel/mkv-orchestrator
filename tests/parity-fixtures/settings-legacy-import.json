@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "settings.legacy-import.v1",
+  "kind": "target_policy",
+  "description": "Imports the flat C# settings.json shape into nested Rust settings without exposing secrets.",
+  "sourceOfTruth": [
+    "src/MKVOrchestrator.Core/Models/AppSettings.cs",
+    "src/MKVOrchestrator.Core/Services/Settings/AppSettingsService.cs",
+    "crates/mkvo-domain/src/settings.rs",
+    "docs/TAURI_RUST_ARCHITECTURE_PLAN.md"
+  ],
+  "comparison": {
+    "pathSeparator": "/",
+    "arrayOrder": "significant",
+    "objectPropertyOrder": "ignored",
+    "secretTokensAreOpaque": true
+  },
+  "policy": {
+    "sourcePropertyNames": "case_insensitive",
+    "currentTargetSchemaVersion": 1,
+    "defaultRootPrecedence": [
+      "RootFolderPath",
+      "LastFolderPath"
+    ],
+    "trimAndDeduplicateLists": true,
+    "workerBounds": {
+      "maxScanWorkers": [
+        1,
+        8
+      ],
+      "maxEditWorkers": [
+        1,
+        6
+      ],
+      "maxRemuxWorkers": [
+        1,
+        2
+      ]
+    },
+    "publicSettingsMustNotContainSecretTokens": true
+  },
+  "cases": [
+    {
+      "id": "schema-zero-full-settings-import",
+      "input": {
+        "SettingsSchemaVersion": 0,
+        "MkvToolNixDirectory": "${TOOLS}/MKVToolNix",
+        "MkvMergePath": "${TOOLS}/legacy/mkvmerge",
+        "MkvPropEditPath": "${TOOLS}/legacy/mkvpropedit",
+        "FfmpegDirectory": "${TOOLS}/ffmpeg",
+        "FfProbePath": "${TOOLS}/legacy/ffprobe",
+        "RootFolderPath": "${ROOT}/Library",
+        "LastFolderPath": "${ROOT}/Old Last Folder",
+        "SourceFolderStartMode": "Last used folder",
+        "TvdbApiKey": "${SECRET:TVDB_API_KEY}",
+        "TvdbPin": "${SECRET:TVDB_PIN}",
+        "TvdbLanguage": "eng",
+        "TmdbApiKey": "${SECRET:TMDB_API_KEY}",
+        "RenameLookupProvider": "TVDB",
+        "RenameTemplate": "{series} - S{season:00}E{episode:00} - {episodeTitle}",
+        "RenamePreviewCompactView": true,
+        "RenameTemplates": [
+          " {title} ({year}) ",
+          "{series} - S{season:00}E{episode:00} - {episodeTitle}",
+          "{title} ({year})"
+        ],
+        "IgnoredScanFolderNames": [
+          " Extras ",
+          "",
+          "Samples",
+          "Extras"
+        ],
+        "AudioNamePresets": [
+          "English",
+          "Japanese"
+        ],
+        "SubtitleNamePresets": [
+          "English",
+          "Signs & Songs"
+        ],
+        "LanguagePresets": [
+          "eng",
+          "jpn",
+          "und"
+        ],
+        "MkvMergeDefaultAudioLanguages": "eng,jpn",
+        "MkvMergeDefaultSubtitleLanguages": "eng",
+        "WatchFolders": [
+          "${ROOT}/Library/Anime",
+          "${ROOT}/Library",
+          "${ROOT}/Library/Anime"
+        ],
+        "EnableLiveWatchFolderMonitoring": true,
+        "Workers": {
+          "MaxScanWorkers": 0,
+          "MaxEditWorkers": 99,
+          "MaxRemuxWorkers": 5
+        },
+        "SelectedThemeName": "Fixture Dark",
+        "CustomThemes": [
+          {
+            "Name": "Fixture Dark",
+            "Colors": {
+              "Background": "#101010",
+              "Accent": "#55AAFF"
+            }
+          }
+        ],
+        "MediaServers": [
+          {
+            "Id": "00000000-0000-7000-8000-000000000001",
+            "Name": "Fixture Jellyfin",
+            "Type": "Jellyfin",
+            "ServerUrl": "http://media.invalid:8096",
+            "ApiKey": "${SECRET:MEDIA_SERVER_API_KEY}",
+            "IsDefault": true,
+            "LastSyncedUtc": "2024-01-02T03:04:05Z",
+            "Libraries": [
+              {
+                "Id": "library-fixture-1",
+                "Name": "Shows",
+                "Type": "tvshows",
+                "ServerPath": "/remote/shows",
+                "ContainerPath": "${ROOT}/Library/Shows",
+                "IsEnabled": true
+              }
+            ]
+          }
+        ],
+        "MediaServerPathMappings": [
+          {
+            "ServerPathPrefix": "/remote",
+            "ContainerPathPrefix": "${ROOT}/Library"
+          }
+        ]
+      },
+      "expected": {
+        "publicSettings": {
+          "schemaVersion": 1,
+          "tools": {
+            "mkvtoolnixDirectory": "${TOOLS}/MKVToolNix",
+            "ffmpegDirectory": "${TOOLS}/ffmpeg",
+            "mkvmergePath": "${TOOLS}/legacy/mkvmerge",
+            "mkvpropeditPath": "${TOOLS}/legacy/mkvpropedit",
+            "ffprobePath": "${TOOLS}/legacy/ffprobe"
+          },
+          "scan": {
+            "defaultRoot": "${ROOT}/Library",
+            "ignoredFolderNames": [
+              "Extras",
+              "Samples"
+            ],
+            "supportedExtensions": [
+              "m4v",
+              "mka",
+              "mkv",
+              "mp4",
+              "webm"
+            ],
+            "useQuickHashOnUnreliableTimestamps": false
+          },
+          "rename": {
+            "provider": "tvdb",
+            "language": "eng",
+            "template": "{series} - S{season:00}E{episode:00} - {episodeTitle}",
+            "templates": [
+              "{title} ({year})",
+              "{series} - S{season:00}E{episode:00} - {episodeTitle}"
+            ],
+            "compactPreview": true,
+            "historyRetentionDays": 90
+          },
+          "watch": {
+            "enabled": true,
+            "roots": [
+              "${ROOT}/Library",
+              "${ROOT}/Library/Anime"
+            ],
+            "debounceMillis": 750,
+            "reconciliationIntervalMinutes": 30,
+            "forcePolling": false
+          },
+          "providers": {
+            "configured": {
+              "tvdb": {
+                "configured": true,
+                "maskedHint": "configured",
+                "secretReference": "secret://providers/tvdb"
+              },
+              "tmdb": {
+                "configured": true,
+                "maskedHint": "configured",
+                "secretReference": "secret://providers/tmdb"
+              }
+            }
+          },
+          "mediaServers": [
+            {
+              "id": "00000000-0000-7000-8000-000000000001",
+              "name": "Fixture Jellyfin",
+              "kind": "jellyfin",
+              "serverUrl": "http://media.invalid:8096",
+              "credential": {
+                "configured": true,
+                "maskedHint": "configured",
+                "secretReference": "secret://media-servers/00000000-0000-7000-8000-000000000001"
+              },
+              "isDefault": true,
+              "libraries": [
+                {
+                  "id": "library-fixture-1",
+                  "name": "Shows",
+                  "mediaType": "tvshows",
+                  "serverPath": "/remote/shows",
+                  "localPath": "${ROOT}/Library/Shows",
+                  "enabled": true
+                }
+              ],
+              "lastSyncedAt": "2024-01-02T03:04:05Z"
+            }
+          ],
+          "mediaServerPathMappings": [
+            {
+              "remotePrefix": "/remote",
+              "localPrefix": "${ROOT}/Library"
+            }
+          ],
+          "workers": {
+            "maxScanWorkers": 1,
+            "maxEditWorkers": 6,
+            "maxRemuxWorkers": 2
+          },
+          "appearance": {
+            "selectedTheme": "Fixture Dark",
+            "customThemes": [
+              {
+                "name": "Fixture Dark",
+                "colors": {
+                  "Background": "#101010",
+                  "Accent": "#55AAFF"
+                }
+              }
+            ]
+          }
+        },
+        "secretWrites": [
+          {
+            "destination": "secret://providers/tvdb/api-key",
+            "sourceToken": "${SECRET:TVDB_API_KEY}"
+          },
+          {
+            "destination": "secret://providers/tvdb/pin",
+            "sourceToken": "${SECRET:TVDB_PIN}"
+          },
+          {
+            "destination": "secret://providers/tmdb/api-key",
+            "sourceToken": "${SECRET:TMDB_API_KEY}"
+          },
+          {
+            "destination": "secret://media-servers/00000000-0000-7000-8000-000000000001/api-key",
+            "sourceToken": "${SECRET:MEDIA_SERVER_API_KEY}"
+          }
+        ],
+        "ignoredLegacyFields": [
+          "SourceFolderStartMode",
+          "LastFolderPath",
+          "AudioNamePresets",
+          "SubtitleNamePresets",
+          "LanguagePresets",
+          "MkvMergeDefaultAudioLanguages",
+          "MkvMergeDefaultSubtitleLanguages"
+        ],
+        "backupRequiredBeforeCommit": true
+      }
+    }
+  ]
+}
