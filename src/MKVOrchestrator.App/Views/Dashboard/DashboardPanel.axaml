@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MKVOrchestrator.App.ViewModels"
              x:Class="MKVOrchestrator.App.Views.Dashboard.DashboardPanel"
-             x:DataType="vm:MainWindowViewModel">
+             x:DataType="vm:DashboardViewModel">
         <Grid RowDefinitions="*,300" ColumnDefinitions="320,*,420" RowSpacing="12" ColumnSpacing="12" Margin="0,12,0,0"
               DragDrop.AllowDrop="True"
               DragDrop.DragOver="Dashboard_DragOver"
@@ -27,8 +27,7 @@
                             MinWidth="84"
                             HorizontalContentAlignment="Center"
                             VerticalContentAlignment="Center"
-                            Command="{Binding BrowseFolderCommand}"
-                            CommandParameter="{Binding $parent[Window]}" />
+                            Command="{Binding BrowseFolderCommand}" />
                     <Button Grid.Column="1"
                             Content="Scan"
                             MinWidth="84"

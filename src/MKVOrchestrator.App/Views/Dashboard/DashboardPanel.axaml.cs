@@ -23,7 +23,7 @@ public partial class DashboardPanel : UserControl
     {
         e.DragEffects = DragDropEffects.None;
 
-        if (DataContext is MainWindowViewModel { IsBusy: false } && DragEventContainsFolder(e))
+        if (DataContext is DashboardViewModel { IsBusy: false } && DragEventContainsFolder(e))
         {
             e.DragEffects = DragDropEffects.Copy;
         }
@@ -35,7 +35,7 @@ public partial class DashboardPanel : UserControl
     {
         e.Handled = true;
 
-        if (DataContext is not MainWindowViewModel vm)
+        if (DataContext is not DashboardViewModel vm)
         {
             return;
         }
@@ -81,7 +81,7 @@ public partial class DashboardPanel : UserControl
 
     private void FileGrid_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel vm)
+        if (DataContext is not DashboardViewModel vm)
         {
             return;
         }

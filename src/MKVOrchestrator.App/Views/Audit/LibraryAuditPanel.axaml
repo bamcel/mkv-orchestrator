@@ -3,7 +3,7 @@
              xmlns:vm="using:MKVOrchestrator.App.ViewModels"
              xmlns:model="using:MKVOrchestrator.Core.Models"
              x:Class="MKVOrchestrator.App.Views.Audit.LibraryAuditPanel"
-             x:DataType="vm:MainWindowViewModel">
+             x:DataType="vm:LibraryAuditViewModel">
   <Grid RowDefinitions="Auto,*,190" RowSpacing="12" Margin="0,12,0,0">
     <Border Classes="card" Grid.Row="0">
       <Grid ColumnDefinitions="120,360,Auto,Auto,Auto,*" ColumnSpacing="10" RowDefinitions="Auto,Auto,Auto" RowSpacing="6">

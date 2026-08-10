@@ -11,7 +11,6 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         LoadWindowIcon();
-        DataContextChanged += (_, _) => ConfigureViewModel();
         Opened += async (_, _) =>
         {
             if (DataContext is MainWindowViewModel vm)
@@ -19,29 +18,12 @@ public partial class MainWindow : Window
                 await vm.InitializeAfterUiReadyAsync();
             }
         };
-    }
-
-    private void ConfigureViewModel()
-    {
-        if (DataContext is not MainWindowViewModel vm) return;
-
-        vm.ConfirmSkipConflictsAsync = async conflicts =>
+        Closed += (_, _) =>
         {
-            var dialog = new ExecutionConflictDialog(conflicts);
-            var result = await dialog.ShowDialog<bool?>(this);
-            return result == true;
-        };
-
-        vm.ShowOutputWindow = (title, lines) =>
-        {
-            var dialog = new OutputWindow(title, lines);
-            _ = dialog.ShowDialog(this);
-        };
-
-        vm.ShowRenameUndoWindowAsync = async (batches, clearBatches, previewUndoBatch, undoBatchAsync) =>
-        {
-            var dialog = new RenameUndoBatchDialog(batches, clearBatches, previewUndoBatch, undoBatchAsync);
-            await dialog.ShowDialog(this);
+            if (DataContext is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
         };
     }
 
