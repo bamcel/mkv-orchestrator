@@ -9,7 +9,7 @@ use mkvo_domain::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{ApplicationError, ApplicationResult};
+use crate::{ApplicationError, ApplicationResult, FileAccessState};
 
 pub const DEFAULT_SERIES_TEMPLATE: &str = "{series} - S{season:00}E{episode:00} - {episodeTitle}";
 pub const DEFAULT_MOVIE_TEMPLATE: &str = "{title} ({year})";
@@ -24,6 +24,15 @@ pub struct RenamePlanRequest {
     pub check_existing_files: bool,
     #[serde(default)]
     pub existing_paths: BTreeSet<PathBuf>,
+    /// Access state of each source file, keyed by portable path.
+    ///
+    /// Gathered by the host rather than probed here so the planner stays pure
+    /// and testable. An absent entry means "not probed" and never blocks.
+    #[serde(default)]
+    pub source_access: BTreeMap<String, FileAccessState>,
+    /// Target parent directories known to exist, by portable path.
+    #[serde(default)]
+    pub existing_parents: BTreeSet<String>,
     #[serde(default)]
     pub authorized_roots: Vec<PathBuf>,
     pub settings_fingerprint: String,
@@ -34,6 +43,34 @@ pub struct RenamePlanRequest {
 
 const fn default_plan_ttl_seconds() -> u64 {
     900
+}
+
+/// Turn a probed access state into a blocking conflict.
+///
+/// `None` means the host did not probe the path, which must not block: a host
+/// that cannot probe should not be worse off than one that never checked.
+pub(crate) fn access_conflict(
+    state: Option<&FileAccessState>,
+    path: &Path,
+) -> Option<PlanConflict> {
+    match state {
+        Some(FileAccessState::ReadOnly) => Some(PlanConflict::blocking(
+            PlanConflictKind::ReadOnly,
+            "File is read-only or permission is denied",
+            Some(path.to_path_buf()),
+        )),
+        Some(FileAccessState::Busy) => Some(PlanConflict::blocking(
+            PlanConflictKind::Busy,
+            "File is open in another program",
+            Some(path.to_path_buf()),
+        )),
+        Some(FileAccessState::Missing) => Some(PlanConflict::blocking(
+            PlanConflictKind::MissingSource,
+            "Source file no longer exists",
+            Some(path.to_path_buf()),
+        )),
+        Some(FileAccessState::Available) | None => None,
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -109,6 +146,26 @@ impl RenamePlanner {
                 conflicts.push(PlanConflict::blocking(
                     PlanConflictKind::UnauthorizedPath,
                     "Target is outside the authorized roots",
+                    Some(target.clone()),
+                ));
+            }
+            // A rename needs write access to the source. Catching this during
+            // preview turns a mid-apply OS error into a row the user can act on.
+            if let Some(conflict) = access_conflict(
+                request.source_access.get(&portable_path_key(&file.path)),
+                &file.path,
+            ) {
+                conflicts.push(conflict);
+            }
+            if !request.existing_parents.is_empty()
+                && let Some(parent) = target.parent()
+                && !request
+                    .existing_parents
+                    .contains(&portable_path_key(parent))
+            {
+                conflicts.push(PlanConflict::blocking(
+                    PlanConflictKind::MissingParent,
+                    "Target directory does not exist",
                     Some(target.clone()),
                 ));
             }
@@ -442,8 +499,11 @@ fn first_non_blank<const N: usize>(values: [Option<&str>; N]) -> String {
         .map_or_else(String::new, |value| value.trim().to_owned())
 }
 
+/// One path-key definition across planners. The local copy this replaced did
+/// not strip the Windows verbatim prefix, so rename disagreed with the remux
+/// and propedit planners about whether two spellings were the same file.
 fn portable_path_key(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/").to_lowercase()
+    crate::paths::path_key(path)
 }
 
 fn portable_contains(root: &Path, child: &Path) -> bool {
@@ -508,6 +568,8 @@ mod tests {
     #[test]
     fn duplicate_targets_block_every_collision() {
         let request = RenamePlanRequest {
+            source_access: BTreeMap::new(),
+            existing_parents: BTreeSet::new(),
             files: vec![media("a.mkv", 1), media("b.mkv", 1)],
             template: DEFAULT_SERIES_TEMPLATE.to_owned(),
             provider: None,
@@ -699,6 +761,8 @@ mod tests {
         for case in planning_cases {
             let input = &case["input"];
             let request = RenamePlanRequest {
+                source_access: BTreeMap::new(),
+                existing_parents: BTreeSet::new(),
                 files: input["files"]
                     .as_array()
                     .expect("files")
@@ -755,5 +819,140 @@ mod tests {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod access_conflict_tests {
+    use super::*;
+    use crate::FileAccessState;
+    use mkvo_domain::{ContainerMetadata, EpisodeIdentity, FileFingerprint};
+
+    fn media(path: &str) -> MediaFile {
+        MediaFile {
+            path: PathBuf::from(path),
+            original_file_name: None,
+            watch_root: None,
+            relative_path: None,
+            fingerprint: FileFingerprint {
+                path: PathBuf::from(path),
+                size_bytes: 1,
+                modified_at: Utc::now(),
+                quick_hash: None,
+            },
+            container: ContainerMetadata::default(),
+            tracks: Vec::new(),
+            attachments: Vec::new(),
+            episode: Some(EpisodeIdentity {
+                series_title: Some("Show".to_owned()),
+                season: Some(1),
+                episode: Some(1),
+                absolute_episode: None,
+                episode_title: Some("Pilot".to_owned()),
+                year: None,
+                is_movie: false,
+            }),
+            provider_match: None,
+            status: mkvo_domain::MediaStatus::Ready,
+        }
+    }
+
+    fn request(files: Vec<MediaFile>) -> RenamePlanRequest {
+        RenamePlanRequest {
+            files,
+            template: DEFAULT_SERIES_TEMPLATE.to_owned(),
+            provider: None,
+            check_existing_files: false,
+            existing_paths: BTreeSet::new(),
+            source_access: BTreeMap::new(),
+            existing_parents: BTreeSet::new(),
+            authorized_roots: Vec::new(),
+            settings_fingerprint: "settings".to_owned(),
+            expires_in_seconds: 60,
+            idempotency_key: IdempotencyKey::generate(),
+        }
+    }
+
+    fn conflict_kinds(plan: &RenamePlan) -> Vec<PlanConflictKind> {
+        plan.payload
+            .items
+            .iter()
+            .flat_map(|item| item.conflicts.iter())
+            .map(|conflict| conflict.kind)
+            .collect()
+    }
+
+    /// The case this exists for: a media server or player holding the file open
+    /// while MKVO plans a rename against it. Without the check the plan looks
+    /// clean and the rename fails partway through.
+    #[test]
+    fn a_busy_source_blocks_the_rename_at_preview() {
+        let file = media("/media/Show/a.mkv");
+        let mut plan_request = request(vec![file.clone()]);
+        plan_request
+            .source_access
+            .insert(portable_path_key(&file.path), FileAccessState::Busy);
+
+        let plan = RenamePlanner.build_plan(plan_request).expect("plan");
+        assert!(conflict_kinds(&plan).contains(&PlanConflictKind::Busy));
+        assert!(plan.payload.has_blocking_issues());
+        assert_eq!(plan.payload.rename_count(), 0);
+    }
+
+    #[test]
+    fn a_read_only_source_blocks_the_rename_at_preview() {
+        let file = media("/media/Show/a.mkv");
+        let mut plan_request = request(vec![file.clone()]);
+        plan_request
+            .source_access
+            .insert(portable_path_key(&file.path), FileAccessState::ReadOnly);
+
+        let plan = RenamePlanner.build_plan(plan_request).expect("plan");
+        assert!(conflict_kinds(&plan).contains(&PlanConflictKind::ReadOnly));
+        assert!(plan.payload.has_blocking_issues());
+    }
+
+    #[test]
+    fn a_missing_target_directory_blocks_the_rename() {
+        let file = media("/media/Show/a.mkv");
+        let mut plan_request = request(vec![file.clone()]);
+        // A non-empty set that omits this parent means "probed, and absent".
+        plan_request
+            .existing_parents
+            .insert("/media/other".to_owned());
+
+        let plan = RenamePlanner.build_plan(plan_request).expect("plan");
+        assert!(conflict_kinds(&plan).contains(&PlanConflictKind::MissingParent));
+        assert!(plan.payload.has_blocking_issues());
+    }
+
+    /// A host that cannot probe must not be worse off than one that never
+    /// checked, so an unprobed path stays renameable.
+    #[test]
+    fn an_unprobed_source_does_not_block() {
+        let plan = RenamePlanner
+            .build_plan(request(vec![media("/media/Show/a.mkv")]))
+            .expect("plan");
+        let kinds = conflict_kinds(&plan);
+        assert!(!kinds.contains(&PlanConflictKind::Busy));
+        assert!(!kinds.contains(&PlanConflictKind::ReadOnly));
+        assert!(!kinds.contains(&PlanConflictKind::MissingParent));
+        assert_eq!(plan.payload.rename_count(), 1);
+    }
+
+    /// The probe map is keyed by portable path, so a canonical Windows spelling
+    /// on one side and a plain one on the other must still match — the same
+    /// class of bug that made cache deletions silently no-op.
+    #[test]
+    fn probe_keys_match_across_windows_path_spellings() {
+        let file = media(r"\\?\C:\media\Show\a.mkv");
+        let mut plan_request = request(vec![file]);
+        plan_request.source_access.insert(
+            portable_path_key(Path::new(r"C:\media\Show\a.mkv")),
+            FileAccessState::Busy,
+        );
+
+        let plan = RenamePlanner.build_plan(plan_request).expect("plan");
+        assert!(conflict_kinds(&plan).contains(&PlanConflictKind::Busy));
     }
 }

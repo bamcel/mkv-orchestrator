@@ -10,7 +10,7 @@ use mkvo_domain::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ApplicationError, ApplicationResult,
+    ApplicationError, ApplicationResult, FileAccessState,
     paths::{path_contains, path_key},
 };
 
@@ -26,6 +26,10 @@ pub struct RemuxPlanRequest {
     pub extractions: BTreeMap<PathBuf, Vec<TrackExtraction>>,
     #[serde(default)]
     pub existing_paths: BTreeSet<PathBuf>,
+    /// Access state of each source file, keyed by portable path. Gathered by
+    /// the host; an absent entry means "not probed" and never blocks.
+    #[serde(default)]
+    pub source_access: BTreeMap<String, FileAccessState>,
     #[serde(default)]
     pub authorized_roots: Vec<PathBuf>,
     pub settings_fingerprint: String,
@@ -155,6 +159,15 @@ impl RemuxPlanner {
                     ));
                 }
                 _ => {}
+            }
+            // Extraction only reads the source; every other mode rewrites it.
+            // The host probes with the access the mode needs, so the planner
+            // just reports whatever came back.
+            if let Some(conflict) = crate::rename::access_conflict(
+                request.source_access.get(&path_key(&file.path)),
+                &file.path,
+            ) {
+                conflicts.push(conflict);
             }
             if selected_track_ids.is_empty()
                 && matches!(request.mode, RemuxMode::Remux | RemuxMode::MuxSubtitles)
@@ -422,6 +435,7 @@ mod tests {
     #[test]
     fn conversion_targets_mkv_and_captures_cleanup_policy() {
         let request = RemuxPlanRequest {
+            source_access: BTreeMap::new(),
             mode: RemuxMode::ConvertToMkv,
             files: vec![media("movie.mp4")],
             options: RemuxOptions {
@@ -449,6 +463,7 @@ mod tests {
     #[test]
     fn unfiltered_remux_is_no_change() {
         let request = RemuxPlanRequest {
+            source_access: BTreeMap::new(),
             mode: RemuxMode::Remux,
             files: vec![media("movie.mkv")],
             options: RemuxOptions::default(),
@@ -650,6 +665,7 @@ mod tests {
             };
             let plan = RemuxPlanner
                 .build_plan(RemuxPlanRequest {
+                    source_access: BTreeMap::new(),
                     mode,
                     files,
                     options,
