@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.mkvorchestrator.desktop",
   "build": {
-    "beforeDevCommand": "npm --prefix ../../../web run dev",
+    "beforeDevCommand": { "script": "npm run dev", "cwd": "../../../web" },
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "npm --prefix ../../../web run build",
+    "beforeBuildCommand": { "script": "npm run build", "cwd": "../../../web" },
     "frontendDist": "../../../web/dist"
   },
   "app": {
