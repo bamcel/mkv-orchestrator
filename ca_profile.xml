@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CommunityApplications>
+  <Profile>MKV Orchestrator provides browser-based tools for scanning, renaming, remuxing, and editing MKV and MP4 media libraries. Project documentation, releases, and support are available through the linked GitHub repository.</Profile>
+  <Icon>https://raw.githubusercontent.com/bamcel/mkv-orchestrator/main/web/src/assets/mkvo-icon-purple.png</Icon>
+  <WebPage>https://github.com/bamcel/mkv-orchestrator</WebPage>
+  <Forum>https://github.com/bamcel/mkv-orchestrator/issues</Forum>
+</CommunityApplications>

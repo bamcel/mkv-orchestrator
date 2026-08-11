@@ -8,7 +8,7 @@ first repair pass.
 
 | Order | Priority | Problem | Status | Resolution or next action |
 |---:|:---:|---|:---:|---|
-| 1 | P0 | The server could bind remotely without authentication | Fixed | Loopback is the default; a non-loopback bind is rejected unless both credentials are configured. Docker requires credentials. |
+| 1 | P0 | The server could bind remotely without authentication | Fixed | Loopback is the default; `auto` rejects an unauthenticated non-loopback bind. Container users may explicitly select `disabled` for a trusted LAN or `basic` with credentials. |
 | 2 | P0 | Remote settings could expand filesystem authorization | Fixed | Confined hosts validate against host-provided roots and cannot grant new roots. Desktop browsing remains intentionally unrestricted. |
 | 3 | P0 | Media-server requests could forward credentials through redirects or changed URLs | Fixed | Redirects are disabled, URLs are validated, and a changed URL requires the key to be entered again. |
 | 4 | P0 | Legacy migration was not guaranteed to run with every secret-store composition | Fixed | Both desktop and server run migration before accepting work. |

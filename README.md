@@ -321,7 +321,8 @@ Keep `.env` local. Do not commit API keys, SMB usernames, SMB passwords, or serv
 Optional container settings (see `docs/DOCKER_WEB_CONTAINER.md` for the full list):
 
 - `PUID` / `PGID` / `UMASK` run the app as a specific user so files written to shares are not root-owned.
-- `MKVO_AUTH_USERNAME` / `MKVO_AUTH_PASSWORD` enable HTTP basic auth for the web UI and API.
+- `MKVO_AUTH_MODE` selects `disabled` (trusted LAN), `basic`, or the secure `auto` server default.
+- `MKVO_AUTH_USERNAME` / `MKVO_AUTH_PASSWORD` are required together in `basic` mode.
 - `MKVO_SCAN_WORKERS` and `MKVO_EDIT_WORKERS` tune scan and mkvpropedit concurrency.
 
 The container wires Dashboard, Rename, Mux / Remux, Track Properties, Library, Settings, and Logs through the single Rust host, from the same React sources the desktop app embeds.

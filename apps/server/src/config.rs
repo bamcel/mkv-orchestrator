@@ -53,16 +53,39 @@ impl ServerConfig {
         )?;
 
         let source_roots = parse_source_roots(get("MKVO_SOURCE_ROOTS").as_deref(), &media_root)?;
+        let auth_mode = get("MKVO_AUTH_MODE")
+            .unwrap_or_else(|| "auto".to_owned())
+            .trim()
+            .to_ascii_lowercase();
         let username = get("MKVO_AUTH_USERNAME").filter(|value| !value.is_empty());
         let password = get("MKVO_AUTH_PASSWORD").filter(|value| !value.is_empty());
-        let auth = match (username, password) {
+        let credentials = match (username, password) {
             (None, None) => None,
             (Some(username), Some(password)) => Some(BasicAuth { username, password }),
             _ => bail!("MKVO_AUTH_USERNAME and MKVO_AUTH_PASSWORD must be configured together"),
         };
-        if !bind.ip().is_loopback() && auth.is_none() {
-            bail!("MKVO authentication is required when MKVO_BIND is not a loopback address");
-        }
+        let auth = match auth_mode.as_str() {
+            "auto" => {
+                if !bind.ip().is_loopback() && credentials.is_none() {
+                    bail!(
+                        "MKVO authentication is required for a non-loopback MKVO_BIND; configure credentials or explicitly set MKVO_AUTH_MODE=disabled for a trusted network"
+                    );
+                }
+                credentials
+            }
+            "basic" => Some(credentials.context(
+                "MKVO_AUTH_MODE=basic requires MKVO_AUTH_USERNAME and MKVO_AUTH_PASSWORD",
+            )?),
+            "disabled" => {
+                if credentials.is_some() {
+                    bail!(
+                        "remove MKVO_AUTH_USERNAME and MKVO_AUTH_PASSWORD when MKVO_AUTH_MODE=disabled"
+                    );
+                }
+                None
+            }
+            _ => bail!("MKVO_AUTH_MODE must be one of: auto, basic, disabled"),
+        };
 
         Ok(Self {
             bind,
@@ -155,6 +178,45 @@ mod tests {
     fn rejects_unauthenticated_non_loopback_bind() {
         let result = ServerConfig::from_lookup(|key| {
             (key == "MKVO_BIND").then(|| "0.0.0.0:8080".to_owned())
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn permits_explicit_unauthenticated_non_loopback_bind() {
+        let values = BTreeMap::from([
+            ("MKVO_BIND", "0.0.0.0:8080"),
+            ("MKVO_AUTH_MODE", "disabled"),
+        ]);
+        let config =
+            ServerConfig::from_lookup(|key| values.get(key).map(ToString::to_string)).unwrap();
+
+        assert!(!config.bind.ip().is_loopback());
+        assert!(config.auth.is_none());
+    }
+
+    #[test]
+    fn basic_mode_requires_credentials() {
+        let result =
+            ServerConfig::from_lookup(|key| (key == "MKVO_AUTH_MODE").then(|| "basic".to_owned()));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn disabled_mode_rejects_credentials() {
+        let values = BTreeMap::from([
+            ("MKVO_AUTH_MODE", "disabled"),
+            ("MKVO_AUTH_USERNAME", "mkvo"),
+            ("MKVO_AUTH_PASSWORD", "secret"),
+        ]);
+        let result = ServerConfig::from_lookup(|key| values.get(key).map(ToString::to_string));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_unknown_auth_mode() {
+        let result = ServerConfig::from_lookup(|key| {
+            (key == "MKVO_AUTH_MODE").then(|| "optional".to_owned())
         });
         assert!(result.is_err());
     }

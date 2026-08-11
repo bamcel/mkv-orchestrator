@@ -10,15 +10,16 @@ Configuration is environment-based:
 - `MKVO_SOURCE_ROOTS` (`label=/path` entries separated by commas or semicolons)
 - `MKVO_CONFIG_DIR` (default `/config`)
 - `MKVO_UI_DIR` (default `web/dist`)
+- `MKVO_AUTH_MODE` (`auto`, `basic`, or `disabled`; default `auto`)
 - `MKVO_AUTH_USERNAME` and `MKVO_AUTH_PASSWORD` (both or neither)
 - `MKVO_REQUEST_BODY_LIMIT_BYTES` (default `16777216`)
 - `MKVO_GRACEFUL_SHUTDOWN_SECONDS` (default `15`)
 
 `/api/health` remains public for container health checks. All other routes and
-the UI are protected when basic authentication is configured. Authentication
-is mandatory for any non-loopback bind; the server refuses to start instead of
-exposing media mutations without credentials. Basic authentication must be
-placed behind HTTPS when traffic leaves the local machine.
+the UI are protected in `basic` mode. The default `auto` mode refuses an
+unauthenticated non-loopback bind. Set `disabled` explicitly only for a trusted
+LAN. Basic authentication must be placed behind HTTPS when traffic leaves the
+local machine.
 
 The server preserves the React client's polling endpoints and also exposes
 Server-Sent Events at `/api/scans/{id}/events` and
