@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { DashboardPage } from "./DashboardPage";
@@ -257,6 +257,58 @@ describe("Dashboard detail panels", () => {
 
     await waitFor(() => expect(screen.getAllByText("HEVC/H.265").length).toBeGreaterThan(0));
     expect(screen.queryByText(/scan a folder, then select a file/i)).not.toBeInTheDocument();
+  });
+
+  it("supports range selection, Ctrl+A, and Delete for scanned files", async () => {
+    const user = userEvent.setup();
+    const baseFile = {
+      path: "/media/Show/Ep01.mkv",
+      fileName: "Ep01.mkv",
+      extension: ".mkv",
+      status: "Scanned",
+      reader: "mkvmerge",
+      codec: "HEVC/H.265",
+      resolution: "1920x1080",
+      bitDepth: "",
+      hdr: "",
+      videoSummary: "HEVC/H.265 | 1920x1080",
+      audioSummary: "eng x1",
+      subtitleSummary: "eng x1",
+      attachmentSummary: "None",
+      tracks: [],
+      attachments: []
+    };
+    const secondFile = { ...baseFile, path: "/media/Show/Ep02.mkv", fileName: "Ep02.mkv" };
+    const thirdFile = { ...baseFile, path: "/media/Show/Ep03.mkv", fileName: "Ep03.mkv" };
+
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve({
+        ...emptyScan,
+        files: [baseFile, secondFile, thirdFile],
+        summary: { total: 3, mkv: 3, mp4: 0, failed: 0, cached: 0 }
+      }),
+      getWebSettings: () => Promise.resolve(settings()),
+      setFileSelection: (paths: string[]) => Promise.resolve({ ...emptyScan, selectedPaths: paths })
+    });
+
+    const firstRow = (await screen.findAllByText("Ep01.mkv"))[0].closest("tr")!;
+    const secondRow = (await screen.findAllByText("Ep02.mkv"))[0].closest("tr")!;
+    const thirdRow = (await screen.findAllByText("Ep03.mkv"))[0].closest("tr")!;
+    await user.click(firstRow);
+    fireEvent.click(thirdRow, { shiftKey: true });
+    expect(firstRow).toHaveClass("bg-selected");
+    expect(secondRow).toHaveClass("bg-selected");
+    expect(thirdRow).toHaveClass("bg-selected");
+
+    fireEvent.click(secondRow, { ctrlKey: true });
+    expect(secondRow).not.toHaveClass("bg-selected");
+
+    const scannedFiles = screen.getByLabelText("Scanned files");
+    fireEvent.keyDown(scannedFiles, { key: "a", ctrlKey: true });
+    expect(secondRow).toHaveClass("bg-selected");
+    fireEvent.keyDown(scannedFiles, { key: "Delete" });
+    expect(await screen.findByText("No files scanned yet")).toBeInTheDocument();
   });
 });
 

@@ -65,13 +65,23 @@ pub(super) fn rename_apply_response(plan: &RenamePlan, replay: bool) -> RenameAp
         .items
         .iter()
         .map(|item| RenamePreviewRow {
-            selected: item.can_apply(),
+            // Applying consumes the selection. Leaving completed rows selected
+            // makes the Rename page look as though the old preview is still
+            // waiting to run.
+            selected: false,
             source_path: display_path(if item.can_apply() {
                 &item.target
             } else {
                 &item.source
             }),
-            current_file_name: file_name(&item.source),
+            // Once the move succeeds, the target is the current file. The old
+            // mapping combined the target path with the source file name,
+            // leaving the Rename page visually stuck on its pre-apply state.
+            current_file_name: file_name(if item.can_apply() {
+                &item.target
+            } else {
+                &item.source
+            }),
             detected: String::new(),
             episode_name: String::new(),
             new_file_name: item.new_file_name.clone(),
@@ -183,5 +193,59 @@ pub(super) fn propedit_preview_response(plan: &PropertyEditPlan) -> PropEditPrev
         plan_id: Some(plan.metadata.id),
         plan_fingerprint: Some(plan.metadata.fingerprint.clone()),
         idempotency_key: Some(plan.metadata.idempotency_key.clone()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use chrono::{Duration, Utc};
+    use mkvo_domain::{
+        FileFingerprint, IdempotencyKey, OperationKind, OperationPlan, PlanContext, RenamePlanItem,
+        RenamePlanPayload,
+    };
+
+    use super::rename_apply_response;
+
+    #[test]
+    fn applied_rename_rows_present_the_target_as_the_current_file() {
+        let created_at = Utc::now();
+        let source = PathBuf::from(r"C:\media\old-name.mkv");
+        let target = PathBuf::from(r"C:\media\new-name.mkv");
+        let payload = RenamePlanPayload {
+            template: "{title}".to_owned(),
+            provider: None,
+            items: vec![RenamePlanItem {
+                source: source.clone(),
+                target: target.clone(),
+                source_fingerprint: FileFingerprint {
+                    path: source,
+                    size_bytes: 1,
+                    modified_at: created_at,
+                    quick_hash: None,
+                },
+                new_file_name: "new-name.mkv".to_owned(),
+                conflicts: Vec::new(),
+            }],
+        };
+        let plan = OperationPlan::new(
+            OperationKind::Rename,
+            &"request",
+            payload,
+            PlanContext::empty("settings"),
+            created_at,
+            created_at + Duration::minutes(15),
+            IdempotencyKey::generate(),
+        )
+        .expect("valid rename plan");
+
+        let response = rename_apply_response(&plan, false);
+        let row = &response.items[0];
+
+        assert_eq!(row.current_file_name, "new-name.mkv");
+        assert!(row.source_path.ends_with(r"media\new-name.mkv"));
+        assert!(!row.selected);
+        assert_eq!(row.status, "Renamed");
     }
 }

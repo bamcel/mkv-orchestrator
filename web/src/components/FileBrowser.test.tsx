@@ -147,6 +147,51 @@ describe("file browser navigation", () => {
     expect(onSelect).toHaveBeenCalledWith("C:\\media\\Ep01.mkv", "file");
   });
 
+  it("supports Ctrl toggle and Ctrl+A multi-selection", async () => {
+    const onSelectMany = vi.fn();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "C:\\media": {
+        path: "C:\\media",
+        parentPath: "C:\\",
+        entries: [
+          file("Ep01.mkv", "C:\\media\\Ep01.mkv", 2048),
+          file("Ep02.mkv", "C:\\media\\Ep02.mkv", 2048),
+          file("Ep03.mkv", "C:\\media\\Ep03.mkv", 2048)
+        ]
+      }
+    });
+
+    renderWithBackend(
+      <FileBrowser
+        initialPath="C:\media"
+        roots={[]}
+        onCancel={() => {}}
+        onSelect={() => {}}
+        onSelectMany={onSelectMany}
+      />,
+      { browseFileSystem }
+    );
+
+    const first = (await screen.findByText("Ep01.mkv")).closest("tr")!;
+    const second = screen.getByText("Ep02.mkv").closest("tr")!;
+    const third = screen.getByText("Ep03.mkv").closest("tr")!;
+    fireEvent.click(first);
+    fireEvent.click(third, { shiftKey: true });
+    expect(screen.getByRole("button", { name: "Select 3 Items" })).toBeInTheDocument();
+
+    fireEvent.click(second, { ctrlKey: true });
+    expect(screen.getByRole("button", { name: "Select 2 Items" })).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByRole("table").parentElement!, { key: "a", ctrlKey: true });
+    await userEvent.setup().click(screen.getByRole("button", { name: "Select 3 Items" }));
+    expect(onSelectMany).toHaveBeenCalledWith([
+      { path: "C:\\media\\Ep01.mkv", kind: "file" },
+      { path: "C:\\media\\Ep02.mkv", kind: "file" },
+      { path: "C:\\media\\Ep03.mkv", kind: "file" }
+    ]);
+  });
+
   it("offers pin, open, and select actions when a folder is right-clicked", async () => {
     const user = userEvent.setup();
     const onPinToQuickAccess = vi.fn();

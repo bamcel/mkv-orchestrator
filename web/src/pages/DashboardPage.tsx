@@ -10,7 +10,16 @@ const lastBrowsePathStorageKey = "mkvo.web.lastBrowsePath";
 
 export function DashboardPage() {
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
-  const { files, setFiles, templateFilePath, setTemplateFilePath, syncFromBackend } = useMediaLibrary();
+  const {
+    files,
+    setFiles,
+    selectedPaths,
+    setSelectedPaths,
+    toggleSelectedPath,
+    templateFilePath,
+    setTemplateFilePath,
+    syncFromBackend
+  } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const [sources, setSources] = useState<string[]>([]);
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
@@ -29,6 +38,7 @@ export function DashboardPage() {
   const [ignoredFoldersEdited, setIgnoredFoldersEdited] = useState(false);
   const [skipped, setSkipped] = useState<string[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState<string>("");
+  const [selectionAnchorPath, setSelectionAnchorPath] = useState("");
   const [actionStatus, setActionStatus] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; path: string } | null>(null);
   const scanStart = useMutation({
@@ -272,6 +282,30 @@ export function DashboardPage() {
     setIsBrowseOpen(false);
   }
 
+  async function addBrowsePaths(entries: Array<{ path: string; kind: "folder" | "file" }>) {
+    try {
+      await Promise.all(entries.map((entry) => {
+        const folder = entry.kind === "file" ? getParentPath(entry.path) : entry.path;
+        return authorizeBrowsedRoot(folder || entry.path);
+      }));
+    } catch (error) {
+      setActionStatus(error instanceof Error ? error.message : "One or more selections could not be authorized.");
+      return;
+    }
+    setSources((current) => {
+      const next = [...current];
+      for (const entry of entries) {
+        if (!next.some((path) => normalizeCompareValue(path) === normalizeCompareValue(entry.path))) {
+          next.push(entry.path);
+        }
+      }
+      return next;
+    });
+    const first = entries[0];
+    if (first) rememberBrowsePath(first.kind === "file" ? getParentPath(first.path) : first.path);
+    setIsBrowseOpen(false);
+  }
+
   async function pinBrowsePath(path: string, name: string) {
     const currentSettings = settings.data ?? (await settings.refetch()).data;
     if (!currentSettings) {
@@ -317,6 +351,9 @@ export function DashboardPage() {
   function openFileContextMenu(event: MouseEvent<HTMLTableRowElement>, file: MediaFileRow) {
     event.preventDefault();
     setSelectedFilePath(file.path);
+    if (!selectedPaths.some((path) => normalizeCompareValue(path) === normalizeCompareValue(file.path))) {
+      setSelectedPaths([file.path]);
+    }
     setContextMenu({ x: event.clientX, y: event.clientY, path: file.path });
   }
 
@@ -336,12 +373,41 @@ export function DashboardPage() {
     setContextMenu(null);
   }
 
-  function removeContextFile(file: MediaFileRow) {
-    const remaining = files.filter((item) => item.path !== file.path);
+  function removeFilesFromList(paths: string[]) {
+    const selectedKeys = new Set(paths.map(normalizeCompareValue));
+    const remaining = files.filter((item) => !selectedKeys.has(normalizeCompareValue(item.path)));
     setFiles(remaining);
-    setSelectedFilePath((current) => current === file.path ? remaining[0]?.path ?? "" : current);
-    setActionStatus(`Removed from list: ${file.fileName}`);
+    setSelectedPaths([]);
+    setSelectionAnchorPath("");
+    setSelectedFilePath(remaining[0]?.path ?? "");
+    setActionStatus(`Removed ${paths.length} file${paths.length === 1 ? "" : "s"} from the list.`);
     setContextMenu(null);
+  }
+
+  function removeContextFile(file: MediaFileRow) {
+    const selected = selectedPaths.some((path) => normalizeCompareValue(path) === normalizeCompareValue(file.path))
+      ? selectedPaths
+      : [file.path];
+    removeFilesFromList(selected);
+  }
+
+  function selectScannedFile(file: MediaFileRow, toggle: boolean, range: boolean) {
+    setSelectedFilePath(file.path);
+    if (range && selectionAnchorPath) {
+      const anchorIndex = files.findIndex(
+        (item) => normalizeCompareValue(item.path) === normalizeCompareValue(selectionAnchorPath)
+      );
+      const fileIndex = files.findIndex((item) => item.path === file.path);
+      if (anchorIndex >= 0 && fileIndex >= 0) {
+        const start = Math.min(anchorIndex, fileIndex);
+        const end = Math.max(anchorIndex, fileIndex);
+        setSelectedPaths(files.slice(start, end + 1).map((item) => item.path));
+        return;
+      }
+    }
+    setSelectionAnchorPath(file.path);
+    if (toggle) toggleSelectedPath(file.path);
+    else setSelectedPaths([file.path]);
   }
 
   function isTemplate(file: MediaFileRow) {
@@ -526,7 +592,23 @@ export function DashboardPage() {
                 </div>
               </div>
             ) : (
-              <div className="h-full overflow-auto">
+              <div
+                className="h-full overflow-auto outline-none"
+                tabIndex={0}
+                aria-label="Scanned files"
+                onMouseDown={(event) => event.currentTarget.focus()}
+                onKeyDown={(event) => {
+                  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+                    event.preventDefault();
+                    setSelectedPaths(files.map((file) => file.path));
+                    setSelectedFilePath(files[0]?.path ?? "");
+                    setSelectionAnchorPath(files[0]?.path ?? "");
+                  } else if (event.key === "Delete" && (selectedPaths.length > 0 || selectedFile)) {
+                    event.preventDefault();
+                    removeFilesFromList(selectedPaths.length > 0 ? selectedPaths : [selectedFile!.path]);
+                  }
+                }}
+              >
                 <table className="w-full min-w-[68.75rem] border-collapse text-left text-sm">
                   <thead className="sticky top-0 bg-panel text-xs uppercase tracking-wide text-subtle">
                     <tr>
@@ -543,15 +625,24 @@ export function DashboardPage() {
                     {files.map((file) => {
                       const templateRow = isTemplate(file);
                       const mismatchRow = !templateRow && hasTemplateMismatch(file, templateFile);
+                      const rowSelected = selectedPaths.some(
+                        (path) => normalizeCompareValue(path) === normalizeCompareValue(file.path)
+                      );
 
                       return (
                         <tr
                           key={file.path}
-                          onClick={() => setSelectedFilePath(file.path)}
+                          onClick={(event) => {
+                            selectScannedFile(
+                              file,
+                              event.ctrlKey || event.metaKey,
+                              event.shiftKey
+                            );
+                          }}
                           onContextMenu={(event) => openFileContextMenu(event, file)}
                           className={[
                             "cursor-pointer bg-card hover:bg-selected",
-                            selectedFile?.path === file.path ? "bg-selected" : "",
+                            rowSelected ? "bg-selected" : "",
                             templateRow ? "text-accent" : mismatchRow ? "text-warning" : "text-text"
                           ].join(" ")}
                         >
@@ -656,6 +747,7 @@ export function DashboardPage() {
           roots={browseRootOptions}
           onCancel={() => setIsBrowseOpen(false)}
           onSelect={addBrowsePath}
+          onSelectMany={addBrowsePaths}
           onPinToQuickAccess={pinBrowsePath}
           onUnpinFromQuickAccess={unpinBrowsePath}
           removableRootPaths={(settings.data?.libraryRoots ?? []).map((root) => root.path)}
@@ -670,13 +762,14 @@ export function DashboardPage() {
           onCopyName={(file) => copyContextFileText(file, file.fileName, "File name")}
           onCopyPath={(file) => copyContextFileText(file, file.path, "Full path")}
           onRemove={removeContextFile}
+          removeCount={selectedPaths.length}
         />
       ) : null}
     </div>
   );
 }
 
-function FileContextMenu({ x, y, file, onSetTemplate, onCopyName, onCopyPath, onRemove }: {
+function FileContextMenu({ x, y, file, onSetTemplate, onCopyName, onCopyPath, onRemove, removeCount }: {
   x: number;
   y: number;
   file: MediaFileRow | null;
@@ -684,6 +777,7 @@ function FileContextMenu({ x, y, file, onSetTemplate, onCopyName, onCopyPath, on
   onCopyName: (file: MediaFileRow) => void;
   onCopyPath: (file: MediaFileRow) => void;
   onRemove: (file: MediaFileRow) => void;
+  removeCount: number;
 }) {
   if (!file) return null;
 
@@ -697,7 +791,12 @@ function FileContextMenu({ x, y, file, onSetTemplate, onCopyName, onCopyPath, on
       <ContextMenuButton icon={<Copy size={15} />} label="Copy File Name" onClick={() => onCopyName(file)} />
       <ContextMenuButton icon={<Copy size={15} />} label="Copy Full Path" onClick={() => onCopyPath(file)} />
       <div className="my-1 border-t border-border" />
-      <ContextMenuButton icon={<Trash2 size={15} />} label="Remove from List" onClick={() => onRemove(file)} warning />
+      <ContextMenuButton
+        icon={<Trash2 size={15} />}
+        label={removeCount > 1 ? `Remove ${removeCount} Selected Files` : "Remove from List"}
+        onClick={() => onRemove(file)}
+        warning
+      />
     </div>
   );
 }
