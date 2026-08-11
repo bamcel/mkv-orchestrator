@@ -6,7 +6,7 @@ services:
     image: mkvo:local
     container_name: mkvo
     ports:
-      - "8887:8080"
+      - "8886:8080"
     environment:
       MKVO_BIND: "0.0.0.0:8080"
       MKVO_MEDIA_ROOT: "/media"
