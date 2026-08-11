@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { FileBrowser } from "./FileBrowser";
@@ -145,6 +145,53 @@ describe("file browser navigation", () => {
     await user.click(screen.getByRole("button", { name: /select file/i }));
 
     expect(onSelect).toHaveBeenCalledWith("C:\\media\\Ep01.mkv", "file");
+  });
+
+  it("offers pin, open, and select actions when a folder is right-clicked", async () => {
+    const user = userEvent.setup();
+    const onPinToQuickAccess = vi.fn();
+    const onSelect = vi.fn();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "C:\\media": {
+        path: "C:\\media",
+        parentPath: "C:\\",
+        entries: [folder("Show", "C:\\media\\Show")]
+      },
+      "C:\\media\\Show": {
+        path: "C:\\media\\Show",
+        parentPath: "C:\\media",
+        entries: [folder("Season 01", "C:\\media\\Show\\Season 01")]
+      }
+    });
+
+    renderWithBackend(
+      <FileBrowser
+        initialPath="C:\media"
+        roots={[]}
+        onCancel={() => {}}
+        onSelect={onSelect}
+        onPinToQuickAccess={onPinToQuickAccess}
+      />,
+      { browseFileSystem }
+    );
+
+    const showRow = (await screen.findByText("Show")).closest("tr")!;
+    fireEvent.contextMenu(showRow, { clientX: 120, clientY: 140 });
+    expect(screen.getByRole("menuitem", { name: /pin to quick access/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /open folder/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /select folder/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("menuitem", { name: /pin to quick access/i }));
+    expect(onPinToQuickAccess).toHaveBeenCalledWith("C:\\media\\Show", "Show");
+
+    fireEvent.contextMenu(showRow, { clientX: 120, clientY: 140 });
+    await user.click(screen.getByRole("menuitem", { name: /open folder/i }));
+    const seasonRow = (await screen.findByText("Season 01")).closest("tr")!;
+
+    fireEvent.contextMenu(seasonRow, { clientX: 120, clientY: 140 });
+    await user.click(screen.getByRole("menuitem", { name: /select folder/i }));
+    expect(onSelect).toHaveBeenCalledWith("C:\\media\\Show\\Season 01", "folder");
   });
 
   /// Folders lead regardless of sort, the way a file manager orders them.

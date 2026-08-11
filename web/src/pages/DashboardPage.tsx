@@ -1,7 +1,7 @@
 import { Fragment, type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronUp, Copy, FileCheck, FileVideo, Folder, FolderOpen, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
-import { authorizeBrowsedRoot, cancelScan, FileSystemEntry, getBackendTransport, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, startScan } from "../api";
+import { authorizeBrowsedRoot, cancelScan, FileSystemEntry, getBackendTransport, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, saveWebSettings, startScan } from "../api";
 import { SectionHeader } from "../components/SectionHeader";
 import { FileBrowser } from "../components/FileBrowser";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
@@ -269,6 +269,23 @@ export function DashboardPage() {
     addSource(path);
     rememberBrowsePath(folder || path);
     setIsBrowseOpen(false);
+  }
+
+  async function pinBrowsePath(path: string, name: string) {
+    const currentSettings = settings.data ?? (await settings.refetch()).data;
+    if (!currentSettings) {
+      setActionStatus("Quick Access settings could not be loaded.");
+      return;
+    }
+    if (currentSettings.libraryRoots.some((root) => normalizeCompareValue(root.path) === normalizeCompareValue(path))) {
+      setActionStatus(`${name} is already in Quick Access.`);
+      return;
+    }
+    await saveWebSettings({
+      libraryRoots: [...currentSettings.libraryRoots, { name: name || folderName(path), path }]
+    });
+    await Promise.all([settings.refetch(), status.refetch()]);
+    setActionStatus(`${name || folderName(path)} pinned to Quick Access.`);
   }
 
   function useSelectedAsTemplate() {
@@ -618,6 +635,7 @@ export function DashboardPage() {
           roots={browseRootOptions}
           onCancel={() => setIsBrowseOpen(false)}
           onSelect={addBrowsePath}
+          onPinToQuickAccess={pinBrowsePath}
         />
       ) : null}
       {contextMenu ? (
@@ -682,6 +700,11 @@ function getParentPath(path: string) {
   if (slash < 0) return "";
   if (slash === 0) return clean.startsWith("/") ? "/" : "";
   return clean.slice(0, slash);
+}
+
+function folderName(path: string) {
+  const parts = path.replace(/[\\/]+$/, "").split(/[\\/]+/);
+  return parts[parts.length - 1] ?? path;
 }
 
 function normalizeCompareValue(value: string | null | undefined) {
