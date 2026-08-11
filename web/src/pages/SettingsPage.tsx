@@ -1130,6 +1130,13 @@ export function SettingsPage() {
           initialPath={libraryRoots[browsingRow]?.path || status.data?.mediaRoot || ""}
           roots={status.data?.sourceRoots ?? []}
           onCancel={() => setBrowsingRow(null)}
+          onPinToQuickAccess={(path, name) => {
+            setLibraryRoots((current) =>
+              current.some((root) => sameFolderPath(root.path, path))
+                ? current
+                : [...current, { name: name || folderName(path), path }]
+            );
+          }}
           onSelect={(path, kind) => {
             // Picking a file means the folder holding it, since a library
             // folder is always a directory.
@@ -1160,6 +1167,11 @@ function parentFolder(path: string): string {
 function folderName(path: string): string {
   const parts = path.replace(/[\\/]+$/, "").split(/[\\/]+/);
   return parts[parts.length - 1] ?? "";
+}
+
+function sameFolderPath(left: string, right: string): boolean {
+  return left.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
+    === right.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }
 
 function settingsRequestFromSaved(settings: WebSettings): WebSettingsRequest {

@@ -7,11 +7,13 @@ import {
   Check,
   ChevronRight,
   Folder,
+  FolderOpen,
   FileVideo,
   HardDrive,
   Monitor,
   Network,
   Plus,
+  Pin,
   RefreshCw,
   Search,
   Star,
@@ -33,6 +35,8 @@ type FileBrowserProps = {
   onCancel: () => void;
   /** Called with the chosen folder or media file. */
   onSelect: (path: string, kind: "folder" | "file") => void;
+  /** Persist a folder as a named Quick Access shortcut. */
+  onPinToQuickAccess?: (path: string, name: string) => void | Promise<void>;
 };
 
 type SortColumn = "name" | "modified" | "type" | "size";
@@ -131,7 +135,13 @@ function describeType(entry: FileSystemEntry): string {
   return extension ? `${extension.toUpperCase()} file` : "File";
 }
 
-export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrowserProps) {
+export function FileBrowser({
+  initialPath,
+  roots,
+  onCancel,
+  onSelect,
+  onPinToQuickAccess
+}: FileBrowserProps) {
   // A single history array with a cursor gives Back and Forward the same
   // meaning they have in a file manager, including forward being discarded
   // once you navigate somewhere new.
@@ -143,6 +153,7 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
   const [pathDraft, setPathDraft] = useState(path);
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<FileSystemEntry | null>(null);
+  const [folderMenu, setFolderMenu] = useState<{ x: number; y: number; entry: FileSystemEntry } | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   // Servers are remembered rather than discovered: enumerating hosts on the
@@ -150,6 +161,20 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
   // one they want again.
   const [networkLocations, setNetworkLocations] = useState<string[]>(readNetworkLocations);
   const listRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!folderMenu) return;
+    const close = () => setFolderMenu(null);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [folderMenu]);
 
   const listing = useQuery({
     queryKey: ["file-browser", path],
@@ -542,6 +567,12 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
                       key={entry.path}
                       onClick={() => setSelected(entry)}
                       onDoubleClick={() => open(entry)}
+                      onContextMenu={(event) => {
+                        if (entry.kind !== "folder") return;
+                        event.preventDefault();
+                        setSelected(entry);
+                        setFolderMenu({ x: event.clientX, y: event.clientY, entry });
+                      }}
                       className={[
                         "cursor-default select-none",
                         isSelected ? "bg-selected text-text" : "text-muted hover:bg-input-hover"
@@ -582,6 +613,54 @@ export function FileBrowser({ initialPath, roots, onCancel, onSelect }: FileBrow
             ) : null}
           </div>
         </div>
+
+        {folderMenu ? (
+          <div
+            role="menu"
+            aria-label={`${folderMenu.entry.name} folder options`}
+            className="fixed z-[60] min-w-44 overflow-hidden rounded-lg border border-border bg-card p-1 shadow-[0_0.75rem_2.5rem_rgba(0,0,0,0.45)]"
+            style={{ left: Math.min(folderMenu.x, window.innerWidth - 200), top: Math.min(folderMenu.y, window.innerHeight - 132) }}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              disabled={!onPinToQuickAccess || roots.some((root) => samePath(root.path, folderMenu.entry.path))}
+              onClick={() => {
+                void onPinToQuickAccess?.(folderMenu.entry.path, folderMenu.entry.name);
+                setFolderMenu(null);
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs text-muted transition hover:bg-selected hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+            >
+              <Pin size={14} className="text-accent" />
+              Pin to Quick Access
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                navigate(folderMenu.entry.path);
+                setFolderMenu(null);
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs text-muted transition hover:bg-selected hover:text-text"
+            >
+              <FolderOpen size={14} className="text-accent" />
+              Open Folder
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onSelect(folderMenu.entry.path, "folder");
+                setFolderMenu(null);
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs text-muted transition hover:bg-selected hover:text-text"
+            >
+              <Check size={14} className="text-accent" />
+              Select Folder
+            </button>
+          </div>
+        ) : null}
 
         <footer className="flex h-14 shrink-0 items-center justify-between gap-4 border-t border-border bg-panel/40 px-4">
           <div className="min-w-0 truncate text-xs text-subtle">
