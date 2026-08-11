@@ -2,7 +2,7 @@
 
 The Docker web build runs MKV Orchestrator as one container:
 
-- ASP.NET Core hosts the API and serves the web app.
+- The Rust/Axum server hosts the API and serves the web app.
 - React, TypeScript, Vite, Tailwind CSS, TanStack Query, React Router, and lucide-react provide the browser UI.
 - MKVToolNix and FFmpeg are installed inside the runtime image.
 
@@ -15,7 +15,7 @@ docker compose up --build
 Open:
 
 ```text
-http://localhost:8886
+http://localhost:8887
 ```
 
 ## Volumes
@@ -49,7 +49,8 @@ MKVO_SOURCE_ROOTS=downloads=/downloads
 | `MKVO_EDIT_WORKERS` | `2` | Maximum concurrent mkvpropedit edits (clamped 1-6). |
 | `PUID` / `PGID` | `0` / `0` | Run the app as this user/group so files written to shares are not root-owned. Unraid users typically want `99` / `100`. |
 | `UMASK` | unset | File creation mask applied at startup. |
-| `MKVO_AUTH_USERNAME` / `MKVO_AUTH_PASSWORD` | unset | When both are set, the web UI and API require HTTP basic auth (the browser shows a native login prompt). `/api/health` stays open for the container healthcheck. |
+| `MKVO_AUTH_MODE` | `disabled` in the supplied container definitions; `auto` in the server | `disabled` allows trusted-LAN access without a login. `basic` requires credentials. `auto` refuses an unauthenticated non-loopback bind. |
+| `MKVO_AUTH_USERNAME` / `MKVO_AUTH_PASSWORD` | unset | Required together when `MKVO_AUTH_MODE=basic`. The browser shows a native login prompt. `/api/health` stays open for the container healthcheck. |
 | `MKVO_TVDB_API_KEY`, `MKVO_TVDB_PIN`, `MKVO_TMDB_API_KEY` | unset | Optional provider credentials; Settings-page values take effect otherwise. |
 
 ## Security Notes
@@ -57,9 +58,10 @@ MKVO_SOURCE_ROOTS=downloads=/downloads
 - Filesystem browsing through the web UI is limited to the configured source
   roots, watch folders, and enabled media-server library paths. Arbitrary
   container paths are rejected.
-- The container has no authentication by default. Set
-  `MKVO_AUTH_USERNAME`/`MKVO_AUTH_PASSWORD` or front it with a reverse proxy
-  before exposing it beyond a trusted network.
+- The supplied Docker and Unraid configurations use `MKVO_AUTH_MODE=disabled`
+  for convenient trusted-LAN access. Switch to `basic`, set both credentials,
+  and use HTTPS or an authenticating reverse proxy before exposing it beyond a
+  trusted network.
 
 ## Long-Running Operations
 
@@ -109,21 +111,36 @@ Do not commit `.env`, SMB usernames, SMB passwords, API keys, or server-specific
 
 ## Unraid Template
 
-An Unraid Docker template is available at:
+The canonical Community Applications template is:
 
 ```text
-unraid/my-MKV-Orchestrator.xml
+templates/my-mkv-orchestrator.xml
 ```
+
+The lowercase `my-mkv-orchestrator.xml` filename follows the Unraid template
+naming convention. The display name remains `MKV Orchestrator`, while the image
+and repository slug remain `mkv-orchestrator`. Environment variables use the
+existing `MKVO_` prefix. `ca_profile.xml` in the repository root supplies the
+required Community Applications repository profile. The legacy
+`unraid/my-MKV-Orchestrator.xml` path remains as a compatibility copy.
 
 The template uses generic defaults:
 
 ```text
 /mnt/user/media           -> /media
 /mnt/user/downloads/media -> /downloads
-/mnt/user/appdata/mkvo    -> /config
+/mnt/user/appdata/mkv-orchestrator -> /config
 ```
 
-Adjust those host paths in Unraid before starting the container. The template does not include API keys, SMB credentials, or server-specific paths. TVDB/TMDB keys can be entered in the MKVO Settings page after first launch, or by using the masked optional environment variables in the Unraid template.
+Adjust those host paths in Unraid before starting the container. Existing users
+can keep an earlier `/mnt/user/appdata/mkvo` mapping to retain their data. The
+template does not include API keys, SMB credentials, or server-specific paths.
+TVDB/TMDB keys can be entered in Settings after first launch, or through the
+masked optional environment variables. Choose `disabled` for no login on a
+trusted LAN, or `basic` and fill in both credential fields.
+
+Before submitting or updating the template, run the Community Applications
+**Validate** and **Scan** checks after every meaningful XML change.
 
 ## Included Tools
 
@@ -140,4 +157,4 @@ The Settings page reports the resolved tool paths and version strings from insid
 
 ## Current Scope
 
-This is a single-container web release. Dashboard scanning, rename preview/apply/undo, mux/remux planning, lossless MP4 to MKV conversion, track property edits, library overview, settings, and logs are exposed through the same ASP.NET Core host. The processing logic should continue moving through shared core services instead of being duplicated in the React UI.
+This is a single-container web release. Dashboard scanning, rename preview/apply/undo, mux/remux planning, lossless MP4 to MKV conversion, track property edits, library overview, settings, and logs are exposed through the same Rust host. Processing logic remains in shared core services instead of being duplicated in the React UI.
