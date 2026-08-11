@@ -432,7 +432,9 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
 
       <div className="mt-2 min-h-[8.75rem] min-w-0 flex-1 overflow-auto rounded-md border border-border bg-card">
         {rows.length === 0 ? (
-          <div className="flex h-full min-h-[7.5rem] items-center justify-center text-sm text-subtle">No tracks available.</div>
+          <div className="flex h-full min-h-[7.5rem] items-center justify-center px-4 text-center text-sm text-subtle">
+            No embedded {type} tracks were found in the selected template file.
+          </div>
         ) : (
           <table className="w-full min-w-[51.25rem] table-fixed border-collapse text-left text-sm">
             <thead className="sticky top-0 bg-panel text-xs text-text">

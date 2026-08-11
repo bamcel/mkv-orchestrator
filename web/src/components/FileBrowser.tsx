@@ -37,6 +37,8 @@ type FileBrowserProps = {
   onCancel: () => void;
   /** Called with the chosen folder or media file. */
   onSelect: (path: string, kind: "folder" | "file") => void;
+  /** Enables desktop-style multi-selection and submits all chosen entries. */
+  onSelectMany?: (entries: Array<{ path: string; kind: "folder" | "file" }>) => void | Promise<void>;
   /** Persist a folder as a named Quick Access shortcut. */
   onPinToQuickAccess?: (path: string, name: string) => void | Promise<void>;
   /** Remove a user-pinned Quick Access shortcut. */
@@ -147,6 +149,7 @@ export function FileBrowser({
   homeRoot,
   onCancel,
   onSelect,
+  onSelectMany,
   onPinToQuickAccess,
   onUnpinFromQuickAccess,
   removableRootPaths = []
@@ -161,7 +164,9 @@ export function FileBrowser({
   const [editingPath, setEditingPath] = useState(false);
   const [pathDraft, setPathDraft] = useState(path);
   const [filter, setFilter] = useState("");
-  const [selected, setSelected] = useState<FileSystemEntry | null>(null);
+  const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
+  const [activePath, setActivePath] = useState("");
+  const [selectionAnchorPath, setSelectionAnchorPath] = useState("");
   const [folderMenu, setFolderMenu] = useState<{ x: number; y: number; entry: FileSystemEntry } | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -204,7 +209,9 @@ export function FileBrowser({
   const navigate = useCallback((next: string) => {
     setHistory((current) => [...current.slice(0, cursor + 1), next]);
     setCursor((current) => current + 1);
-    setSelected(null);
+    setSelectedPaths([]);
+    setActivePath("");
+    setSelectionAnchorPath("");
     setFilter("");
     setEditingPath(false);
   }, [cursor]);
@@ -288,29 +295,69 @@ export function FileBrowser({
     else onSelect(entry.path, "file");
   }
 
+  function selectEntry(entry: FileSystemEntry, toggle: boolean, range = false) {
+    listRef.current?.focus();
+    setActivePath(entry.path);
+    if (range && onSelectMany && selectionAnchorPath) {
+      const anchorIndex = entries.findIndex((item) => samePath(item.path, selectionAnchorPath));
+      const entryIndex = entries.findIndex((item) => samePath(item.path, entry.path));
+      if (anchorIndex >= 0 && entryIndex >= 0) {
+        const start = Math.min(anchorIndex, entryIndex);
+        const end = Math.max(anchorIndex, entryIndex);
+        setSelectedPaths(entries.slice(start, end + 1).map((item) => item.path));
+        return;
+      }
+    }
+    setSelectionAnchorPath(entry.path);
+    setSelectedPaths((current) => {
+      if (!toggle || !onSelectMany) return [entry.path];
+      return current.some((path) => samePath(path, entry.path))
+        ? current.filter((path) => !samePath(path, entry.path))
+        : [...current, entry.path];
+    });
+  }
+
+  function submitSelection(selectedEntries: FileSystemEntry[]) {
+    if (onSelectMany && selectedEntries.length > 1) {
+      void onSelectMany(selectedEntries.map((entry) => ({ path: entry.path, kind: entry.kind })));
+      return;
+    }
+    const entry = selectedEntries[0];
+    if (entry) onSelect(entry.path, entry.kind);
+    else if (currentPath) onSelect(currentPath, "folder");
+  }
+
   function onListKeyDown(event: React.KeyboardEvent) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a" && onSelectMany) {
+      event.preventDefault();
+      setSelectedPaths(entries.map((entry) => entry.path));
+      setActivePath(entries[0]?.path ?? "");
+      setSelectionAnchorPath(entries[0]?.path ?? "");
+      return;
+    }
     if (event.key === "Backspace") {
       event.preventDefault();
       goUp();
       return;
     }
     if (!entries.length) return;
-    const index = selected ? entries.findIndex((entry) => samePath(entry.path, selected.path)) : -1;
+    const index = activePath ? entries.findIndex((entry) => samePath(entry.path, activePath)) : -1;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setSelected(entries[Math.min(index + 1, entries.length - 1)]);
+      selectEntry(entries[Math.min(index + 1, entries.length - 1)], false, event.shiftKey);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setSelected(entries[Math.max(index - 1, 0)]);
-    } else if (event.key === "Enter" && selected) {
+      selectEntry(entries[Math.max(index - 1, 0)], false, event.shiftKey);
+    } else if (event.key === "Enter" && activePath) {
       event.preventDefault();
-      open(selected);
+      const active = entries.find((entry) => samePath(entry.path, activePath));
+      if (active) open(active);
     }
   }
 
   const currentPath = listing.data?.path ?? path;
   const crumbs = breadcrumbs(currentPath);
-  const chosen = selected ?? { path: currentPath, kind: "folder" as const, name: "", sizeBytes: null, modifiedUtc: "" };
+  const selectedEntries = entries.filter((entry) => selectedPaths.some((path) => samePath(path, entry.path)));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
@@ -606,16 +653,20 @@ export function FileBrowser({
               </thead>
               <tbody>
                 {entries.map((entry) => {
-                  const isSelected = selected ? samePath(selected.path, entry.path) : false;
+                  const isSelected = selectedPaths.some((path) => samePath(path, entry.path));
                   return (
                     <tr
                       key={entry.path}
-                      onClick={() => setSelected(entry)}
+                      onClick={(event) => selectEntry(
+                        entry,
+                        event.ctrlKey || event.metaKey,
+                        event.shiftKey
+                      )}
                       onDoubleClick={() => open(entry)}
                       onContextMenu={(event) => {
                         if (entry.kind !== "folder") return;
                         event.preventDefault();
-                        setSelected(entry);
+                        if (!isSelected) selectEntry(entry, false);
                         setFolderMenu({ x: event.clientX, y: event.clientY, entry });
                       }}
                       className={[
@@ -710,7 +761,7 @@ export function FileBrowser({
         <footer className="flex h-14 shrink-0 items-center justify-between gap-4 border-t border-border bg-panel/40 px-4">
           <div className="min-w-0 truncate text-xs text-subtle">
             {entries.length} item{entries.length === 1 ? "" : "s"}
-            {selected ? ` · ${selected.name} selected` : ""}
+            {selectedEntries.length > 0 ? ` · ${selectedEntries.length} selected` : ""}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
@@ -722,14 +773,16 @@ export function FileBrowser({
             </button>
             <button
               type="button"
-              onClick={() => onSelect(chosen.path, chosen.kind)}
-              disabled={!chosen.path}
+              onClick={() => submitSelection(selectedEntries)}
+              disabled={selectedEntries.length === 0 && !currentPath}
               className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent px-4 text-xs font-semibold text-window transition hover:bg-accent-hover disabled:bg-button disabled:text-disabled"
             >
               <Check size={14} />
-              {selected
-                ? selected.kind === "folder" ? "Select Folder" : "Select File"
-                : "Select This Folder"}
+              {selectedEntries.length > 1
+                ? `Select ${selectedEntries.length} Items`
+                : selectedEntries[0]
+                  ? selectedEntries[0].kind === "folder" ? "Select Folder" : "Select File"
+                  : "Select This Folder"}
             </button>
           </div>
         </footer>

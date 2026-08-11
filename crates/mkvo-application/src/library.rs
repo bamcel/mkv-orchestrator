@@ -423,6 +423,28 @@ pub fn parse_episode_number(file_name: &str) -> Option<u32> {
             offset = start + marker.len();
         }
     }
+    // Anime release names commonly put the episode in its own numeric bracket,
+    // for example `[VCB-Studio] Show [01][Ma10p_1080p].mkv`. This is checked
+    // after explicit SxxExx / Episode markers so a deliberate marker always
+    // wins. Requiring the entire bracket to be 1-3 digits avoids treating
+    // resolution, codec, bit-depth, or CRC tags as episode numbers.
+    let mut cursor = 0usize;
+    while let Some(open_offset) = lower[cursor..].find('[') {
+        let open = cursor + open_offset;
+        let content_start = open + 1;
+        let Some(close_offset) = lower[content_start..].find(']') else {
+            break;
+        };
+        let close = content_start + close_offset;
+        let content = &lower[content_start..close];
+        if !content.is_empty()
+            && content.len() <= 3
+            && content.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return content.parse().ok();
+        }
+        cursor = close + 1;
+    }
     None
 }
 
@@ -487,6 +509,14 @@ mod tests {
     fn finds_common_episode_patterns() {
         assert_eq!(parse_episode_number("Show.S02E013.mkv"), Some(13));
         assert_eq!(parse_episode_number("Show - Episode 007.mkv"), Some(7));
+        assert_eq!(
+            parse_episode_number("[VCB-Studio] 7th Time Loop [01][Ma10p_1080p][x265_flac].mkv"),
+            Some(1)
+        );
+        assert_eq!(
+            parse_episode_number("[VCB-Studio] Show [Ma10p_1080p][A1B2C3D4].mkv"),
+            None
+        );
     }
 
     #[test]
