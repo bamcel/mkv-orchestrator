@@ -24,6 +24,7 @@ function settings(overrides: Partial<WebSettings> = {}): WebSettings {
     mkvToolNixDirectory: null,
     ffmpegDirectory: null,
     defaultRoot: null,
+    defaultRootName: "Home",
     libraryRoots: [],
     ignoredScanFolderNames: [],
     useQuickHashOnUnreliableTimestamps: false,
@@ -122,7 +123,7 @@ describe("Settings library folders", () => {
   it("automatically saves a changed desktop default directory", async () => {
     const user = userEvent.setup();
     const saveWebSettings = vi.fn().mockResolvedValue(
-      settings({ libraryRoots: [{ name: "Default", path: "D:\\Media" }] })
+      settings({ defaultRoot: "D:\\Media" })
     );
 
     renderWithBackend(<SettingsPage />, {
@@ -133,19 +134,21 @@ describe("Settings library folders", () => {
     });
 
     await user.click(await screen.findByRole("button", { name: /^general$/i }));
+    const homeName = await screen.findByRole("textbox", { name: /default directory name/i });
+    await user.clear(homeName);
+    await user.type(homeName, "Downloads");
     await user.type(await screen.findByRole("textbox", { name: /^default directory$/i }), "D:\\Media");
 
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled(), { timeout: 2500 });
-    expect(saveWebSettings.mock.calls.at(-1)?.[0].libraryRoots[0]).toEqual({
-      name: "Default",
-      path: "D:\\Media"
-    });
+    expect(saveWebSettings.mock.calls.at(-1)?.[0].defaultRoot).toBe("D:\\Media");
+    expect(saveWebSettings.mock.calls.at(-1)?.[0].defaultRootName).toBe("Downloads");
+    expect(saveWebSettings.mock.calls.at(-1)?.[0].libraryRoots).toEqual([]);
   });
 
-  it("saves the desktop default directory as the first library folder", async () => {
+  it("saves the desktop default directory separately from Quick Access", async () => {
     const user = userEvent.setup();
     const saveWebSettings = vi.fn().mockResolvedValue(
-      settings({ libraryRoots: [{ name: "Default", path: "D:\\Media" }] })
+      settings({ defaultRoot: "D:\\Media" })
     );
 
     renderWithBackend(<SettingsPage />, {
@@ -161,10 +164,8 @@ describe("Settings library folders", () => {
     await user.click(screen.getByRole("button", { name: /save settings/i }));
 
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
-    expect(saveWebSettings.mock.calls[0][0].libraryRoots[0]).toEqual({
-      name: "Default",
-      path: "D:\\Media"
-    });
+    expect(saveWebSettings.mock.calls[0][0].defaultRoot).toBe("D:\\Media");
+    expect(saveWebSettings.mock.calls[0][0].libraryRoots).toEqual([]);
   });
 
   /// The container case the setting exists for: one bind mount, several shares
@@ -212,6 +213,7 @@ describe("Settings library folders", () => {
       getWebSettings: () =>
         Promise.resolve(
           settings({
+            defaultRoot: "/mnt/user",
             libraryRoots: [
               { name: "Anime", path: "/mnt/user/anime" },
               { name: "TV", path: "/mnt/user/tv" }
@@ -233,6 +235,32 @@ describe("Settings library folders", () => {
     expect(saveWebSettings.mock.calls[0][0].libraryRoots).toEqual([
       { name: "TV", path: "/mnt/user/tv" }
     ]);
+  });
+
+  it("promotes the first legacy shortcut to Home", async () => {
+    const saveWebSettings = vi.fn().mockResolvedValue(
+      settings({
+        defaultRoot: "/mnt/user/anime",
+        libraryRoots: [{ name: "TV", path: "/mnt/user/tv" }]
+      })
+    );
+
+    renderWithBackend(<SettingsPage />, {
+      transport: "tauri",
+      getStatus: () => Promise.resolve({ ...status, mediaRoot: "/mnt/user/anime" }),
+      getWebSettings: () => Promise.resolve(settings({
+        libraryRoots: [
+          { name: "Anime", path: "/mnt/user/anime" },
+          { name: "TV", path: "/mnt/user/tv" }
+        ]
+      })),
+      saveWebSettings
+    });
+
+    await waitFor(() => expect(saveWebSettings).toHaveBeenCalled(), { timeout: 2500 });
+    const request = saveWebSettings.mock.calls.at(-1)?.[0];
+    expect(request.defaultRoot).toBe("/mnt/user/anime");
+    expect(request.libraryRoots).toEqual([{ name: "TV", path: "/mnt/user/tv" }]);
   });
 
   /// A half-finished row must not be saved as an unnamed root.
