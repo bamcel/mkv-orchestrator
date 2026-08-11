@@ -15,7 +15,7 @@ docker compose up --build
 Open:
 
 ```text
-http://localhost:8887
+http://localhost:8886
 ```
 
 ## Volumes
