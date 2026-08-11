@@ -152,7 +152,9 @@ export function SettingsPage() {
     setMuxAudioDefaults(webSettings.data.mkvMergeDefaultAudioLanguages || "eng,jpn");
     setMuxSubtitleDefaults(webSettings.data.mkvMergeDefaultSubtitleLanguages || "eng");
     const loadedRoots = webSettings.data.libraryRoots ?? [];
-    const loadedHome = webSettings.data.defaultRoot ?? loadedRoots[0]?.path ?? "";
+    const loadedHome = webSettings.data.defaultRoot
+      ?? loadedRoots[0]?.path
+      ?? (isDesktop ? "" : status.data?.mediaRoot || "/media");
     const loadedHomeName = webSettings.data.defaultRoot
       ? webSettings.data.defaultRootName
       : loadedRoots[0]?.name || webSettings.data.defaultRootName;
@@ -170,7 +172,7 @@ export function SettingsPage() {
     const applied = applyWebTheme(selectedTheme);
     setThemeJson(JSON.stringify(applied, null, 2));
     lastSavedFingerprint.current = settingsFingerprint(settingsRequestFromSaved(webSettings.data));
-  }, [webSettings.data]);
+  }, [isDesktop, status.data?.mediaRoot, webSettings.data]);
 
   const pendingSettingsRequest: WebSettingsRequest = {
     tvdbApiKey: clearTvdbApiKey ? "" : tvdbApiKey || undefined,
@@ -426,48 +428,40 @@ export function SettingsPage() {
                 title={isDesktop ? "Dashboard" : "Server storage"}
                 description={isDesktop
                   ? "Choose the default folder the Dashboard opens for browsing and scans."
-                  : "Paths are resolved inside the server or Docker host, not from the browser device."}
+                  : "Choose the Home folder used when the Dashboard opens for browsing and scans. The mounted media path is used as the starting value."}
               >
                 <dl className="grid min-w-0 gap-x-4 gap-y-3 text-sm sm:grid-cols-[8.75rem_minmax(0,1fr)]">
-                  <dt className="self-center text-muted">{isDesktop ? "Default Directory" : "Media Root"}</dt>
+                  <dt className="self-center text-muted">Default Directory</dt>
                   <dd className="min-w-0">
-                    {isDesktop ? (
-                      <div className="flex min-w-0 flex-wrap gap-2">
-                        <input
-                          aria-label="Default Directory Name"
-                          value={defaultDirectoryName}
-                          onChange={(event) => setDefaultDirectoryName(event.target.value)}
-                          placeholder="Home"
-                          className="h-9 w-32 shrink-0 rounded-md border border-border bg-input px-2 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
-                        />
-                        <input
-                          aria-label="Default Directory"
-                          value={defaultDirectory}
-                          onChange={(event) => setDefaultDirectory(event.target.value)}
-                          placeholder="Choose the folder where browsing and scans should start"
-                          className="h-9 min-w-[15rem] flex-1 rounded-md border border-border bg-input px-3 font-mono text-xs text-text outline-none placeholder:font-sans placeholder:text-subtle focus:border-accent"
-                        />
-                        <button
-                          type="button"
-                          aria-label="Browse for Default Directory"
-                          onClick={() => {
-                            setBrowsingRow("home");
-                          }}
-                          className="h-9 shrink-0 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-                        >
-                          Browse
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="break-all font-mono text-text">{status.data?.mediaRoot ?? "/media"}</span>
-                    )}
+                    <div className="flex min-w-0 flex-wrap gap-2">
+                      <input
+                        aria-label="Default Directory Name"
+                        value={defaultDirectoryName}
+                        onChange={(event) => setDefaultDirectoryName(event.target.value)}
+                        placeholder="Home"
+                        className="h-9 w-32 shrink-0 rounded-md border border-border bg-input px-2 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
+                      />
+                      <input
+                        aria-label="Default Directory"
+                        value={defaultDirectory}
+                        onChange={(event) => setDefaultDirectory(event.target.value)}
+                        placeholder={isDesktop
+                          ? "Choose the folder where browsing and scans should start"
+                          : status.data?.mediaRoot || "/media"}
+                        className="h-9 min-w-[15rem] flex-1 rounded-md border border-border bg-input px-3 font-mono text-xs text-text outline-none placeholder:font-sans placeholder:text-subtle focus:border-accent"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Browse for Default Directory"
+                        onClick={() => {
+                          setBrowsingRow("home");
+                        }}
+                        className="h-9 shrink-0 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                      >
+                        Browse
+                      </button>
+                    </div>
                   </dd>
-                  {!isDesktop ? (
-                    <>
-                      <dt className="text-muted">Config Root</dt>
-                      <dd className="min-w-0 break-all font-mono text-text">{status.data?.configRoot ?? "/config"}</dd>
-                    </>
-                  ) : null}
                 </dl>
 
                 <div className="mt-5 border-t border-border pt-4">

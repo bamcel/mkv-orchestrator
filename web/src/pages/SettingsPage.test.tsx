@@ -120,6 +120,34 @@ describe("Settings providers", () => {
 });
 
 describe("Settings library folders", () => {
+  it("uses the mounted server media path as an editable Home directory", async () => {
+    const user = userEvent.setup();
+    const saveWebSettings = vi.fn().mockResolvedValue(
+      settings({ defaultRoot: "/media/tv" })
+    );
+
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve({ ...status, mediaRoot: "/media" }),
+      getWebSettings: () => Promise.resolve(settings()),
+      saveWebSettings
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^general$/i }));
+    expect(await screen.findByRole("textbox", { name: /default directory name/i })).toHaveValue("Home");
+    const directory = await screen.findByRole("textbox", { name: /^default directory$/i });
+    expect(directory).toHaveValue("/media");
+    expect(screen.queryByText(/paths are resolved inside/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Config Root")).not.toBeInTheDocument();
+
+    await user.clear(directory);
+    await user.type(directory, "/media/tv");
+
+    await waitFor(() => {
+      expect(saveWebSettings.mock.calls.at(-1)?.[0].defaultRoot).toBe("/media/tv");
+      expect(saveWebSettings.mock.calls.at(-1)?.[0].defaultRootName).toBe("Home");
+    }, { timeout: 2500 });
+  });
+
   it("automatically saves a changed desktop default directory", async () => {
     const user = userEvent.setup();
     const saveWebSettings = vi.fn().mockResolvedValue(
