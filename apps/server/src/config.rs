@@ -22,6 +22,7 @@ pub struct ServerConfig {
     pub config_dir: PathBuf,
     pub ui_dir: PathBuf,
     pub auth: Option<BasicAuth>,
+    pub provider_secret_overrides: BTreeMap<String, String>,
     pub request_body_limit_bytes: usize,
     pub graceful_shutdown_seconds: u64,
 }
@@ -86,6 +87,18 @@ impl ServerConfig {
             }
             _ => bail!("MKVO_AUTH_MODE must be one of: auto, basic, disabled"),
         };
+        let provider_secret_overrides = [
+            ("MKVO_TVDB_API_KEY", "provider.tvdb.api_key"),
+            ("MKVO_TVDB_PIN", "provider.tvdb.pin"),
+            ("MKVO_TMDB_API_KEY", "provider.tmdb.api_key"),
+        ]
+        .into_iter()
+        .filter_map(|(variable, key)| {
+            get(variable)
+                .filter(|value| !value.is_empty())
+                .map(|value| (key.to_owned(), value))
+        })
+        .collect();
 
         Ok(Self {
             bind,
@@ -94,6 +107,7 @@ impl ServerConfig {
             config_dir,
             ui_dir,
             auth,
+            provider_secret_overrides,
             request_body_limit_bytes,
             graceful_shutdown_seconds,
         })
@@ -164,6 +178,30 @@ mod tests {
 
         assert_eq!(config.source_roots.len(), 3);
         assert_eq!(config.auth.unwrap().username, "mkvo");
+    }
+
+    #[test]
+    fn parses_container_provider_secret_overrides() {
+        let values = BTreeMap::from([
+            ("MKVO_TVDB_API_KEY", "tvdb-key"),
+            ("MKVO_TVDB_PIN", "tvdb-pin"),
+            ("MKVO_TMDB_API_KEY", "tmdb-key"),
+        ]);
+        let config =
+            ServerConfig::from_lookup(|key| values.get(key).map(ToString::to_string)).unwrap();
+
+        assert_eq!(
+            config.provider_secret_overrides["provider.tvdb.api_key"],
+            "tvdb-key"
+        );
+        assert_eq!(
+            config.provider_secret_overrides["provider.tvdb.pin"],
+            "tvdb-pin"
+        );
+        assert_eq!(
+            config.provider_secret_overrides["provider.tmdb.api_key"],
+            "tmdb-key"
+        );
     }
 
     #[test]

@@ -53,6 +53,12 @@ MKVO_SOURCE_ROOTS=downloads=/downloads
 | `MKVO_AUTH_USERNAME` / `MKVO_AUTH_PASSWORD` | unset | Required together when `MKVO_AUTH_MODE=basic`. The browser shows a native login prompt. `/api/health` stays open for the container healthcheck. |
 | `MKVO_TVDB_API_KEY`, `MKVO_TVDB_PIN`, `MKVO_TMDB_API_KEY` | unset | Optional provider credentials; Settings-page values take effect otherwise. |
 
+Container-provided provider credentials appear as configured in the Settings
+page after startup, but their values are never returned to the browser or
+copied into `secrets.json`. Update the container variable and restart the
+container to rotate or remove one. An environment value takes precedence over
+a value entered through the web UI.
+
 ## Security Notes
 
 - Filesystem browsing through the web UI is limited to the configured source

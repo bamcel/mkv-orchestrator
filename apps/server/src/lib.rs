@@ -30,6 +30,9 @@ pub fn build_runtime(config: &ServerConfig) -> RuntimeResult<MkvoRuntime> {
     let mut builder = MkvoRuntimeBuilder::new(&config.media_root, &config.config_dir)
         .app_name("MKV Orchestrator Web")
         .version(env!("CARGO_PKG_VERSION"));
+    for (key, value) in &config.provider_secret_overrides {
+        builder = builder.secret_override(key.clone(), value.clone());
+    }
     for source in &config.source_roots {
         if source.path != config.media_root {
             builder = builder.source_root(source.label.clone(), &source.path);
@@ -104,7 +107,7 @@ pub async fn shutdown_signal() {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, net::SocketAddr, sync::Arc};
+    use std::{collections::BTreeMap, fs, net::SocketAddr, sync::Arc};
 
     use axum::{
         body::Body,
@@ -125,6 +128,13 @@ mod tests {
 
     impl TestHost {
         fn new(auth: Option<BasicAuth>) -> Self {
+            Self::new_with_provider_secrets(auth, BTreeMap::new())
+        }
+
+        fn new_with_provider_secrets(
+            auth: Option<BasicAuth>,
+            provider_secret_overrides: BTreeMap<String, String>,
+        ) -> Self {
             let directory = tempfile::tempdir().unwrap();
             let media_root = directory.path().join("media");
             let config_dir = directory.path().join("config");
@@ -143,6 +153,7 @@ mod tests {
                 config_dir,
                 ui_dir,
                 auth,
+                provider_secret_overrides,
                 request_body_limit_bytes: 1024,
                 graceful_shutdown_seconds: 1,
             });
@@ -157,6 +168,32 @@ mod tests {
         fn router(&self) -> Router {
             build_router(Arc::clone(&self.config), Arc::clone(&self.runtime))
         }
+    }
+
+    #[tokio::test]
+    async fn container_provider_secrets_appear_configured_in_web_settings() {
+        let host = TestHost::new_with_provider_secrets(
+            None,
+            BTreeMap::from([
+                (
+                    "provider.tvdb.api_key".to_owned(),
+                    "container-tvdb-key".to_owned(),
+                ),
+                (
+                    "provider.tvdb.pin".to_owned(),
+                    "container-tvdb-pin".to_owned(),
+                ),
+                (
+                    "provider.tmdb.api_key".to_owned(),
+                    "container-tmdb-key".to_owned(),
+                ),
+            ]),
+        );
+
+        let settings = host.runtime.get_web_settings().await.unwrap();
+        assert!(settings.has_tvdb_api_key);
+        assert!(settings.has_tvdb_pin);
+        assert!(settings.has_tmdb_api_key);
     }
 
     async fn body_text(response: axum::response::Response) -> String {
