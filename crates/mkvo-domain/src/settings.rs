@@ -49,6 +49,10 @@ impl AppSettings {
         self.workers = self.workers.normalized();
         self.tools = self.tools.normalized();
         self.scan.default_root = configured_path(self.scan.default_root);
+        self.scan.default_root_name = self.scan.default_root_name.trim().to_owned();
+        if self.scan.default_root_name.is_empty() {
+            self.scan.default_root_name = default_root_name();
+        }
         self.watch.roots = self
             .watch
             .roots
@@ -242,6 +246,8 @@ pub struct LibraryRoot {
 pub struct ScanSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_root: Option<PathBuf>,
+    #[serde(default = "default_root_name")]
+    pub default_root_name: String,
     // Skipped when empty so a settings file written before this existed round
     // trips unchanged, and an install that never sets one stays as it was.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -261,10 +267,15 @@ fn default_supported_extensions() -> BTreeSet<String> {
         .collect()
 }
 
+fn default_root_name() -> String {
+    "Home".to_owned()
+}
+
 impl Default for ScanSettings {
     fn default() -> Self {
         Self {
             default_root: None,
+            default_root_name: default_root_name(),
             library_roots: Vec::new(),
             ignored_folder_names: [
                 "Extras",

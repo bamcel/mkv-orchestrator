@@ -114,8 +114,10 @@ export function SettingsPage() {
   const [muxAudioDefaults, setMuxAudioDefaults] = useState("eng,jpn");
   const [muxSubtitleDefaults, setMuxSubtitleDefaults] = useState("eng");
   const [libraryRoots, setLibraryRoots] = useState<SourceRoot[]>([]);
+  const [defaultDirectory, setDefaultDirectory] = useState("");
+  const [defaultDirectoryName, setDefaultDirectoryName] = useState("Home");
   // Which row the browser is filling in, so one dialog serves every row.
-  const [browsingRow, setBrowsingRow] = useState<number | null>(null);
+  const [browsingRow, setBrowsingRow] = useState<number | "home" | null>(null);
   const [watchFoldersText, setWatchFoldersText] = useState("");
   const [liveWatcherEnabled, setLiveWatcherEnabled] = useState(false);
   const [mediaServers, setMediaServers] = useState<EditableMediaServer[]>([]);
@@ -149,7 +151,14 @@ export function SettingsPage() {
     setLanguagePresetsText((webSettings.data.languagePresets ?? []).join("\n"));
     setMuxAudioDefaults(webSettings.data.mkvMergeDefaultAudioLanguages || "eng,jpn");
     setMuxSubtitleDefaults(webSettings.data.mkvMergeDefaultSubtitleLanguages || "eng");
-    setLibraryRoots(webSettings.data.libraryRoots ?? []);
+    const loadedRoots = webSettings.data.libraryRoots ?? [];
+    const loadedHome = webSettings.data.defaultRoot ?? loadedRoots[0]?.path ?? "";
+    const loadedHomeName = webSettings.data.defaultRoot
+      ? webSettings.data.defaultRootName
+      : loadedRoots[0]?.name || webSettings.data.defaultRootName;
+    setDefaultDirectory(loadedHome);
+    setDefaultDirectoryName(loadedHomeName || "Home");
+    setLibraryRoots(loadedRoots.filter((root) => !sameFolderPath(root.path, loadedHome)));
     setWatchFoldersText((webSettings.data.watchFolders ?? []).join("\n"));
     setLiveWatcherEnabled(Boolean(webSettings.data.enableLiveWatchFolderMonitoring));
     setMediaServers((webSettings.data.mediaServers ?? []).map((server) => ({ ...server, apiKey: "" })));
@@ -177,6 +186,8 @@ export function SettingsPage() {
     languagePresets: normalizeLineList(languagePresetsText),
     mkvMergeDefaultAudioLanguages: muxAudioDefaults,
     mkvMergeDefaultSubtitleLanguages: muxSubtitleDefaults,
+    defaultRoot: defaultDirectory.trim() || null,
+    defaultRootName: defaultDirectoryName.trim() || "Home",
     libraryRoots: libraryRoots
       .map((root) => ({ name: root.name.trim(), path: root.path.trim() }))
       .filter((root) => root.name && root.path),
@@ -231,7 +242,9 @@ export function SettingsPage() {
       setLanguagePresetsText(saved.languagePresets.join("\n"));
       setMuxAudioDefaults(saved.mkvMergeDefaultAudioLanguages);
       setMuxSubtitleDefaults(saved.mkvMergeDefaultSubtitleLanguages);
-      setLibraryRoots(saved.libraryRoots);
+      setDefaultDirectory(saved.defaultRoot ?? "");
+      setDefaultDirectoryName(saved.defaultRootName || "Home");
+      setLibraryRoots(saved.libraryRoots.filter((root) => !sameFolderPath(root.path, saved.defaultRoot ?? "")));
       setWatchFoldersText(saved.watchFolders.join("\n"));
       setLiveWatcherEnabled(saved.enableLiveWatchFolderMonitoring);
       setMediaServers(saved.mediaServers.map((server) => ({ ...server, apiKey: "" })));
@@ -421,20 +434,16 @@ export function SettingsPage() {
                     {isDesktop ? (
                       <div className="flex min-w-0 flex-wrap gap-2">
                         <input
+                          aria-label="Default Directory Name"
+                          value={defaultDirectoryName}
+                          onChange={(event) => setDefaultDirectoryName(event.target.value)}
+                          placeholder="Home"
+                          className="h-9 w-32 shrink-0 rounded-md border border-border bg-input px-2 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
+                        />
+                        <input
                           aria-label="Default Directory"
-                          value={libraryRoots[0]?.path ?? ""}
-                          onChange={(event) => {
-                            const path = event.target.value;
-                            setLibraryRoots((current) => {
-                              const first = current[0] ?? { name: "", path: "" };
-                              const next = {
-                                ...first,
-                                name: first.name || "Default",
-                                path
-                              };
-                              return current.length === 0 ? [next] : [next, ...current.slice(1)];
-                            });
-                          }}
+                          value={defaultDirectory}
+                          onChange={(event) => setDefaultDirectory(event.target.value)}
                           placeholder="Choose the folder where browsing and scans should start"
                           className="h-9 min-w-[15rem] flex-1 rounded-md border border-border bg-input px-3 font-mono text-xs text-text outline-none placeholder:font-sans placeholder:text-subtle focus:border-accent"
                         />
@@ -442,10 +451,7 @@ export function SettingsPage() {
                           type="button"
                           aria-label="Browse for Default Directory"
                           onClick={() => {
-                            if (libraryRoots.length === 0) {
-                              setLibraryRoots([{ name: "", path: "" }]);
-                            }
-                            setBrowsingRow(0);
+                            setBrowsingRow("home");
                           }}
                           className="h-9 shrink-0 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
                         >
@@ -469,7 +475,7 @@ export function SettingsPage() {
                     <h3 className="text-sm font-semibold text-text">Quick Access</h3>
                     <p className="mt-1 text-xs leading-5 text-subtle">
                       {isDesktop
-                        ? "Add named folder shortcuts for faster browsing. The first shortcut is also the Dashboard default directory."
+                        ? "Add named folder shortcuts for faster browsing. These are separate from the default directory above."
                         : "Add named folder shortcuts for faster browsing inside the server's mounted storage."}
                     </p>
                   </div>
@@ -1127,9 +1133,16 @@ export function SettingsPage() {
 
       {browsingRow !== null ? (
         <FileBrowser
-          initialPath={libraryRoots[browsingRow]?.path || status.data?.mediaRoot || ""}
-          roots={status.data?.sourceRoots ?? []}
+          initialPath={browsingRow === "home"
+            ? defaultDirectory
+            : libraryRoots[browsingRow]?.path || defaultDirectory || status.data?.mediaRoot || ""}
+          homeRoot={{ name: defaultDirectoryName || "Home", path: defaultDirectory }}
+          roots={libraryRoots}
           onCancel={() => setBrowsingRow(null)}
+          removableRootPaths={libraryRoots.map((root) => root.path)}
+          onUnpinFromQuickAccess={(path) => {
+            setLibraryRoots((current) => current.filter((root) => !sameFolderPath(root.path, path)));
+          }}
           onPinToQuickAccess={(path, name) => {
             setLibraryRoots((current) =>
               current.some((root) => sameFolderPath(root.path, path))
@@ -1141,13 +1154,17 @@ export function SettingsPage() {
             // Picking a file means the folder holding it, since a library
             // folder is always a directory.
             const folder = kind === "file" ? parentFolder(path) : path;
-            setLibraryRoots((current) =>
-              current.map((item, position) =>
-                position === browsingRow
-                  ? { ...item, path: folder, name: item.name || folderName(folder) }
-                  : item
-              )
-            );
+            if (browsingRow === "home") {
+              setDefaultDirectory(folder);
+            } else {
+              setLibraryRoots((current) =>
+                current.map((item, position) =>
+                  position === browsingRow
+                    ? { ...item, path: folder, name: item.name || folderName(folder) }
+                    : item
+                )
+              );
+            }
             setBrowsingRow(null);
           }}
         />
@@ -1185,6 +1202,8 @@ function settingsRequestFromSaved(settings: WebSettings): WebSettingsRequest {
     languagePresets: settings.languagePresets,
     mkvMergeDefaultAudioLanguages: settings.mkvMergeDefaultAudioLanguages,
     mkvMergeDefaultSubtitleLanguages: settings.mkvMergeDefaultSubtitleLanguages,
+    defaultRoot: settings.defaultRoot,
+    defaultRootName: settings.defaultRootName,
     libraryRoots: settings.libraryRoots,
     watchFolders: settings.watchFolders,
     enableLiveWatchFolderMonitoring: settings.enableLiveWatchFolderMonitoring,

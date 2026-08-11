@@ -496,7 +496,7 @@ impl MkvoRuntime {
 
     pub async fn get_status(&self) -> RuntimeResult<AppStatus> {
         let tools = self.inner.dependencies.tools.all_statuses().await?;
-        let library_roots = self.library_roots().await;
+        let (default_root, library_roots) = self.scan_locations().await;
 
         // The host's own roots come from how it was launched; the library roots
         // are the user's. Both are shortcuts the browser offers, so callers see
@@ -537,7 +537,7 @@ impl MkvoRuntime {
             // Empty means "no library folder configured", which only an
             // unrestricted host can report. Callers open the volume list.
             media_root: self
-                .effective_media_root(&library_roots)
+                .effective_media_root(default_root.as_ref(), &library_roots)
                 .as_deref()
                 .map_or_else(String::new, display_path),
             config_root: display_path(&self.inner.config.config_root),
@@ -552,21 +552,32 @@ impl MkvoRuntime {
     /// A host launched pointing at a mount keeps that as its root. An
     /// unrestricted desktop has no such thing: choosing one on the user's
     /// behalf is exactly what the hardcoded Videos folder did. So it uses the
-    /// first library folder the user named, and until there is one it answers
-    /// `None` -- browsing then opens at the volume list rather than somewhere
-    /// arbitrary.
-    fn effective_media_root(&self, library_roots: &[LibraryRoot]) -> Option<PathBuf> {
+    /// configured default directory. Older settings that stored Home as the
+    /// first library folder retain that fallback until their next save migrates
+    /// the value.
+    fn effective_media_root(
+        &self,
+        default_root: Option<&PathBuf>,
+        library_roots: &[LibraryRoot],
+    ) -> Option<PathBuf> {
         if self.inner.config.browse_scope == BrowseScope::Unrestricted {
-            return library_roots.first().map(|root| root.path.clone());
+            return default_root
+                .cloned()
+                .or_else(|| library_roots.first().map(|root| root.path.clone()));
         }
         Some(self.inner.config.media_root.clone())
     }
 
-    async fn library_roots(&self) -> Vec<LibraryRoot> {
+    async fn scan_locations(&self) -> (Option<PathBuf>, Vec<LibraryRoot>) {
         self.settings_service()
             .load()
             .await
-            .map(|loaded| loaded.settings.scan.library_roots)
+            .map(|loaded| {
+                (
+                    loaded.settings.scan.default_root,
+                    loaded.settings.scan.library_roots,
+                )
+            })
             .unwrap_or_default()
     }
 
@@ -597,8 +608,8 @@ impl MkvoRuntime {
         let requested = match path.filter(|value| !value.trim().is_empty()) {
             Some(value) => PathBuf::from(value),
             None => {
-                let library_roots = self.library_roots().await;
-                match self.effective_media_root(&library_roots) {
+                let (default_root, library_roots) = self.scan_locations().await;
+                match self.effective_media_root(default_root.as_ref(), &library_roots) {
                     Some(root) => root,
                     // Nothing configured: show what there is to choose from
                     // rather than inventing a folder.
@@ -699,12 +710,14 @@ impl MkvoRuntime {
             );
         }
         if request.all_sources().is_empty() {
-            let library_roots = self.library_roots().await;
-            let root = self.effective_media_root(&library_roots).ok_or_else(|| {
-                RuntimeError::invalid(
-                    "no folder to scan: choose one, or add a library folder in Settings",
-                )
-            })?;
+            let (default_root, library_roots) = self.scan_locations().await;
+            let root = self
+                .effective_media_root(default_root.as_ref(), &library_roots)
+                .ok_or_else(|| {
+                    RuntimeError::invalid(
+                        "no folder to scan: choose one, or set the default directory in Settings",
+                    )
+                })?;
             request.source_path = Some(display_path(&root));
         }
         let request_fingerprint = stable_fingerprint(&request)
@@ -1436,6 +1449,7 @@ fn web_settings(
             .map(display_path),
         ffmpeg_directory: settings.tools.ffmpeg_directory.as_deref().map(display_path),
         default_root: settings.scan.default_root.as_deref().map(display_path),
+        default_root_name: settings.scan.default_root_name.clone(),
         library_roots: settings
             .scan
             .library_roots
@@ -1557,6 +1571,12 @@ fn apply_web_settings_request(
     }
     if let Some(value) = requested_path(request.default_root) {
         settings.scan.default_root = value;
+    }
+    if let Some(value) = request.default_root_name {
+        settings.scan.default_root_name = value.trim().to_owned();
+        if settings.scan.default_root_name.is_empty() {
+            settings.scan.default_root_name = "Home".to_owned();
+        }
     }
     if let Some(values) = request.library_roots {
         // Blank rows are how a half-finished edit arrives from the form; they
@@ -2184,6 +2204,34 @@ mod library_root_tests {
         );
     }
 
+    /// Home is independent from shortcuts: once configured it remains the
+    /// browser and scan starting point even when Quick Access has other roots.
+    #[tokio::test]
+    async fn the_desktop_media_root_prefers_the_default_directory() {
+        let host = host(false);
+        let home = host.mount.join("home");
+        let anime = host.mount.join("anime");
+        std::fs::create_dir_all(&home).expect("home directory");
+
+        host.runtime
+            .save_web_settings(WebSettingsRequest {
+                default_root: Some(Some(display_path(&home))),
+                library_roots: Some(vec![root("Anime", &anime)]),
+                ..WebSettingsRequest::default()
+            })
+            .await
+            .expect("save");
+
+        let status = host.runtime.get_status().await.expect("status");
+        assert!(same_path(Path::new(&status.media_root), &home));
+        assert!(
+            status
+                .source_roots
+                .iter()
+                .any(|entry| entry.name == "Anime")
+        );
+    }
+
     /// A saved folder has to be usable immediately; requiring a restart to
     /// authorize it is the bug this mirrors for watch folders.
     #[tokio::test]
@@ -2422,6 +2470,7 @@ mod tests {
             mkv_tool_nix_directory: Some(Some("D:/tools/mkvtoolnix".to_owned())),
             ffmpeg_directory: Some(Some("D:/tools/ffmpeg".to_owned())),
             default_root: Some(Some("D:/media".to_owned())),
+            default_root_name: Some("Media".to_owned()),
             ignored_scan_folder_names: Some(vec!["Trailers".to_owned()]),
             use_quick_hash_on_unreliable_timestamps: Some(true),
             max_scan_workers: Some(6),
@@ -2468,6 +2517,7 @@ mod tests {
             view.default_root.as_deref(),
             Some(display_path(Path::new("D:/media")).as_str())
         );
+        assert_eq!(view.default_root_name, "Media");
         assert_eq!(view.ignored_scan_folder_names, vec!["Trailers".to_owned()]);
         assert!(view.use_quick_hash_on_unreliable_timestamps);
         assert_eq!(view.max_scan_workers, 6);

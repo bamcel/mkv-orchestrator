@@ -61,19 +61,20 @@ export function DashboardPage() {
   // only the desktop can report. Browsing then opens at the volume list rather
   // than at a folder nobody chose.
   const defaultSourcePath = status.data?.mediaRoot ?? (isDesktop ? "" : "/media");
+  const homePath = settings.data?.defaultRoot ?? defaultSourcePath;
   const browseRootOptions = useMemo(() => {
-    // The host reports its own roots and the user's library folders as one
-    // list, each already named. Synthesising a "Media" entry here would win the
-    // dedupe below and relabel whatever the user called their own folder.
-    const roots = status.data?.sourceRoots ?? [];
+    const roots = settings.data?.libraryRoots ?? [];
     const seen = new Set<string>();
     return roots.filter((root) => {
       const path = root.path.trim();
-      if (!path || seen.has(path.toLowerCase())) return false;
+      if (!path || normalizeCompareValue(path) === normalizeCompareValue(homePath) || seen.has(path.toLowerCase())) return false;
       seen.add(path.toLowerCase());
       return true;
     });
-  }, [status.data?.sourceRoots]);
+  }, [homePath, settings.data?.libraryRoots]);
+  const browseHome = useMemo(() => {
+    return { name: settings.data?.defaultRootName || "Home", path: homePath };
+  }, [homePath, settings.data?.defaultRootName]);
   const activeSources = sources;
   const hasSources = sources.length > 0;
   const sourceSummary = sources.length === 0
@@ -277,6 +278,10 @@ export function DashboardPage() {
       setActionStatus("Quick Access settings could not be loaded.");
       return;
     }
+    if (normalizeCompareValue(currentSettings.defaultRoot) === normalizeCompareValue(path)) {
+      setActionStatus(`${name || folderName(path)} is already Home.`);
+      return;
+    }
     if (currentSettings.libraryRoots.some((root) => normalizeCompareValue(root.path) === normalizeCompareValue(path))) {
       setActionStatus(`${name} is already in Quick Access.`);
       return;
@@ -286,6 +291,21 @@ export function DashboardPage() {
     });
     await Promise.all([settings.refetch(), status.refetch()]);
     setActionStatus(`${name || folderName(path)} pinned to Quick Access.`);
+  }
+
+  async function unpinBrowsePath(path: string, name: string) {
+    const currentSettings = settings.data ?? (await settings.refetch()).data;
+    if (!currentSettings) {
+      setActionStatus("Quick Access settings could not be loaded.");
+      return;
+    }
+    await saveWebSettings({
+      libraryRoots: currentSettings.libraryRoots.filter(
+        (root) => normalizeCompareValue(root.path) !== normalizeCompareValue(path)
+      )
+    });
+    await Promise.all([settings.refetch(), status.refetch()]);
+    setActionStatus(`${name || folderName(path)} removed from Quick Access.`);
   }
 
   function useSelectedAsTemplate() {
@@ -632,10 +652,13 @@ export function DashboardPage() {
       {isBrowseOpen ? (
         <FileBrowser
           initialPath={lastBrowsePath || sources[0] || defaultSourcePath}
+          homeRoot={browseHome}
           roots={browseRootOptions}
           onCancel={() => setIsBrowseOpen(false)}
           onSelect={addBrowsePath}
           onPinToQuickAccess={pinBrowsePath}
+          onUnpinFromQuickAccess={unpinBrowsePath}
+          removableRootPaths={(settings.data?.libraryRoots ?? []).map((root) => root.path)}
         />
       ) : null}
       {contextMenu ? (

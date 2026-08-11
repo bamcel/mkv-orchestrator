@@ -292,6 +292,10 @@ const fn default_max_scan_workers() -> usize {
     4
 }
 
+fn default_home_name() -> String {
+    "Home".to_owned()
+}
+
 const fn default_max_edit_workers() -> usize {
     2
 }
@@ -342,6 +346,8 @@ pub struct WebSettings {
     pub ffmpeg_directory: Option<String>,
     #[serde(default)]
     pub default_root: Option<String>,
+    #[serde(default = "default_home_name")]
+    pub default_root_name: String,
     /// The user's own named library folders, which drive the browser's
     /// shortcuts and the roots operations may touch.
     #[serde(default)]
@@ -396,6 +402,7 @@ impl Default for WebSettings {
             mkv_tool_nix_directory: None,
             ffmpeg_directory: None,
             default_root: None,
+            default_root_name: default_home_name(),
             library_roots: Vec::new(),
             ignored_scan_folder_names: Vec::new(),
             use_quick_hash_on_unreliable_timestamps: false,
@@ -435,6 +442,7 @@ pub struct WebSettingsRequest {
     pub mkv_tool_nix_directory: Option<Option<String>>,
     pub ffmpeg_directory: Option<Option<String>>,
     pub default_root: Option<Option<String>>,
+    pub default_root_name: Option<String>,
     pub library_roots: Option<Vec<SourceRoot>>,
     pub ignored_scan_folder_names: Option<Vec<String>>,
     pub use_quick_hash_on_unreliable_timestamps: Option<bool>,

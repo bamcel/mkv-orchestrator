@@ -10,13 +10,13 @@ import {
   FolderOpen,
   FileVideo,
   HardDrive,
+  House,
   Monitor,
   Network,
   Plus,
   Pin,
   RefreshCw,
   Search,
-  Star,
   X
 } from "lucide-react";
 
@@ -32,11 +32,17 @@ type FileBrowserProps = {
   initialPath: string;
   /** Configured libraries, shown under Quick access. */
   roots: FileBrowserRoot[];
+  /** The Settings default directory, shown separately above shortcuts. */
+  homeRoot?: FileBrowserRoot;
   onCancel: () => void;
   /** Called with the chosen folder or media file. */
   onSelect: (path: string, kind: "folder" | "file") => void;
   /** Persist a folder as a named Quick Access shortcut. */
   onPinToQuickAccess?: (path: string, name: string) => void | Promise<void>;
+  /** Remove a user-pinned Quick Access shortcut. */
+  onUnpinFromQuickAccess?: (path: string, name: string) => void | Promise<void>;
+  /** Roots owned by the user; host-provided roots remain non-removable. */
+  removableRootPaths?: string[];
 };
 
 type SortColumn = "name" | "modified" | "type" | "size";
@@ -138,9 +144,12 @@ function describeType(entry: FileSystemEntry): string {
 export function FileBrowser({
   initialPath,
   roots,
+  homeRoot,
   onCancel,
   onSelect,
-  onPinToQuickAccess
+  onPinToQuickAccess,
+  onUnpinFromQuickAccess,
+  removableRootPaths = []
 }: FileBrowserProps) {
   // A single history array with a cursor gives Back and Forward the same
   // meaning they have in a file manager, including forward being discarded
@@ -437,28 +446,64 @@ export function FileBrowser({
 
         <div className="flex min-h-0 flex-1">
           <nav className="w-52 shrink-0 overflow-y-auto border-r border-border bg-sidebar/60 py-3">
-            {roots.length > 0 ? (
+            {homeRoot ? (
               <>
                 <div className="px-4 pb-1.5 text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">
+                  Home
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate(homeRoot.path)}
+                  className={[
+                    "flex w-full items-center gap-2 px-4 py-1.5 text-left text-xs transition",
+                    samePath(homeRoot.path, currentPath)
+                      ? "bg-selected text-text"
+                      : "text-muted hover:bg-button-hover hover:text-text"
+                  ].join(" ")}
+                  title={homeRoot.path || "This PC"}
+                >
+                  <House size={13} className="shrink-0 text-accent" />
+                  <span className="truncate">{homeRoot.name}</span>
+                </button>
+              </>
+            ) : null}
+            {roots.length > 0 ? (
+              <>
+                <div className="px-4 pb-1.5 pt-4 text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">
                   Quick access
                 </div>
-                {roots.map((root) => (
-                  <button
-                    key={root.path}
-                    type="button"
-                    onClick={() => navigate(root.path)}
-                    className={[
-                      "flex w-full items-center gap-2 px-4 py-1.5 text-left text-xs transition",
-                      samePath(root.path, currentPath)
-                        ? "bg-selected text-text"
-                        : "text-muted hover:bg-button-hover hover:text-text"
-                    ].join(" ")}
-                    title={root.path}
-                  >
-                    <Star size={13} className="shrink-0 text-accent" />
-                    <span className="truncate">{root.name}</span>
-                  </button>
-                ))}
+                {roots.map((root) => {
+                  const removable = removableRootPaths.some((path) => samePath(path, root.path));
+                  return (
+                    <div key={root.path} className="group/quick relative flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => navigate(root.path)}
+                        className={[
+                          "flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-4 pr-7 text-left text-xs transition",
+                          samePath(root.path, currentPath)
+                            ? "bg-selected text-text"
+                            : "text-muted hover:bg-button-hover hover:text-text"
+                        ].join(" ")}
+                        title={root.path}
+                      >
+                        <Pin size={13} className="shrink-0 text-accent" />
+                        <span className="truncate">{root.name}</span>
+                      </button>
+                      {removable ? (
+                        <button
+                          type="button"
+                          onClick={() => void onUnpinFromQuickAccess?.(root.path, root.name)}
+                          className="absolute right-1.5 hidden h-5 w-5 items-center justify-center rounded text-subtle transition hover:bg-button-hover hover:text-text group-hover/quick:flex"
+                          aria-label={`Remove ${root.name} from Quick Access`}
+                          title="Remove from Quick Access"
+                        >
+                          <X size={11} />
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </>
             ) : null}
 

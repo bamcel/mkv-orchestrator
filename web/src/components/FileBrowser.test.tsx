@@ -194,6 +194,64 @@ describe("file browser navigation", () => {
     expect(onSelect).toHaveBeenCalledWith("C:\\media\\Show\\Season 01", "folder");
   });
 
+  it("uses pin icons and removes user-pinned Quick Access folders", async () => {
+    const user = userEvent.setup();
+    const onUnpinFromQuickAccess = vi.fn();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "C:\\media": { path: "C:\\media", parentPath: "C:\\", entries: [] },
+      "C:\\shows": { path: "C:\\shows", parentPath: "C:\\", entries: [] }
+    });
+
+    renderWithBackend(
+      <FileBrowser
+        initialPath="C:\media"
+        roots={[{ name: "Shows", path: "C:\\shows" }]}
+        removableRootPaths={["C:\\shows"]}
+        onCancel={() => {}}
+        onSelect={() => {}}
+        onUnpinFromQuickAccess={onUnpinFromQuickAccess}
+      />,
+      { browseFileSystem }
+    );
+
+    expect(await screen.findByTitle("C:\\shows")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remove Shows from Quick Access" }));
+    expect(onUnpinFromQuickAccess).toHaveBeenCalledWith("C:\\shows", "Shows");
+  });
+
+  it("shows the default directory as Home above Quick Access", async () => {
+    const user = userEvent.setup();
+    const browseFileSystem = filesystem({
+      "": volumeList,
+      "C:\\media": { path: "C:\\media", parentPath: "C:\\", entries: [] },
+      "C:\\home": {
+        path: "C:\\home",
+        parentPath: "C:\\",
+        entries: [folder("Movies", "C:\\home\\Movies")]
+      },
+      "C:\\shows": { path: "C:\\shows", parentPath: "C:\\", entries: [] }
+    });
+
+    renderWithBackend(
+      <FileBrowser
+        initialPath="C:\media"
+        homeRoot={{ name: "Default Directory", path: "C:\\home" }}
+        roots={[{ name: "Shows", path: "C:\\shows" }]}
+        onCancel={() => {}}
+        onSelect={() => {}}
+      />,
+      { browseFileSystem }
+    );
+
+    const homeHeading = await screen.findByText("Home");
+    const quickAccessHeading = screen.getByText("Quick access");
+    expect(homeHeading.compareDocumentPosition(quickAccessHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Default Directory" }));
+    expect(await screen.findByText("Movies")).toBeInTheDocument();
+  });
+
   /// Folders lead regardless of sort, the way a file manager orders them.
   it("keeps folders above files when sorting by size", async () => {
     const user = userEvent.setup();
