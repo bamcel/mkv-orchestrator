@@ -254,9 +254,9 @@ describe("adopting the backend working set", () => {
     expect(result.current.files.map((item) => item.fileName)).toEqual(["first.mkv"]);
   });
 
-  /// An empty response is a cleared or not-yet-scanned host, not a reason to
-  /// throw away what the page is showing.
-  it("does not empty the library on an empty response", () => {
+  /// Rust owns the working set, so an empty response must clear stale files,
+  /// selections, and the template restored from browser storage.
+  it("clears cached state when the backend working set is empty", () => {
     const { result } = library();
 
     act(() =>
@@ -264,7 +264,7 @@ describe("adopting the backend working set", () => {
         summary: emptySummary,
         updatedUtc: "2026-08-09T10:00:00Z",
         files: [file("/media/kept.mkv")],
-        selectedPaths: []
+        selectedPaths: ["/media/kept.mkv"]
       })
     );
     act(() =>
@@ -276,6 +276,8 @@ describe("adopting the backend working set", () => {
       })
     );
 
-    expect(result.current.files.map((item) => item.fileName)).toEqual(["kept.mkv"]);
+    expect(result.current.files).toEqual([]);
+    expect(result.current.selectedPaths).toEqual([]);
+    expect(result.current.templateFilePath).toBe("");
   });
 });

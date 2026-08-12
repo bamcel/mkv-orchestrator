@@ -157,20 +157,17 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
     },
     hydrateSelection: (paths) => setSelectedPathsState(paths),
     syncFromBackend: (scan) => {
-      if (scan.files.length === 0) return;
-      // An unstamped response is the pre-scan default, not news.
-      if (!scan.updatedUtc) {
-        if (files.length > 0) return;
-      } else if (adoptedUpdatedUtc && scan.updatedUtc <= adoptedUpdatedUtc) {
+      if (scan.updatedUtc && adoptedUpdatedUtc && scan.updatedUtc <= adoptedUpdatedUtc) {
         return;
       }
 
       setAdoptedUpdatedUtc(scan.updatedUtc ?? null);
       setFilesState(scan.files);
       setSelectedPathsState(scan.selectedPaths);
-      setTemplateFilePath((current) =>
-        current && scan.files.some((file) => file.path === current) ? current : scan.files[0].path
-      );
+      setTemplateFilePath((current) => {
+        if (scan.files.length === 0) return "";
+        return current && scan.files.some((file) => file.path === current) ? current : scan.files[0].path;
+      });
     },
     templateFilePath,
     setTemplateFilePath,

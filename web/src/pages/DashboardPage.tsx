@@ -342,12 +342,6 @@ export function DashboardPage() {
     setActionStatus(`${name || folderName(path)} removed from Quick Access.`);
   }
 
-  function useSelectedAsTemplate() {
-    if (!selectedFile) return;
-    setTemplateFilePath(selectedFile.path);
-    setActionStatus(`Template file set: ${selectedFile.fileName}`);
-  }
-
   function openFileContextMenu(event: MouseEvent<HTMLTableRowElement>, file: MediaFileRow) {
     event.preventDefault();
     setSelectedFilePath(file.path);
@@ -564,14 +558,6 @@ export function DashboardPage() {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-3">
-              <button
-                type="button"
-                onClick={useSelectedAsTemplate}
-                disabled={!selectedFile}
-                className="whitespace-nowrap rounded-md border border-border bg-button px-3 py-2 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
-              >
-                Use Selected as Template
-              </button>
               <div className="whitespace-nowrap text-xs text-muted">
                 {summary.total} total | {summary.mkv} MKV | {summary.mp4} MP4 | {summary.failed} failed
               </div>
