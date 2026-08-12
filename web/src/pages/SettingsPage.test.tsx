@@ -265,6 +265,37 @@ describe("Settings library folders", () => {
     ]);
   });
 
+  it("reorders Quick Access folders and automatically saves their order", async () => {
+    const user = userEvent.setup();
+    const saveWebSettings = vi.fn().mockResolvedValue(settings());
+
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings({
+        defaultRoot: "/media",
+        libraryRoots: [
+          { name: "Anime", path: "/media/anime" },
+          { name: "TV", path: "/media/tv" },
+          { name: "Movies", path: "/media/movies" }
+        ]
+      })),
+      saveWebSettings
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^general$/i }));
+    await user.click(await screen.findByRole("button", { name: /move quick access folder 2 up/i }));
+
+    expect(screen.getByLabelText(/quick access folder 1 name/i)).toHaveValue("TV");
+    expect(screen.getByLabelText(/quick access folder 2 name/i)).toHaveValue("Anime");
+    await waitFor(() => {
+      expect(saveWebSettings.mock.calls.at(-1)?.[0].libraryRoots).toEqual([
+        { name: "TV", path: "/media/tv" },
+        { name: "Anime", path: "/media/anime" },
+        { name: "Movies", path: "/media/movies" }
+      ]);
+    }, { timeout: 2500 });
+  });
+
   it("promotes the first legacy shortcut to Home", async () => {
     const saveWebSettings = vi.fn().mockResolvedValue(
       settings({

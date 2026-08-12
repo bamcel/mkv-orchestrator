@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  ArrowDown,
+  ArrowUp,
   BookOpen,
   CheckCircle2,
   CircleAlert,
@@ -517,6 +519,30 @@ export function SettingsPage() {
                           className="h-9 shrink-0 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
                         >
                           Browse
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() =>
+                            setLibraryRoots((current) => moveItem(current, index, index - 1))
+                          }
+                          aria-label={`Move quick access folder ${index + 1} up`}
+                          title="Move up"
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-subtle transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+                        >
+                          <ArrowUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === libraryRoots.length - 1}
+                          onClick={() =>
+                            setLibraryRoots((current) => moveItem(current, index, index + 1))
+                          }
+                          aria-label={`Move quick access folder ${index + 1} down`}
+                          title="Move down"
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-subtle transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+                        >
+                          <ArrowDown size={14} />
                         </button>
                         <button
                           type="button"
@@ -1183,6 +1209,16 @@ function folderName(path: string): string {
 function sameFolderPath(left: string, right: string): boolean {
   return left.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
     === right.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+}
+
+function moveItem<T>(items: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) {
+    return items;
+  }
+  const reordered = [...items];
+  const [item] = reordered.splice(from, 1);
+  reordered.splice(to, 0, item);
+  return reordered;
 }
 
 function settingsRequestFromSaved(settings: WebSettings): WebSettingsRequest {
