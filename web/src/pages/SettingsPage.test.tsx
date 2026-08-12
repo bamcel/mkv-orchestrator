@@ -97,8 +97,8 @@ describe("Settings providers", () => {
     expect(saveWebSettings.mock.calls[0][0].anidbClient).toBe("mkvo/1");
   });
 
-  /// A saved secret is never returned, only a `has*` flag, so the field must
-  /// signal that leaving it blank keeps the stored value.
+  /// A saved secret is never returned, only a `has*` flag, so the field shows
+  /// masking dots while keeping its real value empty and preserving the key.
   it("does not resend a stored secret that was left untouched", async () => {
     const user = userEvent.setup();
     const saveWebSettings = vi.fn().mockResolvedValue(settings({ hasTvdbApiKey: true }));
@@ -111,7 +111,8 @@ describe("Settings providers", () => {
 
     await openRenameTab(user);
     const field = await screen.findByLabelText(/tvdb api key/i);
-    expect(field).toHaveAttribute("placeholder", expect.stringMatching(/saved/i));
+    expect(field).toHaveAttribute("placeholder", "••••••••••••");
+    expect(field).toHaveValue("");
 
     await user.click(screen.getByRole("button", { name: /save settings/i }));
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
