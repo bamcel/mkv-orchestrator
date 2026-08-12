@@ -49,6 +49,11 @@ export function MuxRemuxPage() {
   useEffect(() => {
     if (!currentScan.data) return;
     syncFromBackend(currentScan.data);
+    if (currentScan.data.files.length === 0) {
+      setPreviewResult(null);
+      setSelectedDetailPath("");
+      setStatusText("Load scanned files from Dashboard, then build a preview.");
+    }
   }, [currentScan.data]);
 
   useEffect(() => {

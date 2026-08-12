@@ -347,6 +347,13 @@ describe("Dashboard template highlighting", () => {
     });
   }
 
+  it("keeps template selection in the file context menu instead of the File Info header", async () => {
+    renderWithTemplate();
+
+    expect(await screen.findByText("Template: Ep01.mkv")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /use selected as template/i })).not.toBeInTheDocument();
+  });
+
   /// The other Media Info fields already marked the template in accent; the
   /// filename was left plain, so the one row naming the file did not match.
   it("colours the template's filename like the rest of its details", async () => {
