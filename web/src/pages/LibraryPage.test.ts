@@ -33,4 +33,10 @@ describe("Library sources", () => {
       { name: "Jellyfin — TV", path: "/media/tv" }
     ]);
   });
+
+  it("deduplicates equivalent manual and server paths", () => {
+    expect(librarySourceOptions(settings({ watchFolders: ["/media/tv/"] }))).toEqual([
+      { name: "tv", path: "/media/tv/" }
+    ]);
+  });
 });
