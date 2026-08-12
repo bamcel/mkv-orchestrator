@@ -26,7 +26,7 @@ import {
   testMediaServerConnection,
   testRenameProvider
 } from "../api";
-import type { SourceRoot, WebMediaServer, WebMediaServerPathMapping, WebSettings, WebSettingsRequest } from "../api";
+import type { SourceRoot, WebMediaServer, WebSettings, WebSettingsRequest } from "../api";
 import { FileBrowser } from "../components/FileBrowser";
 import { SectionHeader } from "../components/SectionHeader";
 import ffmpegLogo from "../assets/logos/ffmpeg.png";
@@ -124,7 +124,6 @@ export function SettingsPage() {
   const [watchFoldersText, setWatchFoldersText] = useState("");
   const [liveWatcherEnabled, setLiveWatcherEnabled] = useState(false);
   const [mediaServers, setMediaServers] = useState<EditableMediaServer[]>([]);
-  const [mediaServerMappingsText, setMediaServerMappingsText] = useState("");
   const [newServerName, setNewServerName] = useState("Media Server");
   const [newServerType, setNewServerType] = useState("Emby");
   const [newServerUrl, setNewServerUrl] = useState("");
@@ -167,7 +166,6 @@ export function SettingsPage() {
     setWatchFoldersText((webSettings.data.watchFolders ?? []).join("\n"));
     setLiveWatcherEnabled(Boolean(webSettings.data.enableLiveWatchFolderMonitoring));
     setMediaServers((webSettings.data.mediaServers ?? []).map((server) => ({ ...server, apiKey: "" })));
-    setMediaServerMappingsText(formatPathMappings(webSettings.data.mediaServerPathMappings ?? []));
     const themes = replaceCustomWebThemes(webSettings.data.customThemes ?? []);
     setAvailableThemes(themes);
     const selectedTheme = getWebTheme(webSettings.data.selectedThemeName).name;
@@ -208,8 +206,7 @@ export function SettingsPage() {
       apiKey: server.apiKey || undefined,
       isDefault: server.isDefault,
       libraries: server.libraries
-    })),
-    mediaServerPathMappings: parsePathMappings(mediaServerMappingsText)
+    }))
   };
   const pendingSettingsFingerprint = settingsFingerprint(pendingSettingsRequest);
 
@@ -253,7 +250,6 @@ export function SettingsPage() {
       setWatchFoldersText(saved.watchFolders.join("\n"));
       setLiveWatcherEnabled(saved.enableLiveWatchFolderMonitoring);
       setMediaServers(saved.mediaServers.map((server) => ({ ...server, apiKey: "" })));
-      setMediaServerMappingsText(formatPathMappings(saved.mediaServerPathMappings));
       const themes = replaceCustomWebThemes(saved.customThemes);
       setAvailableThemes(themes);
       setThemeName(saved.selectedThemeName);
@@ -834,7 +830,7 @@ export function SettingsPage() {
                 </div>
               </SettingsCard>
 
-              <SettingsCard className="order-2" title="Media Servers" description="Optional discovery for Emby, Jellyfin, or Plex library paths. Add path mappings here when server paths differ from Docker container paths.">
+              <SettingsCard className="order-2" title="Media Servers" description="Optional discovery for Emby, Jellyfin, or Plex library paths. Synced and enabled libraries become available on the Library page.">
                 <div className="space-y-3">
                   {mediaServers.length === 0 ? (
                     <div className="rounded-lg border border-border bg-input p-3 text-sm text-subtle">
@@ -1001,22 +997,6 @@ export function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-lg border border-border bg-panel p-3">
-                  <h3 className="text-sm font-semibold">Path Mapping</h3>
-                  <p className="mt-2 text-xs leading-5 text-muted">
-                    Translate paths reported by the media server into paths available inside this MKVO container. One mapping per line.
-                  </p>
-                  <textarea
-                    value={mediaServerMappingsText}
-                    onChange={(event) => setMediaServerMappingsText(event.target.value)}
-                    rows={5}
-                    placeholder={"\\\\server\\media => /media\n/mnt/media => /media"}
-                    className="mt-3 w-full resize-none rounded-md border border-border bg-input p-3 font-mono text-xs leading-5 text-text outline-none placeholder:text-subtle focus:border-accent"
-                  />
-                  <div className="mt-3 rounded-md border border-border bg-input p-3 text-xs leading-5 text-subtle">
-                    If Emby reports <span className="font-mono text-text">\\server\media\Anime</span> and Docker mounts that share at <span className="font-mono text-text">/media/Anime</span>, add <span className="font-mono text-text">\\server\media =&gt; /media</span>.
-                  </div>
-                </div>
               </SettingsCard>
             </div>
           ) : null}
@@ -1314,32 +1294,6 @@ function normalizeRenameTemplates(value: string, selectedTemplate: string) {
       seen.add(template.toLowerCase());
       return true;
     });
-}
-
-function parsePathMappings(value: string): WebMediaServerPathMapping[] {
-  const seen = new Set<string>();
-  return value
-    .split(/\r?\n/g)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const separator = line.includes("=>") ? "=>" : "=";
-      const [serverPathPrefix, containerPathPrefix] = line.split(separator).map((part) => part.trim());
-      return { serverPathPrefix, containerPathPrefix };
-    })
-    .filter((mapping) => {
-      if (!mapping.serverPathPrefix || !mapping.containerPathPrefix) return false;
-      const key = mapping.serverPathPrefix.toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-}
-
-function formatPathMappings(mappings: WebMediaServerPathMapping[]) {
-  return mappings
-    .map((mapping) => `${mapping.serverPathPrefix} => ${mapping.containerPathPrefix}`)
-    .join("\n");
 }
 
 function createLocalId() {
