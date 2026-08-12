@@ -48,6 +48,7 @@ const defaultAudioNamePresets = ["English", "Japanese", "Commentary"];
 const defaultSubtitleNamePresets = ["English", "English Forced", "English SDH", "Dialogue", "Signs & Songs", "Commentary"];
 const defaultLanguagePresets = ["eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de"];
 const autoSaveDelayMillis = 900;
+const savedSecretPlaceholder = "••••••••••••";
 
 /**
  * Third-party notices shown in About.
@@ -463,7 +464,7 @@ export function SettingsPage() {
 
                 <div className="mt-5 border-t border-border pt-4">
                   <div className="mb-3">
-                    <h3 className="text-sm font-semibold text-text">Quick Access</h3>
+                    <h3 className="text-base font-semibold text-text">Quick Access</h3>
                     <p className="mt-1 text-xs leading-5 text-subtle">
                       {isDesktop
                         ? "Add named folder shortcuts for faster browsing. These are separate from the default directory above."
@@ -618,7 +619,7 @@ export function SettingsPage() {
                       <input
                         value={tvdbApiKey}
                         onChange={(event) => setTvdbApiKey(event.target.value)}
-                        placeholder={webSettings.data?.hasTvdbApiKey ? "Saved - leave blank to keep" : "User-provided TVDB API key"}
+                        placeholder={webSettings.data?.hasTvdbApiKey ? savedSecretPlaceholder : "User-provided TVDB API key"}
                         type="password"
                         disabled={clearTvdbApiKey}
                         className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
@@ -637,7 +638,7 @@ export function SettingsPage() {
                       <input
                         value={tvdbPin}
                         onChange={(event) => setTvdbPin(event.target.value)}
-                        placeholder={webSettings.data?.hasTvdbPin ? "Saved - leave blank to keep" : "Optional TVDB subscriber PIN"}
+                        placeholder={webSettings.data?.hasTvdbPin ? savedSecretPlaceholder : "Optional TVDB subscriber PIN"}
                         type="password"
                         disabled={clearTvdbPin}
                         className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
@@ -656,7 +657,7 @@ export function SettingsPage() {
                       <input
                         value={tmdbApiKey}
                         onChange={(event) => setTmdbApiKey(event.target.value)}
-                        placeholder={webSettings.data?.hasTmdbApiKey ? "Saved - leave blank to keep" : "User-provided TMDB API key"}
+                        placeholder={webSettings.data?.hasTmdbApiKey ? savedSecretPlaceholder : "User-provided TMDB API key"}
                         type="password"
                         disabled={clearTmdbApiKey}
                         className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
@@ -869,7 +870,7 @@ export function SettingsPage() {
                           <input
                             value={server.apiKey ?? ""}
                             onChange={(event) => updateMediaServer(server.id, { apiKey: event.target.value })}
-                            placeholder={server.hasApiKey ? "Saved API key - leave blank to keep" : "API key or token"}
+                            placeholder={server.hasApiKey ? savedSecretPlaceholder : "API key or token"}
                             type="password"
                             className="mt-2 h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                           />
