@@ -133,6 +133,8 @@ describe("Settings library folders", () => {
     });
 
     await user.click(await screen.findByRole("button", { name: /^general$/i }));
+    expect(await screen.findByRole("heading", { name: "Default Directory" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /server storage/i })).not.toBeInTheDocument();
     expect(await screen.findByRole("textbox", { name: /default directory name/i })).toHaveValue("Home");
     const directory = await screen.findByRole("textbox", { name: /^default directory$/i });
     expect(directory).toHaveValue("/media");
