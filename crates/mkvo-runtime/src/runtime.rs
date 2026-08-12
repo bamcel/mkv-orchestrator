@@ -1049,9 +1049,10 @@ impl MkvoRuntime {
             base_url: server.server_url.clone(),
             credential,
         };
-        let libraries = media_server_client(server.kind, &settings)
+        let mut libraries = media_server_client(server.kind, &settings)
             .discover_libraries(&connection, CancellationToken::new())
             .await?;
+        resolve_media_server_local_paths(&mut libraries, &self.inner.config.media_root);
         settings.media_servers[index]
             .libraries
             .clone_from(&libraries);
@@ -1776,6 +1777,7 @@ fn requested_path(value: Option<Option<String>>) -> Option<Option<PathBuf>> {
 }
 
 fn web_media_server(server: &MediaServerSettings) -> WebMediaServer {
+    let mut seen_libraries = BTreeSet::new();
     WebMediaServer {
         id: server.id.to_string(),
         name: server.name.clone(),
@@ -1787,6 +1789,15 @@ fn web_media_server(server: &MediaServerSettings) -> WebMediaServer {
         libraries: server
             .libraries
             .iter()
+            .filter(|library| {
+                let path = library
+                    .local_path
+                    .as_deref()
+                    .unwrap_or(&library.server_path)
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                seen_libraries.insert(path.trim_end_matches('/').to_ascii_lowercase())
+            })
             .map(|library| WebMediaServerLibraryPath {
                 id: library.id.clone(),
                 name: library.name.clone(),
@@ -1799,6 +1810,27 @@ fn web_media_server(server: &MediaServerSettings) -> WebMediaServer {
                 is_enabled: library.enabled,
             })
             .collect(),
+    }
+}
+
+fn resolve_media_server_local_paths(libraries: &mut [MediaServerLibrary], media_root: &Path) {
+    for library in libraries {
+        if library.local_path.as_deref().is_some_and(Path::is_dir) {
+            continue;
+        }
+
+        if library.server_path.is_dir() {
+            library.local_path = Some(library.server_path.clone());
+            continue;
+        }
+
+        let Some(folder_name) = library.server_path.file_name() else {
+            continue;
+        };
+        let mounted_path = media_root.join(folder_name);
+        if mounted_path.is_dir() {
+            library.local_path = Some(mounted_path);
+        }
     }
 }
 
@@ -1935,6 +1967,29 @@ fn server_listing(server: &str) -> RuntimeResult<FileSystemResponse> {
 mod library_root_tests {
     use super::*;
     use crate::MkvoRuntimeBuilder;
+
+    #[test]
+    fn media_server_path_falls_back_to_matching_mounted_folder() {
+        let directory = tempfile::tempdir().unwrap();
+        let media_root = directory.path().join("media");
+        let mounted_anime = media_root.join("anime");
+        std::fs::create_dir_all(&mounted_anime).unwrap();
+        let mut libraries = vec![MediaServerLibrary {
+            id: "anime".to_owned(),
+            name: "Anime".to_owned(),
+            media_type: Some("tvshows".to_owned()),
+            server_path: PathBuf::from("/mnt/user/anime"),
+            local_path: None,
+            enabled: true,
+        }];
+
+        resolve_media_server_local_paths(&mut libraries, &media_root);
+
+        assert_eq!(
+            libraries[0].local_path.as_deref(),
+            Some(mounted_anime.as_path())
+        );
+    }
 
     struct Host {
         _directory: tempfile::TempDir,

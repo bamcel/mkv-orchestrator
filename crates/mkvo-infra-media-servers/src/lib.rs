@@ -410,14 +410,11 @@ fn deduplicate_libraries(rows: Vec<DiscoveredLibrary>) -> Vec<DiscoveredLibrary>
     let mut rows: Vec<_> = rows
         .into_iter()
         .filter(|row| {
-            let key = row
-                .local_path
-                .as_ref()
-                .map_or_else(
-                    || row.server_path.clone(),
-                    |path| path.to_string_lossy().into_owned(),
-                )
-                .to_ascii_lowercase();
+            let key = row.local_path.as_ref().map_or_else(
+                || row.server_path.clone(),
+                |path| path.to_string_lossy().into_owned(),
+            );
+            let key = normalize_server_path(&key).to_ascii_lowercase();
             seen.insert(key)
         })
         .collect();
@@ -534,6 +531,29 @@ mod tests {
         );
         assert_eq!(rows[0].name, "TV");
         assert_eq!(rows[0].local_path, Some(PathBuf::from("/mnt/tv")));
+    }
+
+    #[test]
+    fn deduplicates_equivalent_library_paths() {
+        let server = server(MediaServerKind::Emby);
+        let rows = vec![
+            make_library(
+                &server,
+                &[],
+                "Anime".to_owned(),
+                None,
+                "/media/anime".to_owned(),
+            ),
+            make_library(
+                &server,
+                &[],
+                "Anime".to_owned(),
+                None,
+                "/media/anime/".to_owned(),
+            ),
+        ];
+
+        assert_eq!(deduplicate_libraries(rows).len(), 1);
     }
 
     #[test]

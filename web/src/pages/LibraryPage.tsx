@@ -365,7 +365,7 @@ export function librarySourceOptions(settings: WebSettings | undefined) {
   const seen = new Set<string>();
   return roots.filter((root) => {
     const path = root.path.trim();
-    const key = path.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
+    const key = path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
     if (!path || seen.has(key)) return false;
     seen.add(key);
     return true;
