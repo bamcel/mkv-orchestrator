@@ -6,9 +6,11 @@ import {
   getCurrentScanFiles,
   getScanJob,
   getStatus,
+  getWebSettings,
   LibraryAuditResponse,
   LibraryAuditRow,
-  startScan
+  startScan,
+  WebSettings
 } from "../api";
 import { OutputModal } from "../components/OutputModal";
 import { SectionHeader } from "../components/SectionHeader";
@@ -17,6 +19,7 @@ import { useMediaLibrary } from "../state/MediaLibraryContext";
 export function LibraryPage() {
   const { files, setFiles, setTemplateFilePath, syncFromBackend } = useMediaLibrary();
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
+  const webSettings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const [auditResult, setAuditResult] = useState<LibraryAuditResponse | null>(null);
   const [selectedFolder, setSelectedFolder] = useState("");
@@ -28,9 +31,7 @@ export function LibraryPage() {
   const [statusText, setStatusText] = useState("Select a watch folder, then build the library overview.");
 
   const sourceOptions = useMemo(() => {
-    const roots = status.data?.sourceRoots?.length
-      ? status.data.sourceRoots
-      : [{ name: "media", path: status.data?.mediaRoot ?? "/media" }];
+    const roots = librarySourceOptions(webSettings.data);
     const seen = new Set<string>();
     return roots.filter((root) => {
       const path = root.path.trim();
@@ -38,11 +39,16 @@ export function LibraryPage() {
       seen.add(path.toLowerCase());
       return true;
     });
-  }, [status.data]);
+  }, [webSettings.data]);
 
   useEffect(() => {
-    if (selectedSource || sourceOptions.length === 0) return;
-    setSelectedSource(sourceOptions[0].path);
+    if (sourceOptions.length === 0) {
+      setSelectedSource("");
+      return;
+    }
+    if (!sourceOptions.some((source) => source.path === selectedSource)) {
+      setSelectedSource(sourceOptions[0].path);
+    }
   }, [selectedSource, sourceOptions]);
 
   useEffect(() => {
@@ -223,6 +229,7 @@ export function LibraryPage() {
               onChange={(event) => setSelectedSource(event.target.value)}
               className="h-9 min-w-0 rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
             >
+              {sourceOptions.length === 0 ? <option value="">No library sources configured</option> : null}
               {sourceOptions.map((source) => (
                 <option key={source.path} value={source.path}>{source.name}: {source.path}</option>
               ))}
@@ -243,7 +250,7 @@ export function LibraryPage() {
             </button>
           </div>
           <p className="mt-3 text-sm leading-5 text-muted">
-            Builds a cached overview from the selected manual, container, or synced media-server source. Select a season or folder group to review its media profile, warnings, and files that can be sent into Dashboard for rename, merge, or track-property work.
+            Builds a cached overview from a manual watch folder or an enabled synced media-server library. Select a season or folder group to review its media profile, warnings, and files that can be sent into Dashboard for rename, merge, or track-property work.
           </p>
           {currentScanJob?.currentSource && isBusy ? (
             <div className="mt-2 truncate font-mono text-xs text-subtle" title={currentScanJob.currentSource}>
@@ -339,6 +346,34 @@ export function LibraryPage() {
       ) : null}
     </div>
   );
+}
+
+export function librarySourceOptions(settings: WebSettings | undefined) {
+  if (!settings) return [];
+
+  const roots = [
+    ...settings.watchFolders.map((path) => ({ name: folderName(path) || "Watch Folder", path })),
+    ...settings.mediaServers.flatMap((server) =>
+      server.libraries
+        .filter((library) => library.isEnabled)
+        .map((library) => ({
+          name: `${server.name} — ${library.name}`,
+          path: library.containerPath
+        }))
+    )
+  ];
+  const seen = new Set<string>();
+  return roots.filter((root) => {
+    const path = root.path.trim();
+    const key = path.replace(/\\/g, "/").replace(/\/$/, "").toLowerCase();
+    if (!path || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function folderName(path: string) {
+  return path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "";
 }
 
 function TableCell({ children, className, title }: { children: React.ReactNode; className?: string; title?: string }) {
