@@ -17,7 +17,7 @@ import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
 export function LibraryPage() {
-  const { files, setFiles, setTemplateFilePath, syncFromBackend } = useMediaLibrary();
+  const { files, setFiles, setSelectedPaths, setTemplateFilePath, syncFromBackend } = useMediaLibrary();
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const webSettings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
@@ -210,8 +210,12 @@ export function LibraryPage() {
     }
 
     setFiles(selectedFiles);
+    // Track Properties resolves its plan from the shared selection, not from
+    // the template. Keep the whole handed-off batch selected so choosing a
+    // template never collapses the operation to that one file.
+    setSelectedPaths(selectedFiles.map((file) => file.path));
     setTemplateFilePath(row.templateFilePath);
-    setStatusText(`Sent ${selectedFiles.length} file(s) to Dashboard. Template file set: ${row.templateFileName}`);
+    setStatusText(`Sent and selected ${selectedFiles.length} file(s) for batch operations. Template file set: ${row.templateFileName}`);
   }
 
   return (

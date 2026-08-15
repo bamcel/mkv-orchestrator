@@ -194,6 +194,48 @@ describe("Dashboard ignored folders", () => {
 
     await waitFor(() => expect(startScan).toHaveBeenCalled());
     expect(startScan.mock.calls[0][0].ignoredFolderNames).toEqual(["Extras", "Samples"]);
+    expect(startScan.mock.calls[0][0].forceRefresh).toBe(false);
+  });
+
+  it("can force a rescan of sources that were already scanned", async () => {
+    const user = userEvent.setup();
+    const startScan = vi.fn().mockResolvedValue({
+      id: "refresh-job",
+      status: "Queued",
+      createdUtc: new Date().toISOString(),
+      startedUtc: null,
+      completedUtc: null,
+      currentSource: "",
+      completed: 0,
+      total: 0,
+      files: [],
+      skipped: [],
+      summary: { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 },
+      error: ""
+    });
+
+    renderDashboard({
+      getStatus: () => Promise.resolve({
+        ...emptyStatus,
+        sourceRoots: [{ name: "Media", path: "/media" }]
+      }),
+      getCurrentScanFiles: () => Promise.resolve(emptyScan),
+      getWebSettings: () => Promise.resolve(settings()),
+      browseFileSystem: () =>
+        Promise.resolve({ path: "/media", parentPath: null, entries: [] }),
+      authorizeBrowsedRoot: () => Promise.resolve(),
+      startScan
+    });
+
+    await user.click(await screen.findByRole("button", { name: /browse/i }));
+    await user.click(await screen.findByRole("button", { name: /select this folder/i }));
+    await user.click(await screen.findByRole("button", { name: /rescan files/i }));
+
+    await waitFor(() => expect(startScan).toHaveBeenCalledTimes(1));
+    expect(startScan.mock.calls[0][0]).toMatchObject({
+      sources: ["/media"],
+      forceRefresh: true
+    });
   });
 });
 

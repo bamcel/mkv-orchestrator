@@ -7,6 +7,7 @@ import { FileBrowser } from "../components/FileBrowser";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
 const lastBrowsePathStorageKey = "mkvo.web.lastBrowsePath";
+const scanSourcesStorageKey = "mkvo.web.scanSources";
 
 export function DashboardPage() {
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
@@ -21,7 +22,14 @@ export function DashboardPage() {
     syncFromBackend
   } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
-  const [sources, setSources] = useState<string[]>([]);
+  const [sources, setSources] = useState<string[]>(() => {
+    try {
+      const stored = window.sessionStorage.getItem(scanSourcesStorageKey);
+      return stored ? JSON.parse(stored) as string[] : [];
+    } catch {
+      return [];
+    }
+  });
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
   const [lastBrowsePath, setLastBrowsePath] = useState(() => {
     try {
@@ -41,6 +49,13 @@ export function DashboardPage() {
   const [selectionAnchorPath, setSelectionAnchorPath] = useState("");
   const [actionStatus, setActionStatus] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; path: string } | null>(null);
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(scanSourcesStorageKey, JSON.stringify(sources));
+    } catch {
+      // Source persistence is a convenience; browsing and scanning still work.
+    }
+  }, [sources]);
   const scanStart = useMutation({
     mutationFn: startScan,
     onSuccess: (job) => {
@@ -217,7 +232,7 @@ export function DashboardPage() {
     }
   }, [files, selectedFilePath]);
 
-  function runScan() {
+  function runScan(forceRefresh: boolean) {
     if (!hasSources) return;
 
     setFiles([]);
@@ -228,8 +243,7 @@ export function DashboardPage() {
     scanStart.mutate({
       sources: activeSources,
       ignoredFolderNames: ignoredFolders.split(/[\n,]/).map((item) => item.trim()).filter(Boolean),
-      // Trust the cache; Refresh is the deliberate way to re-probe.
-      forceRefresh: false
+      forceRefresh
     });
   }
 
@@ -490,7 +504,7 @@ export function DashboardPage() {
               Browse
             </button>
             <button
-              onClick={runScan}
+              onClick={() => runScan(false)}
               disabled={isScanning || !hasSources}
               className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-2 text-sm font-semibold text-window transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled"
             >
@@ -524,11 +538,12 @@ export function DashboardPage() {
 
           <div className="mt-4 flex gap-2">
             <button
-              onClick={() => status.refetch()}
+              onClick={() => runScan(true)}
+              disabled={isScanning || !hasSources}
               className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
             >
               <RefreshCw size={15} />
-              Refresh
+              Rescan Files
             </button>
           </div>
 

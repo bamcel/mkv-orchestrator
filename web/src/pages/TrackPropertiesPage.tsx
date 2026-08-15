@@ -69,6 +69,12 @@ export function TrackPropertiesPage() {
   }, [files, templateFilePath, templatePath]);
 
   const mkvFiles = useMemo(() => files.filter((file) => file.extension.toLowerCase() === ".mkv"), [files]);
+  const selectedMkvPaths = useMemo(() => {
+    const selected = new Set(selectedPaths.map((path) => path.replace(/\\/g, "/").toLowerCase()));
+    return mkvFiles
+      .filter((file) => selected.has(file.path.replace(/\\/g, "/").toLowerCase()))
+      .map((file) => file.path);
+  }, [mkvFiles, selectedPaths]);
   const nonMkvCount = files.length - mkvFiles.length;
 
   // Cached and warmed while the library loads, so arriving here usually finds
@@ -172,7 +178,7 @@ export function TrackPropertiesPage() {
   function buildRequest(): PropEditPreviewRequest {
     return {
       files,
-      selectedPaths,
+      selectedPaths: selectedMkvPaths,
       templatePath,
       containerTitleMode: containerMode,
       customContainerTitle,
@@ -293,7 +299,7 @@ export function TrackPropertiesPage() {
 
             <div className="mt-3 text-xs font-semibold text-muted">Execution</div>
             <div className="mt-2 flex gap-2">
-              <button onClick={runPreview} disabled={preview.isPending || selectedPaths.length === 0 || !template} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
+              <button onClick={runPreview} disabled={preview.isPending || selectedMkvPaths.length === 0 || !template} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
                 {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
                 Preview
               </button>
@@ -302,11 +308,12 @@ export function TrackPropertiesPage() {
                   Cancel
                 </button>
               ) : (
-                <button onClick={runApply} disabled={selectedPaths.length === 0 || !previewResult?.actions.length} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
+                <button onClick={runApply} disabled={selectedMkvPaths.length === 0 || !previewResult?.actions.length} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
                   Apply
                 </button>
               )}
             </div>
+            <div className="mt-2 text-xs text-muted">{selectedMkvPaths.length} MKV file(s) selected for this batch.</div>
             <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
         </section>
 
