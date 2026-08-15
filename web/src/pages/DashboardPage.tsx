@@ -359,9 +359,8 @@ export function DashboardPage() {
   function openFileContextMenu(event: MouseEvent<HTMLTableRowElement>, file: MediaFileRow) {
     event.preventDefault();
     setSelectedFilePath(file.path);
-    if (!selectedPaths.some((path) => normalizeCompareValue(path) === normalizeCompareValue(file.path))) {
-      setSelectedPaths([file.path]);
-    }
+    // Opening the template menu must not replace the operation batch. A
+    // template is a reference file, not an implicit one-file selection.
     setContextMenu({ x: event.clientX, y: event.clientY, path: file.path });
   }
 

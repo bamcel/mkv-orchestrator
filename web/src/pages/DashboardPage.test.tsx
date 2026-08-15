@@ -396,6 +396,35 @@ describe("Dashboard template highlighting", () => {
     expect(screen.queryByRole("button", { name: /use selected as template/i })).not.toBeInTheDocument();
   });
 
+  it("setting a template does not collapse the selected batch", async () => {
+    const user = userEvent.setup();
+    const otherFile = {
+      ...templateFile,
+      path: "/media/Show/Ep02.mkv",
+      fileName: "Ep02.mkv"
+    };
+    const setFileSelection = vi.fn();
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () =>
+        Promise.resolve({
+          ...emptyScan,
+          files: [templateFile, otherFile],
+          selectedPaths: [templateFile.path, otherFile.path],
+          summary: { total: 2, mkv: 2, mp4: 0, failed: 0, cached: 0 }
+        }),
+      getWebSettings: () => Promise.resolve(settings()),
+      setFileSelection
+    });
+
+    const otherRow = await screen.findByRole("row", { name: /Ep02\.mkv/i });
+    fireEvent.contextMenu(otherRow);
+    await user.click(screen.getByRole("button", { name: /set as template/i }));
+
+    expect(setFileSelection).not.toHaveBeenCalled();
+    expect(screen.getByText("Template: Ep02.mkv")).toBeInTheDocument();
+  });
+
   /// The other Media Info fields already marked the template in accent; the
   /// filename was left plain, so the one row naming the file did not match.
   it("colours the template's filename like the rest of its details", async () => {

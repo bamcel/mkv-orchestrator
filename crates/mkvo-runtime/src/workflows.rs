@@ -380,25 +380,40 @@ fn append_track_edits(
     selected_forced: &str,
 ) {
     for (index, row) in rows.iter().enumerate() {
-        let name = if row.edited_name == row.current_name {
-            TextEdit::Keep
-        } else if row.edited_name.trim().is_empty() {
+        // Rows are seeded from the template. Their values are desired values
+        // for every target, even when the user did not alter the template row.
+        // Encoding an unchanged template value as Keep made every mismatching
+        // target keep its own value instead of converging on the template.
+        let name = if row.edited_name.trim().is_empty() {
             TextEdit::Delete
         } else {
             TextEdit::Set(row.edited_name.trim().to_owned())
         };
-        let language = (row.edited_language.trim() != row.current_language.trim())
-            .then(|| row.edited_language.trim().to_owned());
-        let should_default = !selected_default.is_empty() && selected_default == row.track_label;
-        let should_forced = !selected_forced.is_empty() && selected_forced == row.track_label;
+        let language = Some(if row.edited_language.trim().is_empty() {
+            "und".to_owned()
+        } else {
+            row.edited_language.trim().to_owned()
+        });
+        let default = track_flag_edit(selected_default, &row.track_label);
+        let forced = track_flag_edit(selected_forced, &row.track_label);
         edits.push(TrackEditIntent {
             kind,
             ordinal: u32::try_from(index + 1).unwrap_or(u32::MAX),
             name,
             language,
-            default: (should_default != row.current_default).then_some(should_default),
-            forced: (!selected_forced.is_empty()).then_some(should_forced),
+            default,
+            forced,
         });
+    }
+}
+
+fn track_flag_edit(selection: &str, track_label: &str) -> Option<bool> {
+    if selection.is_empty() || selection.eq_ignore_ascii_case("Keep existing") {
+        None
+    } else if selection.eq_ignore_ascii_case("None") {
+        Some(false)
+    } else {
+        Some(selection == track_label)
     }
 }
 
@@ -408,10 +423,10 @@ fn prop_track_row(index: usize, track: &MediaTrack) -> PropEditTrackConfigRow {
         track_label: format!("{} {}", track_kind_label(track.kind), index + 1),
         track_type: track_kind_label(track.kind).to_ascii_lowercase(),
         current_name: track.name.clone().unwrap_or_default(),
-        current_language: track.language.clone().unwrap_or_default(),
+        current_language: track.language_or_undetermined().to_owned(),
         current_default: track.default,
         edited_name: track.name.clone().unwrap_or_default(),
-        edited_language: track.language.clone().unwrap_or_default(),
+        edited_language: track.language_or_undetermined().to_owned(),
     }
 }
 
@@ -719,6 +734,44 @@ mod tests {
                 idempotency_key: key,
             })
             .expect("remux plan")
+    }
+
+    #[test]
+    fn template_track_values_are_desired_batch_values() {
+        let request = PropEditPreviewRequest {
+            files: Vec::new(),
+            selected_paths: Vec::new(),
+            template_path: None,
+            container_title_mode: TitleEditMode::Keep,
+            custom_container_title: String::new(),
+            video_title_mode: TitleEditMode::Keep,
+            custom_video_title: String::new(),
+            audio_tracks: vec![PropEditTrackConfigRow {
+                track_number: 1,
+                track_label: "Audio 1".to_owned(),
+                track_type: "audio".to_owned(),
+                current_name: "English".to_owned(),
+                current_language: "eng".to_owned(),
+                current_default: true,
+                edited_name: "English".to_owned(),
+                edited_language: "eng".to_owned(),
+            }],
+            subtitle_tracks: Vec::new(),
+            selected_default_audio: "Audio 1".to_owned(),
+            selected_forced_audio: "Keep existing".to_owned(),
+            selected_default_subtitle: "Keep existing".to_owned(),
+            selected_forced_subtitle: "Keep existing".to_owned(),
+            plan_id: None,
+            plan_fingerprint: None,
+            idempotency_key: None,
+        };
+
+        let edits = build_track_edits(&request);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].name, TextEdit::Set("English".to_owned()));
+        assert_eq!(edits[0].language.as_deref(), Some("eng"));
+        assert_eq!(edits[0].default, Some(true));
+        assert_eq!(edits[0].forced, None);
     }
 
     #[tokio::test]

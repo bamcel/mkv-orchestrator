@@ -314,6 +314,15 @@ export function TrackPropertiesPage() {
               )}
             </div>
             <div className="mt-2 text-xs text-muted">{selectedMkvPaths.length} MKV file(s) selected for this batch.</div>
+            {selectedMkvPaths.length < mkvFiles.length ? (
+              <button
+                type="button"
+                onClick={() => setSelectedPaths(mkvFiles.map((file) => file.path))}
+                className="mt-2 h-8 w-full rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted hover:bg-button-hover hover:text-text"
+              >
+                Select all {mkvFiles.length} MKV files
+              </button>
+            ) : null}
             <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
         </section>
 
