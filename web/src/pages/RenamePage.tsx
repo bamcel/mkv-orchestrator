@@ -409,20 +409,16 @@ export function RenamePage() {
 
   function toggleScope(key: string) {
     setScopeKeys((current) => {
-      // "All seasons + specials" and "All seasons" are exclusive shortcuts, mirroring
-      // the desktop scope cascade; concrete season/specials scopes combine freely.
-      if (key === "All") {
-        return current.includes("All") ? [] : ["All"];
+      // Scope keys are backend contracts (`all`, `season:N`). The all-episodes
+      // shortcut is exclusive; concrete seasons combine with each other.
+      if (key === "all") {
+        return current.includes("all") ? [] : ["all"];
       }
 
-      if (key === "AllRegular") {
-        return current.includes("AllRegular") ? [] : ["AllRegular"];
-      }
-
-      const withoutShortcuts = current.filter((item) => item !== "All" && item !== "AllRegular");
-      return withoutShortcuts.includes(key)
-        ? withoutShortcuts.filter((item) => item !== key)
-        : [...withoutShortcuts, key];
+      const withoutAll = current.filter((item) => item !== "all");
+      return withoutAll.includes(key)
+        ? withoutAll.filter((item) => item !== key)
+        : [...withoutAll, key];
     });
   }
 

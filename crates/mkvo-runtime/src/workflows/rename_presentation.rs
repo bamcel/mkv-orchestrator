@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
+use mkvo_application::{parse_episode_number, parse_season_episode};
 use mkvo_contracts::RenameScopeRow;
 use mkvo_domain::{EpisodeMetadata, RemuxMode, RemuxPlanItem, TrackKind};
 
@@ -26,6 +27,31 @@ pub(super) fn scope_rows(episodes: &[EpisodeMetadata]) -> Vec<RenameScopeRow> {
         is_selected: false,
     }));
     rows
+}
+
+pub(super) fn match_episode_for_file<'a>(
+    file_name: &str,
+    episodes: &'a [EpisodeMetadata],
+    selected_seasons: &BTreeSet<u32>,
+) -> Option<&'a EpisodeMetadata> {
+    let in_scope = |episode: &&EpisodeMetadata| {
+        selected_seasons.is_empty() || selected_seasons.contains(&episode.season)
+    };
+
+    if let Some((season, number)) = parse_season_episode(file_name) {
+        return episodes
+            .iter()
+            .filter(in_scope)
+            .find(|episode| episode.season == season && episode.episode == number);
+    }
+
+    let number = parse_episode_number(file_name)?;
+    let mut matches = episodes
+        .iter()
+        .filter(in_scope)
+        .filter(|episode| episode.episode == number);
+    let matched = matches.next()?;
+    matches.next().is_none().then_some(matched)
 }
 
 pub(super) fn track_kind_label(kind: TrackKind) -> &'static str {
@@ -91,4 +117,47 @@ pub(super) fn path_key(value: &str) -> String {
 pub(super) fn file_name(path: &Path) -> String {
     path.file_name()
         .map_or_else(String::new, |value| value.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn episode(season: u32, number: u32, title: &str) -> EpisodeMetadata {
+        EpisodeMetadata {
+            id: format!("{season}-{number}"),
+            season,
+            episode: number,
+            absolute_episode: None,
+            title: title.to_owned(),
+            aired_at: None,
+        }
+    }
+
+    #[test]
+    fn multi_season_filename_matches_its_encoded_season() {
+        let episodes = vec![episode(1, 1, "Pilot"), episode(6, 1, "Essential")];
+        let matched = match_episode_for_file(
+            "Superstore (2015) - S06E01 - Essential.mkv",
+            &episodes,
+            &BTreeSet::new(),
+        )
+        .expect("season six match");
+        assert_eq!((matched.season, matched.episode), (6, 1));
+        assert_eq!(matched.title, "Essential");
+    }
+
+    #[test]
+    fn episode_only_filename_must_be_unambiguous_in_scope() {
+        let episodes = vec![episode(1, 1, "Pilot"), episode(6, 1, "Essential")];
+        assert!(
+            match_episode_for_file("Superstore - Episode 1.mkv", &episodes, &BTreeSet::new())
+                .is_none()
+        );
+
+        let selected = BTreeSet::from([6]);
+        let matched = match_episode_for_file("Superstore - Episode 1.mkv", &episodes, &selected)
+            .expect("unique selected-season match");
+        assert_eq!(matched.season, 6);
+    }
 }

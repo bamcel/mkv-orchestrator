@@ -277,7 +277,7 @@ impl JobSupervisor {
             Ok(completion) => {
                 let _ = live.finish_completed(completion).await;
             }
-            Err(ApplicationError::Canceled | ApplicationError::Port(PortError::Canceled)) => {
+            Err(ApplicationError::Canceled) => {
                 let _ = live.finish_canceled("Canceled").await;
             }
             Err(error) => {

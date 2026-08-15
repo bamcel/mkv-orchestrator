@@ -17,7 +17,7 @@
   },
   "policy": {
     "sourcePropertyNames": "case_insensitive",
-    "currentTargetSchemaVersion": 1,
+    "currentTargetSchemaVersion": 2,
     "defaultRootPrecedence": [
       "RootFolderPath",
       "LastFolderPath"
@@ -146,6 +146,7 @@
           },
           "scan": {
             "defaultRoot": "${ROOT}/Library",
+            "defaultRootName": "Home",
             "ignoredFolderNames": [
               "Extras",
               "Samples"

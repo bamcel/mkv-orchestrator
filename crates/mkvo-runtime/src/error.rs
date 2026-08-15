@@ -73,7 +73,7 @@ impl From<ApplicationError> for RuntimeError {
 
 impl From<PortError> for RuntimeError {
     fn from(error: PortError) -> Self {
-        ApplicationError::Port(error).into()
+        ApplicationError::from(error).into()
     }
 }
 

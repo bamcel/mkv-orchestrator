@@ -104,12 +104,16 @@ export type Unsubscribe = () => void;
  * the complete workflow contract here prevents individual pages from depending
  * on transport details.
  */
-export interface BackendClient {
+export interface BackendTransportClient {
   readonly transport: BackendTransport;
+}
 
+export interface StatusClient {
   getStatus(): Promise<AppStatus>;
   browseFileSystem(path?: string): Promise<FileSystemResponse>;
+}
 
+export interface ScanClient {
   startScan(request: ScanRequest): Promise<ScanJobResponse>;
   getScanJob(id: string): Promise<ScanJobResponse>;
   cancelScan(id: string): Promise<ScanJobResponse>;
@@ -123,12 +127,16 @@ export interface BackendClient {
    * host that confines browsing has already authorized anything it showed.
    */
   authorizeBrowsedRoot(path: string): Promise<void>;
+}
 
+export interface SettingsClient {
   getWebSettings(): Promise<WebSettings>;
   saveWebSettings(request: WebSettingsRequest): Promise<WebSettings>;
   testMediaServerConnection(request: MediaServerConnectionRequest): Promise<MediaServerTestResponse>;
   syncMediaServerLibraries(id: string): Promise<MediaServerSyncResponse>;
+}
 
+export interface RenameClient {
   searchRenameMetadata(request: RenameSearchRequest): Promise<{ results: RenameSearchResult[] }>;
   loadRenameScopes(request: RenameScopesRequest): Promise<{ scopes: RenameScopeRow[] }>;
   testRenameProvider(request: RenameProviderTestRequest): Promise<RenameProviderTestResponse>;
@@ -138,24 +146,55 @@ export interface BackendClient {
   previewRenameBatchUndo(id: string): Promise<RenameBatchUndoPreviewResponse>;
   undoRenameBatch(id: string): Promise<RenameBatchUndoResponse>;
   clearRenameBatches(): Promise<RenameBatchListResponse>;
+}
 
-  buildMuxPreview(request: MuxPreviewRequest): Promise<MuxPreviewResponse>;
-  startMuxApply(request: MuxPreviewRequest): Promise<OperationJobResponse>;
+export interface OperationJobsClient {
   getOperationJob(id: string): Promise<OperationJobResponse>;
   cancelOperationJob(id: string): Promise<OperationJobResponse>;
+}
 
+export interface RemuxClient {
+  buildMuxPreview(request: MuxPreviewRequest): Promise<MuxPreviewResponse>;
+  startMuxApply(request: MuxPreviewRequest): Promise<OperationJobResponse>;
+}
+
+export interface PropertyEditClient {
   loadPropEditTemplate(request: PropEditTemplateRequest): Promise<PropEditTemplateResponse>;
   buildPropEditPreview(request: PropEditPreviewRequest): Promise<PropEditPreviewResponse>;
   startPropEditApply(request: PropEditPreviewRequest): Promise<OperationJobResponse>;
+}
 
+export interface LibraryClient {
   buildLibraryAudit(files: MediaFileRow[]): Promise<LibraryAuditResponse>;
+}
+
+export interface OperationLogsClient {
   getOperationLogs(): Promise<{ entries: OperationLogEntry[] }>;
   clearOperationLogs(): Promise<{ entries: OperationLogEntry[] }>;
   exportOperationLogs(): Promise<LogExport>;
+}
 
+export interface JobProgressClient {
   subscribeJobProgress(
     subscription: JobProgressSubscription,
     listener: JobProgressListener,
     onError?: JobProgressErrorListener
   ): Promise<Unsubscribe>;
 }
+
+/**
+ * Full runtime client retained for composition roots and transports. Feature
+ * code can accept one of the smaller interfaces above.
+ */
+export interface BackendClient
+  extends BackendTransportClient,
+    StatusClient,
+    ScanClient,
+    SettingsClient,
+    RenameClient,
+    OperationJobsClient,
+    RemuxClient,
+    PropertyEditClient,
+    LibraryClient,
+    OperationLogsClient,
+    JobProgressClient {}

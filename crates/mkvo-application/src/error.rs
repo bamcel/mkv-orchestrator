@@ -56,8 +56,10 @@ pub enum ApplicationError {
     Canceled,
     #[error("plan validation failed: {0}")]
     Plan(#[from] PlanValidationError),
-    #[error(transparent)]
-    Port(#[from] PortError),
+    #[error("{message}")]
+    DependencyUnavailable { message: String, retryable: bool },
+    #[error("adapter failure: {0}")]
+    AdapterFailure(String),
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -65,13 +67,19 @@ pub enum ApplicationError {
 impl ApplicationError {
     #[must_use]
     pub fn into_api_error(self, correlation_id: CorrelationId) -> ApiError {
-        let retryable = matches!(&self, Self::Port(error) if error.is_retryable());
+        let retryable = matches!(
+            &self,
+            Self::DependencyUnavailable {
+                retryable: true,
+                ..
+            }
+        );
         let code = match &self {
             Self::InvalidRequest(_) => ApiErrorCode::InvalidRequest,
             Self::UnauthorizedPath(_) => ApiErrorCode::UnauthorizedPath,
             Self::NotFound(_) => ApiErrorCode::NotFound,
             Self::Conflict(_) => ApiErrorCode::Conflict,
-            Self::Canceled | Self::Port(PortError::Canceled) => ApiErrorCode::JobCanceled,
+            Self::Canceled => ApiErrorCode::JobCanceled,
             Self::Plan(PlanValidationError::Expired(_)) => ApiErrorCode::PlanExpired,
             Self::Plan(PlanValidationError::FingerprintMismatch) => ApiErrorCode::PlanTampered,
             Self::Plan(_) => ApiErrorCode::PlanStale,
@@ -79,13 +87,25 @@ impl ApplicationError {
             // unconfigured provider, an unreachable server, a stale reference.
             // Collapsing them all to `Internal` tells the user to report a bug
             // when they should be opening Settings.
-            Self::Port(PortError::Unavailable { .. }) => ApiErrorCode::ProviderUnavailable,
-            Self::Port(PortError::NotFound(_)) => ApiErrorCode::NotFound,
-            Self::Port(PortError::Conflict(_)) => ApiErrorCode::Conflict,
-            Self::Port(PortError::InvalidData(_)) => ApiErrorCode::InvalidRequest,
-            Self::Port(PortError::Other(_)) | Self::Internal(_) => ApiErrorCode::Internal,
+            Self::DependencyUnavailable { .. } => ApiErrorCode::ProviderUnavailable,
+            Self::AdapterFailure(_) | Self::Internal(_) => ApiErrorCode::Internal,
         };
         ApiError::new(code, self.to_string(), correlation_id).retryable(retryable)
+    }
+}
+
+impl From<PortError> for ApplicationError {
+    fn from(error: PortError) -> Self {
+        match error {
+            PortError::Unavailable { message, retryable } => {
+                Self::DependencyUnavailable { message, retryable }
+            }
+            PortError::NotFound(message) => Self::NotFound(message),
+            PortError::Conflict(message) => Self::Conflict(message),
+            PortError::InvalidData(message) => Self::InvalidRequest(message),
+            PortError::Canceled => Self::Canceled,
+            PortError::Other(message) => Self::AdapterFailure(message),
+        }
     }
 }
 
@@ -123,7 +143,7 @@ mod tests {
         ];
 
         for (port, expected) in cases {
-            let api = ApplicationError::Port(port.clone())
+            let api = ApplicationError::from(port.clone())
                 .into_api_error(mkvo_domain::CorrelationId::new());
             assert_eq!(api.code, expected, "{port:?}");
         }
@@ -131,7 +151,7 @@ mod tests {
 
     #[test]
     fn a_retryable_port_failure_stays_marked_retryable() {
-        let api = ApplicationError::Port(PortError::unavailable("provider timed out", true))
+        let api = ApplicationError::from(PortError::unavailable("provider timed out", true))
             .into_api_error(mkvo_domain::CorrelationId::new());
         assert!(api.retryable);
     }

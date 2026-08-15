@@ -379,6 +379,9 @@ fn parse_season_folder(value: &str) -> Option<u32> {
 
 #[must_use]
 pub fn parse_episode_number(file_name: &str) -> Option<u32> {
+    if let Some((_, episode)) = parse_season_episode(file_name) {
+        return Some(episode);
+    }
     let lower = file_name.to_ascii_lowercase();
     let bytes = lower.as_bytes();
     for index in 0..bytes.len() {
@@ -448,6 +451,40 @@ pub fn parse_episode_number(file_name: &str) -> Option<u32> {
     None
 }
 
+/// Parse the common `SxxExxx` identity embedded in a media filename.
+///
+/// Keeping the season alongside the episode prevents a multi-season rename
+/// from matching every `E01` to the first season returned by the provider.
+#[must_use]
+pub fn parse_season_episode(file_name: &str) -> Option<(u32, u32)> {
+    let lower = file_name.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    for index in 0..bytes.len() {
+        if bytes[index] != b's' {
+            continue;
+        }
+        let mut cursor = index + 1;
+        let season_start = cursor;
+        while cursor < bytes.len() && bytes[cursor].is_ascii_digit() && cursor - season_start < 2 {
+            cursor += 1;
+        }
+        if cursor == season_start || cursor >= bytes.len() || bytes[cursor] != b'e' {
+            continue;
+        }
+        let season = lower[season_start..cursor].parse().ok()?;
+        cursor += 1;
+        let episode_start = cursor;
+        while cursor < bytes.len() && bytes[cursor].is_ascii_digit() && cursor - episode_start < 3 {
+            cursor += 1;
+        }
+        if cursor > episode_start {
+            let episode = lower[episode_start..cursor].parse().ok()?;
+            return Some((season, episode));
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
@@ -508,6 +545,8 @@ mod tests {
     #[test]
     fn finds_common_episode_patterns() {
         assert_eq!(parse_episode_number("Show.S02E013.mkv"), Some(13));
+        assert_eq!(parse_season_episode("Show.S06E01.mkv"), Some((6, 1)));
+        assert_eq!(parse_season_episode("Show - Episode 007.mkv"), None);
         assert_eq!(parse_episode_number("Show - Episode 007.mkv"), Some(7));
         assert_eq!(
             parse_episode_number("[VCB-Studio] 7th Time Loop [01][Ma10p_1080p][x265_flac].mkv"),

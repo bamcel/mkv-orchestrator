@@ -137,6 +137,41 @@ describe("rename episode scope", () => {
     await waitFor(() => expect(screen.getByText("All episodes (78)")).toBeInTheDocument());
     expect(screen.queryByText(/not applicable to a movie/i)).not.toBeInTheDocument();
   });
+
+  it("treats the backend all scope as exclusive", async () => {
+    const user = userEvent.setup();
+    renderWithBackend(
+      <MediaLibraryProvider>
+        <Scan fileNames={["Superstore.S06E01.mkv"]} />
+        <RenamePage />
+      </MediaLibraryProvider>,
+      {
+        searchRenameMetadata: () => Promise.resolve({ results: [searchResult("series")] }),
+        loadRenameScopes: () => Promise.resolve({ scopes: [
+          { key: "all", label: "All episodes (113)", isSelected: true },
+          { key: "season:1", label: "Season 1", isSelected: false },
+          { key: "season:6", label: "Season 6", isSelected: false }
+        ] })
+      }
+    );
+
+    const title = await searchTitleField();
+    await user.clear(title);
+    await user.type(title, "Superstore");
+    await user.click(screen.getByRole("button", { name: /^search$/i }));
+
+    const all = await screen.findByRole("checkbox", { name: "All episodes (113)" });
+    const seasonSix = screen.getByRole("checkbox", { name: "Season 6" });
+    expect(all).toBeChecked();
+
+    await user.click(seasonSix);
+    expect(all).not.toBeChecked();
+    expect(seasonSix).toBeChecked();
+
+    await user.click(all);
+    expect(all).toBeChecked();
+    expect(seasonSix).not.toBeChecked();
+  });
 });
 
 describe("rename search title", () => {
