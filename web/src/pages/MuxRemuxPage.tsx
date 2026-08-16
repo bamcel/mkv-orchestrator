@@ -41,6 +41,7 @@ export function MuxRemuxPage() {
   const [convertMp4, setConvertMp4] = useState(false);
   const [deleteMp4AfterConvert, setDeleteMp4AfterConvert] = useState(false);
   const [previewResult, setPreviewResult] = useState<MuxPreviewResponse | null>(null);
+  const [previewRemovedTracks, setPreviewRemovedTracks] = useState<Record<string, string[]>>({});
   const [statusText, setStatusText] = useState("Load scanned files from Dashboard, then build a preview.");
   const [settingsDefaultsApplied, setSettingsDefaultsApplied] = useState(false);
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
@@ -107,8 +108,9 @@ export function MuxRemuxPage() {
 
   const preview = useMutation({
     mutationFn: buildMuxPreview,
-    onSuccess: (response) => {
+    onSuccess: (response, request) => {
       setPreviewResult(response);
+      setPreviewRemovedTracks(buildRemovedTrackDetails(request));
       setStatusText(response.status);
     },
     onError: (error) => setStatusText(error instanceof Error ? error.message : "Preview failed.")
@@ -501,7 +503,10 @@ export function MuxRemuxPage() {
               rows: previewResult?.actions.map((action) => ({
                 key: `${action.filePath}-${action.index}`,
                 title: action.fileName,
-                detail: action.description,
+                detail: [
+                  action.description,
+                  ...(previewRemovedTracks[normalizePath(action.filePath)] ?? [])
+                ].join("\n"),
                 meta: `${action.operation} · ${action.toolName}`
               })) ?? []
             },
@@ -584,6 +589,61 @@ export function MuxRemuxPage() {
 
 function normalizePath(path: string) {
   return path.replace(/\\/g, "/").toLowerCase();
+}
+
+type RemovalPreviewInput = Pick<MuxPreviewRequest,
+  "files"
+  | "selectedPaths"
+  | "removeUnwantedAudioLanguages"
+  | "keepAudioLanguages"
+  | "removeUnwantedSubtitleLanguages"
+  | "keepSubtitleLanguages"
+  | "removeUnwantedTrackIds"
+  | "removeTrackIdsText"
+>;
+
+export function buildRemovedTrackDetails(request: RemovalPreviewInput): Record<string, string[]> {
+  const selected = new Set(request.selectedPaths.map(normalizePath));
+  const explicitIds = request.removeUnwantedTrackIds
+    ? new Set((request.removeTrackIdsText.match(/\d+/g) ?? []).map(Number))
+    : new Set<number>();
+  const audioLanguages = parseLanguageSet(request.keepAudioLanguages);
+  const subtitleLanguages = parseLanguageSet(request.keepSubtitleLanguages);
+  const details: Record<string, string[]> = {};
+
+  for (const file of request.files) {
+    const key = normalizePath(file.path);
+    if (!selected.has(key)) continue;
+    const removed = file.tracks.filter((track) => {
+      if (explicitIds.has(track.id)) return true;
+      const type = track.type.toLowerCase();
+      const language = (track.language || "und").toLowerCase();
+      if (type === "audio" && request.removeUnwantedAudioLanguages) return !audioLanguages.has(language);
+      if ((type === "subtitle" || type === "subtitles") && request.removeUnwantedSubtitleLanguages) return !subtitleLanguages.has(language);
+      return false;
+    });
+    if (removed.length === 0) continue;
+    details[key] = [
+      `Removed tracks (${removed.length}):`,
+      ...removed.map((track) => {
+        const parts = [
+          `ID ${track.id}`,
+          track.type || "Track",
+          track.language || "und",
+          track.codec || "Unknown codec",
+          track.name || "No name"
+        ];
+        if (track.default) parts.push("default");
+        if (track.forced) parts.push("forced");
+        return `• ${parts.join(" · ")}`;
+      })
+    ];
+  }
+  return details;
+}
+
+function parseLanguageSet(value: string) {
+  return new Set(value.split(/[\s,;]+/).map((part) => part.trim().toLowerCase()).filter(Boolean));
 }
 
 function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
