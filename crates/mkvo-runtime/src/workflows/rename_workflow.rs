@@ -210,6 +210,12 @@ impl MkvoRuntime {
                                 .file_system
                                 .move_file(&item.source, &item.target)
                                 .await?;
+                            runtime
+                                .apply_renames_to_working_set(&[(
+                                    item.source.clone(),
+                                    item.target.clone(),
+                                )])
+                                .await;
                             let renamed_fingerprint = runtime
                                 .dependencies()
                                 .file_system
@@ -276,7 +282,7 @@ impl MkvoRuntime {
             .filter(|item| item.can_apply())
             .map(|item| (item.source.clone(), item.target.clone()))
             .collect();
-        if !moves.is_empty() {
+        if replay && !moves.is_empty() {
             self.apply_renames_to_working_set(&moves).await;
         }
 
@@ -427,6 +433,12 @@ impl MkvoRuntime {
                                 .file_system
                                 .move_file(&entry.renamed_path, &entry.original_path)
                                 .await?;
+                            runtime
+                                .apply_renames_to_working_set(&[(
+                                    entry.renamed_path.clone(),
+                                    entry.original_path.clone(),
+                                )])
+                                .await;
                             response.renamed += 1;
                             response
                                 .lines

@@ -1237,6 +1237,36 @@ mod tests {
         );
     }
 
+    #[test]
+    fn initial_scan_selects_every_file() {
+        let mut state = CurrentScanState::default();
+
+        state.apply_scan(
+            vec![media_at("/media/a.mkv"), media_at("/media/b.mkv")],
+            mkvo_contracts::ScanSummary::default(),
+        );
+
+        assert_eq!(
+            state.selected_display_paths(),
+            vec!["/media/a.mkv".to_owned(), "/media/b.mkv".to_owned()]
+        );
+    }
+
+    #[test]
+    fn rescan_preserves_a_deliberate_empty_selection() {
+        let mut state = CurrentScanState {
+            files: vec![media_at("/media/a.mkv")],
+            ..CurrentScanState::default()
+        };
+
+        state.apply_scan(
+            vec![media_at("/media/a.mkv"), media_at("/media/b.mkv")],
+            mkvo_contracts::ScanSummary::default(),
+        );
+
+        assert!(state.selected_display_paths().is_empty());
+    }
+
     /// Clearing the working set is a transient step on the way to replacing it,
     /// so it must not be read as "the user deselected everything".
     #[test]

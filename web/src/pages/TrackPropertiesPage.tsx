@@ -33,6 +33,8 @@ type StoredTrackPropertiesConfiguration = {
   videoMode: TitleMode;
   customContainerTitle: string;
   customVideoTitle: string;
+  videoLanguageEnabled: boolean;
+  videoLanguage: string;
   audioTracks: PropEditTrackConfigRow[];
   subtitleTracks: PropEditTrackConfigRow[];
   defaultAudio: string;
@@ -52,7 +54,7 @@ function readStoredConfiguration(): StoredTrackPropertiesConfiguration | null {
 }
 
 export function TrackPropertiesPage() {
-  const { files, setFiles, selectedPaths, setSelectedPaths, templateFilePath, setTemplateFilePath, syncFromBackend } = useMediaLibrary();
+  const { files, setFiles, templateFilePath, setTemplateFilePath, syncFromBackend } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const storedConfiguration = useRef(readStoredConfiguration());
@@ -61,6 +63,8 @@ export function TrackPropertiesPage() {
   const [videoMode, setVideoMode] = useState<TitleMode>(storedConfiguration.current?.videoMode ?? "keep");
   const [customContainerTitle, setCustomContainerTitle] = useState(storedConfiguration.current?.customContainerTitle ?? "");
   const [customVideoTitle, setCustomVideoTitle] = useState(storedConfiguration.current?.customVideoTitle ?? "");
+  const [videoLanguageEnabled, setVideoLanguageEnabled] = useState(storedConfiguration.current?.videoLanguageEnabled ?? false);
+  const [videoLanguage, setVideoLanguage] = useState(storedConfiguration.current?.videoLanguage ?? "und");
   const [template, setTemplate] = useState<PropEditTemplateResponse | null>(null);
   const [audioTracks, setAudioTracks] = useState<PropEditTrackConfigRow[]>([]);
   const [subtitleTracks, setSubtitleTracks] = useState<PropEditTrackConfigRow[]>([]);
@@ -81,15 +85,6 @@ export function TrackPropertiesPage() {
   }, [currentScan.data]);
 
   useEffect(() => {
-    // Only mkvpropedit-capable files can be edited here, and a default is
-    // filled in only when nothing is selected, so a restored or deliberate
-    // selection survives.
-    if (files.length > 0 && selectedPaths.length === 0) {
-      setSelectedPaths(
-        files.filter((file) => file.extension.toLowerCase() === ".mkv").map((file) => file.path)
-      );
-    }
-
     if (!templatePath || !files.some((file) => file.path === templatePath)) {
       const nextTemplate = templateFilePath || files.find((file) => file.extension.toLowerCase() === ".mkv")?.path || "";
       setTemplatePath(nextTemplate);
@@ -97,12 +92,9 @@ export function TrackPropertiesPage() {
   }, [files, templateFilePath, templatePath]);
 
   const mkvFiles = useMemo(() => files.filter((file) => file.extension.toLowerCase() === ".mkv"), [files]);
-  const selectedMkvPaths = useMemo(() => {
-    const selected = new Set(selectedPaths.map((path) => path.replace(/\\/g, "/").toLowerCase()));
-    return mkvFiles
-      .filter((file) => selected.has(file.path.replace(/\\/g, "/").toLowerCase()))
-      .map((file) => file.path);
-  }, [mkvFiles, selectedPaths]);
+  // Track Properties is always a complete MKV batch. Selections made in
+  // Rename, Mux/Remux, or the library do not narrow this workflow.
+  const selectedMkvPaths = useMemo(() => mkvFiles.map((file) => file.path), [mkvFiles]);
   const nonMkvCount = files.length - mkvFiles.length;
 
   // Cached and warmed while the library loads, so arriving here usually finds
@@ -142,6 +134,8 @@ export function TrackPropertiesPage() {
     setVideoMode(canRestore ? stored!.videoMode : "keep");
     setCustomContainerTitle(canRestore ? stored!.customContainerTitle : loadedTemplate.templateFileName.replace(/\.[^.]+$/, ""));
     setCustomVideoTitle(canRestore ? stored!.customVideoTitle : loadedTemplate.templateFileName.replace(/\.[^.]+$/, ""));
+    setVideoLanguageEnabled(canRestore ? stored!.videoLanguageEnabled ?? false : false);
+    setVideoLanguage(canRestore ? stored!.videoLanguage || "und" : "und");
     storedConfiguration.current = canRestore ? stored : null;
     setPreviewResult(null);
     setConfigurationReady(true);
@@ -169,6 +163,8 @@ export function TrackPropertiesPage() {
       videoMode,
       customContainerTitle,
       customVideoTitle,
+      videoLanguageEnabled,
+      videoLanguage,
       audioTracks,
       subtitleTracks,
       defaultAudio,
@@ -184,7 +180,7 @@ export function TrackPropertiesPage() {
     }
   }, [
     currentScan.data, configurationReady, template, templatePath, containerMode, videoMode,
-    customContainerTitle, customVideoTitle, audioTracks, subtitleTracks, defaultAudio,
+    customContainerTitle, customVideoTitle, videoLanguageEnabled, videoLanguage, audioTracks, subtitleTracks, defaultAudio,
     forcedAudio, defaultSubtitle, forcedSubtitle, customTrackKeys
   ]);
 
@@ -264,6 +260,7 @@ export function TrackPropertiesPage() {
       customContainerTitle,
       videoTitleMode: videoMode,
       customVideoTitle,
+      videoTrackLanguage: videoLanguageEnabled ? videoLanguage.trim() || "und" : null,
       audioTracks,
       subtitleTracks,
       selectedDefaultAudio: defaultAudio,
@@ -377,6 +374,26 @@ export function TrackPropertiesPage() {
               labels={{ remove: "Remove video name", keep: "Keep existing name", file: "Use file name", custom: "Custom video name" }}
             />
 
+            <div className="mt-3 text-xs font-semibold text-muted">Video Track Language</div>
+            <label className="mt-2 flex items-center gap-2 text-sm text-text">
+              <input
+                type="checkbox"
+                checked={videoLanguageEnabled}
+                onChange={(event) => setVideoLanguageEnabled(event.target.checked)}
+              />
+              Set video track language
+            </label>
+            <select
+              value={videoLanguage}
+              disabled={!videoLanguageEnabled}
+              onChange={(event) => setVideoLanguage(event.target.value)}
+              className="mt-2 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent disabled:text-disabled"
+            >
+              {[...new Set(["und", ...languagePresetOptions])].map((language) => (
+                <option key={language} value={language}>{language}</option>
+              ))}
+            </select>
+
             <div className="mt-3 text-xs font-semibold text-muted">Execution</div>
             <div className="mt-2 flex gap-2">
               <button onClick={runPreview} disabled={preview.isPending || selectedMkvPaths.length === 0 || !template} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
@@ -393,16 +410,7 @@ export function TrackPropertiesPage() {
                 </button>
               )}
             </div>
-            <div className="mt-2 text-xs text-muted">{selectedMkvPaths.length} MKV file(s) selected for this batch.</div>
-            {selectedMkvPaths.length < mkvFiles.length ? (
-              <button
-                type="button"
-                onClick={() => setSelectedPaths(mkvFiles.map((file) => file.path))}
-                className="mt-2 h-8 w-full rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted hover:bg-button-hover hover:text-text"
-              >
-                Select all {mkvFiles.length} MKV files
-              </button>
-            ) : null}
+            <div className="mt-2 text-xs text-muted">All {selectedMkvPaths.length} MKV file(s) are included in this batch.</div>
             <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
         </section>
 

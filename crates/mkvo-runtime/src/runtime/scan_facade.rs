@@ -258,12 +258,7 @@ impl MkvoRuntime {
                 {
                     let mut current = current.write().await;
                     current.updated_utc = Some(Utc::now());
-                    current.files.clone_from(&outcome.files);
-                    current.summary = outcome.summary;
-                    // A rescan after a mutating job changes which paths exist,
-                    // so a selection naming a file that is gone is dropped here
-                    // rather than being handed to the next operation.
-                    current.reconcile_selection();
+                    current.apply_scan(outcome.files.clone(), outcome.summary);
                 }
                 let summary = outcome.summary;
                 let detail = format!(
@@ -384,9 +379,22 @@ impl MkvoRuntime {
     /// operation resolves nothing and the dashboard shows the old names until a
     /// rescan.
     pub(crate) async fn apply_renames_to_working_set(&self, renames: &[(PathBuf, PathBuf)]) {
-        let mut state = self.inner.current_scan.write().await;
-        state.apply_renames(renames);
-        state.updated_utc = Some(Utc::now());
+        {
+            let mut state = self.inner.current_scan.write().await;
+            state.apply_renames(renames);
+            state.updated_utc = Some(Utc::now());
+        }
+        for (source, _) in renames {
+            if let Err(error) = self.inner.dependencies.cache.remove(source).await {
+                tracing::warn!(
+                    path = %source.display(),
+                    %error,
+                    "renamed file's old cache entry could not be removed"
+                );
+            }
+        }
+        let targets: Vec<_> = renames.iter().map(|(_, target)| target.clone()).collect();
+        self.refresh_working_set(&targets).await;
     }
 
     /// Re-read files an operation just changed, so the working set describes
@@ -420,6 +428,16 @@ impl MkvoRuntime {
             }
         }
 
+        for file in &probed {
+            if let Err(error) = self.inner.dependencies.cache.upsert(file).await {
+                tracing::warn!(
+                    path = %file.path.display(),
+                    %error,
+                    "refreshed file metadata could not be cached"
+                );
+            }
+        }
+
         let mut state = self.inner.current_scan.write().await;
         for file in probed {
             if let Some(existing) = state
@@ -428,8 +446,14 @@ impl MkvoRuntime {
                 .find(|candidate| same_path(&candidate.path, &file.path))
             {
                 *existing = file;
+            } else {
+                state.files.push(file);
             }
         }
+        state
+            .files
+            .sort_by(|left, right| left.path.cmp(&right.path));
+        state.reconcile_selection();
         state.updated_utc = Some(Utc::now());
     }
 

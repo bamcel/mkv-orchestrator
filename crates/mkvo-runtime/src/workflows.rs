@@ -358,6 +358,16 @@ fn title_edit(mode: TitleEditMode, custom: &str) -> TextEdit {
 
 fn build_track_edits(request: &PropEditPreviewRequest) -> Vec<TrackEditIntent> {
     let mut edits = Vec::new();
+    if let Some(language) = request.video_track_language.as_deref() {
+        edits.push(TrackEditIntent {
+            kind: TrackKind::Video,
+            ordinal: 1,
+            name: TextEdit::Keep,
+            language: Some(language.trim().to_owned()),
+            default: None,
+            forced: None,
+        });
+    }
     append_track_edits(
         &mut edits,
         TrackKind::Audio,
@@ -749,6 +759,7 @@ mod tests {
             custom_container_title: String::new(),
             video_title_mode: TitleEditMode::Keep,
             custom_video_title: String::new(),
+            video_track_language: None,
             audio_tracks: vec![PropEditTrackConfigRow {
                 track_number: 1,
                 track_label: "Audio 1".to_owned(),
@@ -775,6 +786,38 @@ mod tests {
         assert_eq!(edits[0].language.as_deref(), Some("eng"));
         assert_eq!(edits[0].default, Some(true));
         assert_eq!(edits[0].forced, None);
+    }
+
+    #[test]
+    fn video_language_is_opt_in_and_targets_the_first_video_track() {
+        let mut request = PropEditPreviewRequest {
+            files: Vec::new(),
+            selected_paths: Vec::new(),
+            template_path: None,
+            container_title_mode: TitleEditMode::Keep,
+            custom_container_title: String::new(),
+            video_title_mode: TitleEditMode::Keep,
+            custom_video_title: String::new(),
+            video_track_language: None,
+            audio_tracks: Vec::new(),
+            subtitle_tracks: Vec::new(),
+            selected_default_audio: "Keep existing".to_owned(),
+            selected_forced_audio: "Keep existing".to_owned(),
+            selected_default_subtitle: "Keep existing".to_owned(),
+            selected_forced_subtitle: "Keep existing".to_owned(),
+            plan_id: None,
+            plan_fingerprint: None,
+            idempotency_key: None,
+        };
+
+        assert!(build_track_edits(&request).is_empty());
+
+        request.video_track_language = Some("und".to_owned());
+        let edits = build_track_edits(&request);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].kind, TrackKind::Video);
+        assert_eq!(edits[0].ordinal, 1);
+        assert_eq!(edits[0].language.as_deref(), Some("und"));
     }
 
     #[tokio::test]

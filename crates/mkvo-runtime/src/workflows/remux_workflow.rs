@@ -393,6 +393,18 @@ impl MkvoRuntime {
                     .await?;
             }
         }
+        if item.mode != RemuxMode::ExtractSubtitles {
+            if item.delete_source_after_success && !same_path(&item.source, &item.final_output) {
+                self.apply_renames_to_working_set(&[(
+                    item.source.clone(),
+                    item.final_output.clone(),
+                )])
+                .await;
+            } else {
+                self.refresh_working_set(std::slice::from_ref(&item.final_output))
+                    .await;
+            }
+        }
         Ok(())
     }
 

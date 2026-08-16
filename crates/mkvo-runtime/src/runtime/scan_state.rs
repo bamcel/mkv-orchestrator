@@ -28,6 +28,24 @@ pub(super) struct CurrentScanState {
 }
 
 impl CurrentScanState {
+    /// Replace the working set after a scan, selecting every file the first
+    /// time a working set is populated. Later rescans preserve an explicit
+    /// user selection, including a deliberate empty selection.
+    pub(super) fn apply_scan(&mut self, files: Vec<MediaFile>, summary: ScanSummary) {
+        let is_initial_scan = self.files.is_empty() && self.selected.is_empty();
+        self.files = files;
+        self.summary = summary;
+        if is_initial_scan {
+            self.selected = self
+                .files
+                .iter()
+                .map(|file| mkvo_application::paths::path_key(&file.path))
+                .collect();
+        } else {
+            self.reconcile_selection();
+        }
+    }
+
     /// Move the authoritative working set and selection with completed renames.
     pub(super) fn apply_renames(&mut self, renames: &[(PathBuf, PathBuf)]) {
         for (source, target) in renames {

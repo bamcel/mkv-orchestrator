@@ -190,6 +190,8 @@ pub struct PropEditPreviewRequest {
     pub custom_container_title: String,
     pub video_title_mode: TitleEditMode,
     pub custom_video_title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video_track_language: Option<String>,
     #[serde(default)]
     pub audio_tracks: Vec<PropEditTrackConfigRow>,
     #[serde(default)]

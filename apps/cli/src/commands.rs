@@ -143,6 +143,7 @@ pub async fn cleanup(runtime: &MkvoRuntime, args: CleanupArgs) -> Result<u8> {
             TitleEditMode::Remove
         },
         custom_video_title: String::new(),
+        video_track_language: None,
         audio_tracks,
         subtitle_tracks,
         // Left blank so existing default and forced flags are kept; the retired
