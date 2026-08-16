@@ -121,27 +121,7 @@ fn legacy_rename_batch_dto(
 }
 
 fn media_from_row(row: &mkvo_contracts::MediaFileRow, fingerprint: FileFingerprint) -> MediaFile {
-    let tracks = row
-        .tracks
-        .iter()
-        .map(|track| MediaTrack {
-            mkvmerge_id: track.id,
-            propedit_track_number: track.track_number,
-            kind: parse_track_kind(&track.track_type),
-            codec: track.codec.clone(),
-            codec_id: None,
-            language: (!track.language.is_empty()).then(|| track.language.clone()),
-            name: (!track.name.is_empty()).then(|| track.name.clone()),
-            resolution: None,
-            bit_depth: None,
-            hdr: None,
-            channels: None,
-            sampling_frequency_hz: None,
-            default: track.default,
-            forced: track.forced,
-            enabled: true,
-        })
-        .collect();
+    let tracks = tracks_from_row(row);
     let attachments = row
         .attachments
         .iter()
@@ -184,6 +164,29 @@ fn media_from_row(row: &mkvo_contracts::MediaFileRow, fingerprint: FileFingerpri
         provider_match: None,
         status: MediaStatus::Ready,
     }
+}
+
+fn tracks_from_row(row: &mkvo_contracts::MediaFileRow) -> Vec<MediaTrack> {
+    row.tracks
+        .iter()
+        .map(|track| MediaTrack {
+            mkvmerge_id: track.id,
+            propedit_track_number: track.track_number,
+            kind: parse_track_kind(&track.track_type),
+            codec: track.codec.clone(),
+            codec_id: None,
+            language: (!track.language.is_empty()).then(|| track.language.clone()),
+            name: (!track.name.is_empty()).then(|| track.name.clone()),
+            resolution: None,
+            bit_depth: None,
+            hdr: None,
+            channels: None,
+            sampling_frequency_hz: None,
+            default: track.default,
+            forced: track.forced,
+            enabled: true,
+        })
+        .collect()
 }
 
 fn parse_track_kind(value: &str) -> TrackKind {

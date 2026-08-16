@@ -83,7 +83,14 @@ impl MkvoRuntime {
                 .iter()
                 .find(|file| same_path(&file.path, Path::new(&row.path)))
             {
-                files.push(file.clone());
+                // The row is the track layout the user is looking at. Keep
+                // the runtime's fingerprint and rich file metadata, but plan
+                // track operations against the exact IDs displayed in the UI
+                // so a stale cached domain projection cannot target a
+                // different track or incorrectly report no change.
+                let mut resolved = file.clone();
+                resolved.tracks = tracks_from_row(row);
+                files.push(resolved);
                 continue;
             }
             let path = PathBuf::from(&row.path);
