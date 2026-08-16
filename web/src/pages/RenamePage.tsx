@@ -13,6 +13,7 @@ import {
   previewRenameBatchUndo,
   RenameBatchRecord,
   RenameBatchUndoPreviewResponse,
+  RenamePreviewResponse,
   RenamePreviewRow,
   RenameScopeRow,
   RenameSearchResult,
@@ -45,6 +46,19 @@ type StoredRenameState = {
   scopeRows?: RenameScopeRow[];
 };
 
+type BatchMovieMatch = {
+  file: MediaFileRow;
+  query: string;
+  results: RenameSearchResult[];
+  selectedIndex: number;
+  status: string;
+};
+
+type BatchMoviePlan = {
+  sourcePath: string;
+  preview: RenamePreviewResponse;
+};
+
 function loadRenameState(): StoredRenameState {
   try {
     const saved = window.sessionStorage.getItem(renameStateStorageKey);
@@ -73,6 +87,7 @@ export function RenamePage() {
     void queryClient.invalidateQueries({ queryKey: ["propedit-template"] });
   };
   const [storedRenameState] = useState<StoredRenameState>(() => loadRenameState());
+  const [renameMode, setRenameMode] = useState<"single" | "batch-movies">("single");
   const [provider, setProvider] = useState(storedRenameState.provider || "TVDB");
   const [language, setLanguage] = useState(storedRenameState.language || "eng");
   const [searchTitle, setSearchTitle] = useState(storedRenameState.searchTitle || "");
@@ -101,6 +116,10 @@ export function RenamePage() {
   const [highlightedPreviewPaths, setHighlightedPreviewPaths] = useState<string[]>([]);
   const [previewSelectionAnchor, setPreviewSelectionAnchor] = useState("");
   const [previewSelectionMenu, setPreviewSelectionMenu] = useState<{ x: number; y: number } | null>(null);
+  const [batchMatches, setBatchMatches] = useState<BatchMovieMatch[]>([]);
+  const [batchPlans, setBatchPlans] = useState<BatchMoviePlan[]>([]);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchApplying, setBatchApplying] = useState(false);
   const [compactPreview, setCompactPreview] = useState(() => {
     try {
       return window.localStorage.getItem(renamePreviewCompactStorageKey) === "true";
@@ -226,6 +245,7 @@ export function RenamePage() {
   }, [isUndoOpen, selectedUndoBatch, undoPreview.data]);
 
   useEffect(() => {
+    if (renameMode === "batch-movies") return;
     if (files.length === 0 || previewRowsMatchFiles(previewRows, files)) return;
 
     setPreviewRows(buildScannedFilePreviewRows(files));
@@ -233,7 +253,7 @@ export function RenamePage() {
     if (searchResults.length === 0) {
       setStatusText(`${files.length} scanned file(s) ready for metadata search.`);
     }
-  }, [files, previewRows, searchResults.length]);
+  }, [renameMode, files, previewRows, searchResults.length]);
 
   const search = useMutation({
     mutationFn: searchRenameMetadata,
@@ -385,6 +405,134 @@ export function RenamePage() {
     }).catch(() => undefined);
 
     search.mutate({ query: searchTitle, provider, language });
+  }
+
+  async function matchBatchMovies() {
+    if (selectedFiles.length === 0) {
+      setStatusText("Scan movie files before matching a batch.");
+      return;
+    }
+    setBatchBusy(true);
+    setBatchPlans([]);
+    setPreviewRows([]);
+    setPreviewSummary("");
+    setStatusText(`Matching ${selectedFiles.length} movie file(s)...`);
+    const matches: BatchMovieMatch[] = [];
+    for (const file of selectedFiles) {
+      const query = batchMatches.find((item) => normalizeRenamePath(item.file.path) === normalizeRenamePath(file.path))?.query
+        || guessSearchTitle([file.fileName])
+        || file.fileName.replace(/\.[^.]+$/, "");
+      try {
+        const response = await searchRenameMetadata({ query, provider, language });
+        const movieResults = response.results.filter((result) => result.format.toLowerCase() === "movie");
+        matches.push({
+          file,
+          query,
+          results: movieResults,
+          selectedIndex: 0,
+          status: movieResults.length > 0 ? `${movieResults.length} movie match(es)` : "No movie match"
+        });
+      } catch (error) {
+        matches.push({
+          file,
+          query,
+          results: [],
+          selectedIndex: 0,
+          status: error instanceof Error ? error.message : "Search failed"
+        });
+      }
+    }
+    setBatchMatches(matches);
+    const matched = matches.filter((item) => item.results.length > 0).length;
+    setStatusText(`Batch matching complete: ${matched} matched, ${matches.length - matched} need attention.`);
+    setBatchBusy(false);
+  }
+
+  function updateBatchMatch(index: number, patch: Partial<BatchMovieMatch>) {
+    setBatchMatches((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
+    setBatchPlans([]);
+    setPreviewRows([]);
+    setPreviewSummary("");
+  }
+
+  async function previewBatchMovies() {
+    const matched = batchMatches.filter((item) => item.results[item.selectedIndex]);
+    if (matched.length === 0) {
+      setStatusText("Match at least one movie before building a preview.");
+      return;
+    }
+    setBatchBusy(true);
+    setStatusText(`Building ${matched.length} movie rename preview(s)...`);
+    const plans: BatchMoviePlan[] = [];
+    const rows: RenamePreviewRow[] = [];
+    for (const item of matched) {
+      const result = item.results[item.selectedIndex];
+      try {
+        const response = await buildRenamePreview({
+          files: [item.file],
+          selectedResult: result,
+          provider,
+          language,
+          scopeKeys: ["all"],
+          template
+        });
+        plans.push({ sourcePath: item.file.path, preview: response });
+        rows.push(...response.items.map((row) => ({ ...row, selected: row.canApply })));
+      } catch (error) {
+        rows.push(makeUnavailableRenameRow(
+          item.file,
+          error instanceof Error ? error.message : "Preview failed"
+        ));
+      }
+    }
+    setBatchPlans(plans);
+    setPreviewRows(rows);
+    setPreviewSummary(`${rows.filter((row) => row.canApply).length} movie rename(s) ready; ${rows.filter((row) => !row.canApply).length} need attention.`);
+    setStatusText("Batch Movies preview ready.");
+    setBatchBusy(false);
+  }
+
+  async function applyBatchMovies() {
+    const selected = new Map(
+      previewRows.map((row) => [normalizeRenamePath(row.sourcePath), row.selected && row.canApply])
+    );
+    const plans = batchPlans.filter((plan) => selected.get(normalizeRenamePath(plan.sourcePath)));
+    if (plans.length === 0) {
+      setStatusText("No batch movie preview rows are selected.");
+      return;
+    }
+    setBatchApplying(true);
+    let renamed = 0;
+    let skipped = 0;
+    const moves: Array<{ oldPath: string; newPath: string; newFileName: string }> = [];
+    for (const plan of plans) {
+      try {
+        const response = await applyRenamePreview({
+          items: plan.preview.items.map((row) => ({ ...row, selected: true })),
+          provider,
+          template,
+          planId: plan.preview.planId ?? undefined,
+          planFingerprint: plan.preview.planFingerprint ?? undefined,
+          idempotencyKey: plan.preview.idempotencyKey ?? crypto.randomUUID()
+        });
+        const renamedItems = response.items.filter((item) => item.status === "Renamed").length;
+        renamed += renamedItems;
+        skipped += response.items.length - renamedItems;
+        const original = plan.preview.items[0];
+        const applied = response.items[0];
+        if (original && applied?.status === "Renamed") {
+          moves.push({ oldPath: original.sourcePath, newPath: applied.sourcePath, newFileName: applied.currentFileName });
+        }
+      } catch {
+        skipped += 1;
+      }
+    }
+    updateFilesAfterRename(moves);
+    refreshAfterRename();
+    setBatchApplying(false);
+    setStatusText(`Batch Movies complete: ${renamed} renamed, ${skipped} skipped.`);
+    setPreviewRows([]);
+    setBatchPlans([]);
   }
 
   function toggleCompactPreview() {
@@ -561,6 +709,25 @@ export function RenamePage() {
           </div>
           <p className="mt-3 text-xs leading-5 text-muted">Search, select result, choose scope, pick naming template, then build preview.</p>
 
+          <div className="mt-3 flex gap-5 text-sm">
+            <button
+              type="button"
+              onClick={() => setRenameMode("single")}
+              className={["pb-1 font-semibold", renameMode === "single" ? "border-b border-accent text-text" : "text-muted hover:text-text"].join(" ")}
+            >
+              Series / Movie
+            </button>
+            <button
+              type="button"
+              onClick={() => setRenameMode("batch-movies")}
+              className={["pb-1 font-semibold", renameMode === "batch-movies" ? "border-b border-accent text-text" : "text-muted hover:text-text"].join(" ")}
+            >
+              Batch Movies
+            </button>
+          </div>
+
+          <div className={renameMode === "single" ? "" : "hidden"}>
+
           <label className="mt-3 block text-sm font-semibold">Search Title</label>
           <div className="mt-1.5 flex gap-2">
             <input
@@ -727,6 +894,65 @@ export function RenamePage() {
           </div>
 
           <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
+          </div>
+
+          <div className={renameMode === "batch-movies" ? "" : "hidden"}>
+            <p className="mt-3 text-xs leading-5 text-muted">Search each scanned filename independently, review its movie match, then preview the batch.</p>
+
+            <div className="mt-3 text-sm font-semibold">Database Options</div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <select value={provider} onChange={(event) => { setProvider(event.target.value); setBatchMatches([]); setBatchPlans([]); setPreviewRows([]); }} className="h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent">
+                <option value="TVDB">TVDB</option>
+                <option value="TMDB">TMDB</option>
+                <option value="AniDB">AniDB</option>
+                <option value="AniList">AniList</option>
+              </select>
+              <select value={language} onChange={(event) => { setLanguage(event.target.value); setBatchMatches([]); setBatchPlans([]); setPreviewRows([]); }} className="h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent">
+                {languageOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </div>
+
+            {providerConfigured === false ? (
+              <div className="mt-3 rounded-md border border-warning bg-input p-3 text-xs text-warning">{provider} API key is not configured. Add it in Settings before matching.</div>
+            ) : null}
+
+            <button type="button" onClick={matchBatchMovies} disabled={batchBusy || selectedFiles.length === 0} className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
+              {batchBusy && batchMatches.length === 0 ? <RefreshCw size={15} className="animate-spin" /> : <Search size={15} />}
+              Match {selectedFiles.length} Movie File(s)
+            </button>
+
+            <div className="mt-3 max-h-56 space-y-2 overflow-auto">
+              {batchMatches.map((item, index) => (
+                <div key={item.file.path} className="rounded-md border border-border bg-panel p-2">
+                  <div className="truncate text-xs font-semibold text-text" title={item.file.fileName}>{item.file.fileName}</div>
+                  <input value={item.query} onChange={(event) => updateBatchMatch(index, { query: event.target.value })} className="mt-2 h-8 w-full rounded-md border border-border bg-input px-2 text-xs text-text outline-none focus:border-accent" />
+                  <select value={String(item.selectedIndex)} onChange={(event) => updateBatchMatch(index, { selectedIndex: Number(event.target.value) })} disabled={item.results.length === 0} className="mt-2 h-8 w-full rounded-md border border-border bg-input px-2 text-xs text-text outline-none focus:border-accent disabled:text-disabled">
+                    {item.results.length === 0 ? <option>No movie match</option> : item.results.map((result, resultIndex) => (
+                      <option key={`${result.provider}-${result.id}-${resultIndex}`} value={String(resultIndex)}>{result.displayName || `${result.name} ${result.year}`}</option>
+                    ))}
+                  </select>
+                  <div className={["mt-1 text-[0.6875rem]", item.results.length > 0 ? "text-success" : "text-warning"].join(" ")}>{item.status}</div>
+                </div>
+              ))}
+            </div>
+
+            <label className="mt-3 block text-sm font-semibold">Naming Template</label>
+            <select value={template} onChange={(event) => { setTemplate(event.target.value); setBatchPlans([]); setPreviewRows([]); }} className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent">
+              {renameTemplates.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+
+            <div className="mt-3 text-sm font-semibold">Execution</div>
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={previewBatchMovies} disabled={batchBusy || batchMatches.every((item) => item.results.length === 0)} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
+                {batchBusy && batchMatches.length > 0 ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
+                Preview
+              </button>
+              <button type="button" onClick={applyBatchMovies} disabled={batchApplying || batchPlans.length === 0 || selectedCount === 0} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
+                {batchApplying ? "Applying..." : "Apply"}
+              </button>
+            </div>
+            <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
+          </div>
         </section>
 
         <div className="min-h-0 min-w-0">
@@ -756,7 +982,9 @@ export function RenamePage() {
             {previewRows.length === 0 ? (
               <div className="flex h-full min-h-[16.25rem] flex-col items-center justify-center text-center">
                 <div className="text-xl font-semibold">No preview built yet</div>
-                <div className="mt-2 text-sm text-subtle">Search metadata, select a result, then click Preview.</div>
+                <div className="mt-2 text-sm text-subtle">
+                  {renameMode === "batch-movies" ? "Match the scanned movies, review each result, then click Preview." : "Search metadata, select a result, then click Preview."}
+                </div>
               </div>
             ) : (
               <div
@@ -1285,6 +1513,20 @@ function getRenameStatusDisplay(status: string) {
 
 function hasFilenameChange(row: RenamePreviewRow) {
   return row.newFileName.trim().length > 0 && row.currentFileName.trim() !== row.newFileName.trim();
+}
+
+function makeUnavailableRenameRow(file: MediaFileRow, status: string): RenamePreviewRow {
+  return {
+    selected: false,
+    sourcePath: file.path,
+    currentFileName: file.fileName,
+    detected: "Movie",
+    episodeName: "-",
+    newFileName: "",
+    confidence: "-",
+    status,
+    canApply: false
+  };
 }
 
 function normalizeRenamePath(path: string) {

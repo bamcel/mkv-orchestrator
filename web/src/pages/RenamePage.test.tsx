@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
@@ -259,5 +259,47 @@ describe("rename search title", () => {
 
     // Give the effect a chance to fire before concluding it did not.
     await waitFor(async () => expect(await searchTitleField()).toHaveValue("Cowboy Bebop"));
+  });
+});
+
+describe("batch movie matching", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  it("shows Series / Movie by default and searches every selected file independently", async () => {
+    const movieFiles = [mediaFile("Arrival.2016.mkv"), mediaFile("Heat.1995.mkv")];
+    const searchRenameMetadata = vi.fn(async ({ query }: { query: string }) => ({
+      results: [{ ...searchResult("movie"), name: query, displayName: `${query} (2026)` }]
+    }));
+    const user = userEvent.setup();
+
+    renderWithBackend(
+      <MediaLibraryProvider>
+        <Scan fileNames={movieFiles.map((file) => file.fileName)} />
+        <RenamePage />
+      </MediaLibraryProvider>,
+      {
+        getCurrentScanFiles: () => Promise.resolve({
+          updatedUtc: "2026-08-16T12:00:00Z",
+          files: movieFiles,
+          summary: { total: 2, mkv: 2, mp4: 0, failed: 0, cached: 0 },
+          selectedPaths: movieFiles.map((file) => file.path)
+        }),
+        searchRenameMetadata
+      }
+    );
+
+    expect(await screen.findByRole("button", { name: "Series / Movie" })).toHaveClass("text-text");
+    await user.click(screen.getByRole("button", { name: "Batch Movies" }));
+    const matchButton = await screen.findByRole("button", { name: /Match \d+ Movie File/ });
+    await waitFor(() => expect(matchButton).toHaveTextContent("Match 2 Movie File(s)"));
+    await user.click(matchButton);
+
+    await waitFor(() => expect(searchRenameMetadata).toHaveBeenCalledTimes(2));
+    expect(searchRenameMetadata.mock.calls.map(([request]) => request.query)).toEqual(["Arrival", "Heat"]);
+    expect(await screen.findByText("Arrival (2026)")).toBeInTheDocument();
+    expect(screen.getByText("Heat (2026)")).toBeInTheDocument();
   });
 });
