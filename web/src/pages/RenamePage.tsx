@@ -98,6 +98,9 @@ export function RenamePage() {
   const [selectedUndoBatchId, setSelectedUndoBatchId] = useState("");
   const [pendingProceedBatchId, setPendingProceedBatchId] = useState("");
   const [undoSummaryLines, setUndoSummaryLines] = useState<string[]>([]);
+  const [highlightedPreviewPaths, setHighlightedPreviewPaths] = useState<string[]>([]);
+  const [previewSelectionAnchor, setPreviewSelectionAnchor] = useState("");
+  const [previewSelectionMenu, setPreviewSelectionMenu] = useState<{ x: number; y: number } | null>(null);
   const [compactPreview, setCompactPreview] = useState(() => {
     try {
       return window.localStorage.getItem(renamePreviewCompactStorageKey) === "true";
@@ -106,6 +109,18 @@ export function RenamePage() {
     }
   });
   const selectedFiles = files;
+
+  useEffect(() => {
+    if (!previewSelectionMenu) return;
+    const close = () => setPreviewSelectionMenu(null);
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [previewSelectionMenu]);
+
+  useEffect(() => {
+    const available = new Set(previewRows.map((row) => normalizeRenamePath(row.sourcePath)));
+    setHighlightedPreviewPaths((current) => current.filter((path) => available.has(normalizeRenamePath(path))));
+  }, [previewRows.length]);
   const renameBatches = useQuery({
     queryKey: ["rename-batches"],
     queryFn: getRenameBatches,
@@ -461,6 +476,41 @@ export function RenamePage() {
     setPreviewRows((current) => current.map((row) => ({ ...row, selected: checked && row.canApply })));
   }
 
+  function highlightPreviewRow(row: RenamePreviewRow, index: number, modifiers: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) {
+    if (modifiers.shiftKey && previewSelectionAnchor) {
+      const anchorIndex = previewRows.findIndex((item) => normalizeRenamePath(item.sourcePath) === normalizeRenamePath(previewSelectionAnchor));
+      if (anchorIndex >= 0) {
+        const start = Math.min(anchorIndex, index);
+        const end = Math.max(anchorIndex, index);
+        setHighlightedPreviewPaths(previewRows.slice(start, end + 1).map((item) => item.sourcePath));
+        return;
+      }
+    }
+    if (modifiers.ctrlKey || modifiers.metaKey) {
+      setHighlightedPreviewPaths((current) => current.some((path) => normalizeRenamePath(path) === normalizeRenamePath(row.sourcePath))
+        ? current.filter((path) => normalizeRenamePath(path) !== normalizeRenamePath(row.sourcePath))
+        : [...current, row.sourcePath]);
+      setPreviewSelectionAnchor(row.sourcePath);
+      return;
+    }
+    setHighlightedPreviewPaths([row.sourcePath]);
+    setPreviewSelectionAnchor(row.sourcePath);
+  }
+
+  function setHighlightedPreviewSelection(checked: boolean) {
+    const targets = new Set(highlightedPreviewPaths.map(normalizeRenamePath));
+    setPreviewRows((current) => current.map((row) => targets.has(normalizeRenamePath(row.sourcePath))
+      ? { ...row, selected: checked && row.canApply }
+      : row));
+  }
+
+  function toggleHighlightedPreviewSelection() {
+    if (highlightedPreviewPaths.length === 0) return;
+    const targets = new Set(highlightedPreviewPaths.map(normalizeRenamePath));
+    const selectable = previewRows.filter((row) => row.canApply && targets.has(normalizeRenamePath(row.sourcePath)));
+    setHighlightedPreviewSelection(!selectable.every((row) => row.selected));
+  }
+
   async function copyUrl() {
     if (!selectedResult?.databaseUrl) return;
     await navigator.clipboard.writeText(selectedResult.databaseUrl);
@@ -709,7 +759,16 @@ export function RenamePage() {
                 <div className="mt-2 text-sm text-subtle">Search metadata, select a result, then click Preview.</div>
               </div>
             ) : (
-              <div className="h-full overflow-auto">
+              <div
+                className="h-full overflow-auto outline-none"
+                tabIndex={0}
+                aria-label="Rename file selection"
+                onKeyDown={(event) => {
+                  if (event.key !== " " || highlightedPreviewPaths.length === 0) return;
+                  event.preventDefault();
+                  toggleHighlightedPreviewSelection();
+                }}
+              >
                 <table className={["w-full table-fixed border-collapse text-left text-sm", compactPreview ? "min-w-[47.5rem]" : "min-w-[73.75rem]"].join(" ")}>
                   <thead className="sticky top-0 bg-panel text-xs uppercase tracking-wide text-subtle">
                     {compactPreview ? (
@@ -729,7 +788,7 @@ export function RenamePage() {
                     )}
                   </thead>
                   <tbody>
-                    {previewRows.map((row) => {
+                    {previewRows.map((row, index) => {
                       // Only the destination is coloured, and only when it
                       // actually differs: green has to mean "this name is
                       // changing", not "this row exists".
@@ -737,20 +796,44 @@ export function RenamePage() {
                       const statusDisplay = getRenameStatusDisplay(row.status);
 
                       return compactPreview ? (
-                        <tr key={row.sourcePath} className="bg-card hover:bg-selected">
+                        <tr
+                          key={row.sourcePath}
+                          onClick={(event) => highlightPreviewRow(row, index, event)}
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                            if (!highlightedPreviewPaths.some((path) => normalizeRenamePath(path) === normalizeRenamePath(row.sourcePath))) {
+                              setHighlightedPreviewPaths([row.sourcePath]);
+                              setPreviewSelectionAnchor(row.sourcePath);
+                            }
+                            setPreviewSelectionMenu({ x: event.clientX, y: event.clientY });
+                          }}
+                          className={[highlightedPreviewPaths.some((path) => normalizeRenamePath(path) === normalizeRenamePath(row.sourcePath)) ? "bg-selected" : "bg-card", "cursor-pointer hover:bg-selected"].join(" ")}
+                        >
                           <td className="truncate border-b border-border px-3 py-2" title={row.sourcePath}>
                             <div className="flex min-w-0 items-center gap-3">
-                              <input type="checkbox" checked={row.selected} disabled={!row.canApply} onChange={() => toggleRow(row)} />
+                              <input type="checkbox" checked={row.selected} disabled={!row.canApply} onClick={(event) => event.stopPropagation()} onChange={() => toggleRow(row)} />
                               <span className="truncate">{row.currentFileName}</span>
                             </div>
                           </td>
                           <td className={["truncate border-b border-border px-3 py-2", changedTextClass].join(" ")} title={row.newFileName}>{row.newFileName || "-"}</td>
                         </tr>
                       ) : (
-                        <tr key={row.sourcePath} className="bg-card hover:bg-selected">
+                        <tr
+                          key={row.sourcePath}
+                          onClick={(event) => highlightPreviewRow(row, index, event)}
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                            if (!highlightedPreviewPaths.some((path) => normalizeRenamePath(path) === normalizeRenamePath(row.sourcePath))) {
+                              setHighlightedPreviewPaths([row.sourcePath]);
+                              setPreviewSelectionAnchor(row.sourcePath);
+                            }
+                            setPreviewSelectionMenu({ x: event.clientX, y: event.clientY });
+                          }}
+                          className={[highlightedPreviewPaths.some((path) => normalizeRenamePath(path) === normalizeRenamePath(row.sourcePath)) ? "bg-selected" : "bg-card", "cursor-pointer hover:bg-selected"].join(" ")}
+                        >
                           <td className="max-w-[17.5rem] truncate border-b border-border px-3 py-2" title={row.sourcePath}>
                             <div className="flex min-w-0 items-center gap-3">
-                              <input type="checkbox" checked={row.selected} disabled={!row.canApply} onChange={() => toggleRow(row)} />
+                              <input type="checkbox" checked={row.selected} disabled={!row.canApply} onClick={(event) => event.stopPropagation()} onChange={() => toggleRow(row)} />
                               <span className="truncate">{row.currentFileName}</span>
                             </div>
                           </td>
@@ -843,6 +926,21 @@ export function RenamePage() {
           ]}
           onClose={() => setIsSummaryExpanded(false)}
         />
+      ) : null}
+      {previewSelectionMenu ? (
+        <div
+          role="menu"
+          aria-label="Rename selection options"
+          className="fixed z-[60] min-w-48 overflow-hidden rounded-lg border border-border bg-card p-1 shadow-[0_0.75rem_2.5rem_rgba(0,0,0,0.45)]"
+          style={{ left: Math.min(previewSelectionMenu.x, window.innerWidth - 210), top: Math.min(previewSelectionMenu.y, window.innerHeight - 180) }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button type="button" role="menuitem" onClick={() => { setHighlightedPreviewSelection(true); setPreviewSelectionMenu(null); }} className="flex w-full rounded-md px-3 py-2 text-left text-sm text-muted hover:bg-selected hover:text-text">Select highlighted rows</button>
+          <button type="button" role="menuitem" onClick={() => { setHighlightedPreviewSelection(false); setPreviewSelectionMenu(null); }} className="flex w-full rounded-md px-3 py-2 text-left text-sm text-muted hover:bg-selected hover:text-text">Deselect highlighted rows</button>
+          <div className="my-1 border-t border-border" />
+          <button type="button" role="menuitem" onClick={() => { toggleAll(true); setPreviewSelectionMenu(null); }} className="flex w-full rounded-md px-3 py-2 text-left text-sm text-muted hover:bg-selected hover:text-text">Select all</button>
+          <button type="button" role="menuitem" onClick={() => { toggleAll(false); setPreviewSelectionMenu(null); }} className="flex w-full rounded-md px-3 py-2 text-left text-sm text-muted hover:bg-selected hover:text-text">Deselect all</button>
+        </div>
       ) : null}
     </div>
   );
@@ -1187,6 +1285,10 @@ function getRenameStatusDisplay(status: string) {
 
 function hasFilenameChange(row: RenamePreviewRow) {
   return row.newFileName.trim().length > 0 && row.currentFileName.trim() !== row.newFileName.trim();
+}
+
+function normalizeRenamePath(path: string) {
+  return path.replace(/\\/g, "/").toLowerCase();
 }
 
 function buildOptionList(values: string[], current: string) {

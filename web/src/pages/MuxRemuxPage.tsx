@@ -46,6 +46,8 @@ export function MuxRemuxPage() {
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
   const [applyJobId, setApplyJobId] = useState<string | null>(null);
   const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number } | null>(null);
+  const [highlightedPaths, setHighlightedPaths] = useState<string[]>([]);
+  const [selectionAnchorPath, setSelectionAnchorPath] = useState("");
   const initializedSelectionScope = useRef("");
 
   useEffect(() => {
@@ -198,6 +200,43 @@ export function MuxRemuxPage() {
     toggleSelectedPath(path);
   }
 
+  function highlightFile(path: string, index: number, modifiers: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) {
+    setSelectedDetailPath(path);
+    if (modifiers.shiftKey && selectionAnchorPath) {
+      const anchorIndex = files.findIndex((file) => normalizePath(file.path) === normalizePath(selectionAnchorPath));
+      if (anchorIndex >= 0) {
+        const start = Math.min(anchorIndex, index);
+        const end = Math.max(anchorIndex, index);
+        setHighlightedPaths(files.slice(start, end + 1).map((file) => file.path));
+        return;
+      }
+    }
+    if (modifiers.ctrlKey || modifiers.metaKey) {
+      setHighlightedPaths((current) => current.some((item) => normalizePath(item) === normalizePath(path))
+        ? current.filter((item) => normalizePath(item) !== normalizePath(path))
+        : [...current, path]);
+      setSelectionAnchorPath(path);
+      return;
+    }
+    setHighlightedPaths([path]);
+    setSelectionAnchorPath(path);
+  }
+
+  function setHighlightedSelection(checked: boolean) {
+    if (highlightedPaths.length === 0) return;
+    const targets = new Set(highlightedPaths.map(normalizePath));
+    const next = checked
+      ? [...selectedPaths, ...highlightedPaths.filter((path) => !selectedPaths.some((selected) => normalizePath(selected) === normalizePath(path)))]
+      : selectedPaths.filter((path) => !targets.has(normalizePath(path)));
+    setSelectedPaths(next);
+  }
+
+  function toggleHighlightedSelection() {
+    if (highlightedPaths.length === 0) return;
+    const allSelected = highlightedPaths.every((path) => selectedPaths.some((selected) => normalizePath(selected) === normalizePath(path)));
+    setHighlightedSelection(!allSelected);
+  }
+
   function runPreview() {
     const hasConvertibleMp4s = convertMp4 && selectedMp4Paths.length > 0;
     if (selectedMkvPaths.length === 0 && !hasConvertibleMp4s) {
@@ -333,9 +372,11 @@ export function MuxRemuxPage() {
             </div>
             <div
               className="mt-3 min-h-0 flex-1 overflow-auto"
-              onContextMenu={(event) => {
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key !== " " || highlightedPaths.length === 0) return;
                 event.preventDefault();
-                setSelectionMenu({ x: event.clientX, y: event.clientY });
+                toggleHighlightedSelection();
               }}
               aria-label="Mux/remux file selection"
             >
@@ -348,11 +389,20 @@ export function MuxRemuxPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {files.map((file) => (
+                  {files.map((file, index) => (
                     <tr
                       key={file.path}
-                      onClick={() => setSelectedDetailPath(file.path)}
-                      className={[selectedDetailFile?.path === file.path ? "bg-selected" : "bg-card", "cursor-pointer hover:bg-selected"].join(" ")}
+                      onClick={(event) => highlightFile(file.path, index, event)}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        if (!highlightedPaths.some((path) => normalizePath(path) === normalizePath(file.path))) {
+                          setHighlightedPaths([file.path]);
+                          setSelectionAnchorPath(file.path);
+                        }
+                        setSelectedDetailPath(file.path);
+                        setSelectionMenu({ x: event.clientX, y: event.clientY });
+                      }}
+                      className={[highlightedPaths.some((path) => normalizePath(path) === normalizePath(file.path)) ? "bg-selected" : "bg-card", "cursor-pointer hover:bg-selected"].join(" ")}
                     >
                       <td className="border-b border-border px-3 py-2">
                         <div className="flex min-w-0 items-center gap-3">
@@ -475,10 +525,35 @@ export function MuxRemuxPage() {
           className="fixed z-[60] min-w-40 overflow-hidden rounded-lg border border-border bg-card p-1 shadow-[0_0.75rem_2.5rem_rgba(0,0,0,0.45)]"
           style={{
             left: Math.min(selectionMenu.x, window.innerWidth - 180),
-            top: Math.min(selectionMenu.y, window.innerHeight - 92)
+            top: Math.min(selectionMenu.y, window.innerHeight - 180)
           }}
           onPointerDown={(event) => event.stopPropagation()}
         >
+          <button
+            type="button"
+            role="menuitem"
+            disabled={highlightedPaths.length === 0}
+            onClick={() => {
+              setHighlightedSelection(true);
+              setSelectionMenu(null);
+            }}
+            className="flex w-full rounded-md px-3 py-2 text-left text-sm text-muted hover:bg-selected hover:text-text disabled:text-disabled"
+          >
+            Select highlighted rows
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={highlightedPaths.length === 0}
+            onClick={() => {
+              setHighlightedSelection(false);
+              setSelectionMenu(null);
+            }}
+            className="flex w-full rounded-md px-3 py-2 text-left text-sm text-muted hover:bg-selected hover:text-text disabled:text-disabled"
+          >
+            Deselect highlighted rows
+          </button>
+          <div className="my-1 border-t border-border" />
           <button
             type="button"
             role="menuitem"

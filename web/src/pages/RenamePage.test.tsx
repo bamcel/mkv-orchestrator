@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 
@@ -171,6 +171,53 @@ describe("rename episode scope", () => {
     await user.click(all);
     expect(all).toBeChecked();
     expect(seasonSix).not.toBeChecked();
+  });
+});
+
+describe("rename preview row selection", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  it("supports Ctrl and Shift highlights, Space toggling, and highlighted-row context actions", async () => {
+    const names = ["Episode 01.mkv", "Episode 02.mkv", "Episode 03.mkv"];
+    window.sessionStorage.setItem("mkvo.web.renameState", JSON.stringify({
+      previewRows: names.map((name, index) => ({
+        selected: true,
+        sourcePath: String.raw`C:\media` + "\\" + name,
+        currentFileName: name,
+        detected: `S01E0${index + 1}`,
+        episodeName: `Episode ${index + 1}`,
+        newFileName: `Show - S01E0${index + 1}.mkv`,
+        confidence: "High",
+        status: "Ready",
+        canApply: true
+      }))
+    }));
+
+    const user = userEvent.setup();
+    renderRename(names);
+    const selection = await screen.findByLabelText("Rename file selection");
+    const rows = within(selection).getAllByRole("row").slice(1);
+    const checkboxes = within(selection).getAllByRole("checkbox");
+
+    await user.click(rows[0]);
+    fireEvent.click(rows[2], { shiftKey: true });
+    fireEvent.keyDown(selection, { key: " " });
+    checkboxes.forEach((checkbox) => expect(checkbox).not.toBeChecked());
+
+    fireEvent.click(rows[0]);
+    fireEvent.click(rows[2], { ctrlKey: true });
+    fireEvent.contextMenu(rows[2], { clientX: 140, clientY: 160 });
+    await user.click(screen.getByRole("menuitem", { name: "Select highlighted rows" }));
+    expect(checkboxes[0]).toBeChecked();
+    expect(checkboxes[1]).not.toBeChecked();
+    expect(checkboxes[2]).toBeChecked();
+
+    fireEvent.contextMenu(rows[2], { clientX: 140, clientY: 160 });
+    await user.click(screen.getByRole("menuitem", { name: "Deselect all" }));
+    checkboxes.forEach((checkbox) => expect(checkbox).not.toBeChecked());
   });
 });
 

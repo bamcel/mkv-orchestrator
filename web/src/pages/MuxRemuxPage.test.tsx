@@ -66,12 +66,23 @@ describe("Mux/remux file selection", () => {
     await waitFor(() => checkboxes.forEach((checkbox) => expect(checkbox).toBeChecked()));
     expect(setFileSelection).toHaveBeenCalledWith(files.map((file) => file.path));
 
-    fireEvent.contextMenu(selection, { clientX: 120, clientY: 140 });
-    await user.click(screen.getByRole("menuitem", { name: "Deselect all" }));
+    const rows = within(selection).getAllByRole("row").slice(1);
+    await user.click(rows[0]);
+    fireEvent.click(rows[1], { ctrlKey: true });
+    fireEvent.keyDown(selection, { key: " " });
     await waitFor(() => checkboxes.forEach((checkbox) => expect(checkbox).not.toBeChecked()));
 
-    fireEvent.contextMenu(selection, { clientX: 120, clientY: 140 });
-    await user.click(screen.getByRole("menuitem", { name: "Select all" }));
+    fireEvent.keyDown(selection, { key: " " });
     await waitFor(() => checkboxes.forEach((checkbox) => expect(checkbox).toBeChecked()));
+
+    await user.click(rows[0]);
+    fireEvent.contextMenu(rows[0], { clientX: 120, clientY: 140 });
+    await user.click(screen.getByRole("menuitem", { name: "Deselect highlighted rows" }));
+    await waitFor(() => expect(checkboxes[0]).not.toBeChecked());
+    expect(checkboxes[1]).toBeChecked();
+
+    fireEvent.contextMenu(rows[0], { clientX: 120, clientY: 140 });
+    await user.click(screen.getByRole("menuitem", { name: "Select highlighted rows" }));
+    await waitFor(() => expect(checkboxes[0]).toBeChecked());
   });
 });
