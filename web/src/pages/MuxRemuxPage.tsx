@@ -120,7 +120,7 @@ export function MuxRemuxPage() {
     mutationFn: startMuxApply,
     onSuccess: (job) => {
       setApplyJobId(job.id);
-      setStatusText(`Applying ${job.total} mux/remux action(s)...`);
+      setStatusText(`Applying ${job.total} MKV operation(s)...`);
     },
     onError: (error) => setStatusText(error instanceof Error ? error.message : "Apply failed.")
   });
@@ -242,7 +242,7 @@ export function MuxRemuxPage() {
   function runPreview() {
     const hasConvertibleMp4s = convertMp4 && selectedMp4Paths.length > 0;
     if (selectedMkvPaths.length === 0 && !hasConvertibleMp4s) {
-      setStatusText("Mux / Remux requires at least one selected MKV file (or MP4 with conversion enabled).");
+      setStatusText("MKV Operations requires at least one selected MKV file (or MP4 with conversion enabled).");
       return;
     }
 
@@ -266,12 +266,12 @@ export function MuxRemuxPage() {
   function cancelRunningApply() {
     if (!applyJobId) return;
     cancelApply.mutate(applyJobId);
-    setStatusText("Canceling mux/remux job...");
+    setStatusText("Canceling MKV operation job...");
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <SectionHeader title="Mux / Remux" description="Remove tracks, mux matching subtitle sidecars, or extract subtitle tracks with MKVToolNix." />
+      <SectionHeader title="MKV Operations" description="Remove tracks, mux matching subtitle sidecars, extract subtitles, or convert containers with MKVToolNix." />
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
         <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <div className="flex justify-end">
@@ -283,9 +283,9 @@ export function MuxRemuxPage() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={["pb-1 font-semibold capitalize", activeTab === tab ? "border-b border-accent text-text" : "text-muted hover:text-text"].join(" ")}
+                className={["pb-1 font-semibold", activeTab === tab ? "border-b border-accent text-text" : "text-muted hover:text-text"].join(" ")}
               >
-                {tab}
+                {tab === "remux" ? "Tracks" : "Subtitles"}
               </button>
             ))}
           </div>
@@ -356,7 +356,7 @@ export function MuxRemuxPage() {
             {selectedCount} selected | {selectedMkvPaths.length} selected MKV | {mkvFiles.length} MKV available
           </div>
           {selectedNonMkvCount > 0 ? (
-            <div className="mt-1 text-xs text-warning">{selectedNonMkvCount} selected non-MKV file(s) are visible for context and excluded from mux/remux.</div>
+            <div className="mt-1 text-xs text-warning">{selectedNonMkvCount} selected non-MKV file(s) are visible for context and excluded from MKV operations.</div>
           ) : null}
         </section>
 
@@ -380,7 +380,7 @@ export function MuxRemuxPage() {
                 event.preventDefault();
                 toggleHighlightedSelection();
               }}
-              aria-label="Mux/remux file selection"
+              aria-label="MKV Operations file selection"
             >
               <table className="w-full min-w-[56.25rem] border-collapse text-left text-sm">
                 <thead className="sticky top-0 bg-card text-xs text-text">
@@ -485,8 +485,8 @@ export function MuxRemuxPage() {
       </div>
       {isSummaryExpanded ? (
         <PreviewSummaryModal
-          title="Mux / Remux Preview Summary"
-          emptyText="Build a preview to see planned mux/remux operations."
+          title="MKV Operations Preview Summary"
+          emptyText="Build a preview to see planned MKV operations."
           available={previewResult !== null}
           status={previewResult?.status ?? ""}
           summary={previewResult?.summary ?? ""}
@@ -499,7 +499,7 @@ export function MuxRemuxPage() {
           sections={[
             {
               title: "Planned operations",
-              emptyText: "No mux/remux operations are needed.",
+              emptyText: "No MKV operations are needed.",
               rows: previewResult?.actions.map((action) => ({
                 key: `${action.filePath}-${action.index}`,
                 title: action.fileName,
@@ -516,7 +516,7 @@ export function MuxRemuxPage() {
               rows: previewResult?.noChangeFiles.map((filePath) => ({
                 key: filePath,
                 title: filePath.split(/[\\/]/).pop() || filePath,
-                detail: "No mux/remux changes are required for this file."
+                detail: "No MKV operations are required for this file."
               })) ?? []
             }
           ]}

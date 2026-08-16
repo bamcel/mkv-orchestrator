@@ -8,7 +8,7 @@ import { useMediaLibrary } from "../state/MediaLibraryContext";
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: Activity },
   { to: "/rename", label: "Rename Files", icon: ListVideo },
-  { to: "/mux-remux", label: "Mux / Remux", icon: Shuffle },
+  { to: "/mux-remux", label: "MKV Operations", icon: Shuffle },
   { to: "/track-properties", label: "Track Properties", icon: FileCog },
   { to: "/library", label: "Library", icon: Database },
   { to: "/settings", label: "Settings", icon: Settings },

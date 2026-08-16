@@ -781,7 +781,7 @@ export function SettingsPage() {
                 </div>
               </SettingsCard>
 
-              <SettingsCard title="Mux / Remux Defaults" description="Default keep-language values for remux track removal workflows.">
+              <SettingsCard title="MKV Operations Defaults" description="Default keep-language values for track removal workflows.">
                 <label className="block">
                   <span className="text-xs font-semibold text-muted">Default audio languages to keep</span>
                   <input
@@ -1080,7 +1080,7 @@ export function SettingsPage() {
                     This React interface uses the same Rust application services through {isDesktop ? "typed Tauri IPC" : "the typed HTTP API"}.
                   </p>
                   <p>
-                    Current supported workflows include MKV and MP4 scanning, metadata inspection, provider-based rename previews, rename apply and undo batches, MKV mux/remux operations, lossless MP4 to MKV conversion, MKV track property edits, library audit views, logs, and container tool checks.
+                    Current supported workflows include MKV and MP4 scanning, metadata inspection, provider-based rename previews, rename apply and undo batches, MKV operations, lossless MP4 to MKV conversion, MKV track property edits, library audit views, logs, and container tool checks.
                   </p>
                   <p>
                     TVDB and TMDB lookup requires your own API keys. Saved keys stay in the {isDesktop ? "local application configuration directory" : "mounted server configuration directory"}; never commit or publish that data.

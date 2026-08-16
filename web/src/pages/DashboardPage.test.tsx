@@ -469,6 +469,14 @@ describe("Dashboard template highlighting", () => {
     expect(detail).toHaveClass("text-accent");
   });
 
+  it("labels the selected template beside its media reader", async () => {
+    renderWithTemplate();
+
+    const templateBadge = await screen.findByText("Template File");
+    expect(templateBadge).toBeInTheDocument();
+    expect(templateBadge.nextElementSibling).toHaveTextContent("mkvmerge");
+  });
+
   /// Track rows are compared against the template, so the template itself has
   /// nothing to compare against and reads as the reference.
   it("colours the template's track rows as the reference", async () => {

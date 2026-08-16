@@ -32,7 +32,7 @@ beforeEach(() => {
   window.sessionStorage.clear();
 });
 
-describe("Mux/remux file selection", () => {
+describe("MKV Operations file selection", () => {
   it("selects every current file by default and offers select-all controls on right click", async () => {
     const user = userEvent.setup();
     const files = [mediaFile("Episode 01.mkv"), mediaFile("Episode 02.mkv")];
@@ -61,7 +61,8 @@ describe("Mux/remux file selection", () => {
     );
 
     await screen.findByText("Episode 01.mkv");
-    const selection = screen.getByLabelText("Mux/remux file selection");
+    expect(screen.getByRole("button", { name: "Tracks" })).toBeInTheDocument();
+    const selection = screen.getByLabelText("MKV Operations file selection");
     const checkboxes = within(selection).getAllByRole("checkbox");
     await waitFor(() => checkboxes.forEach((checkbox) => expect(checkbox).toBeChecked()));
     expect(setFileSelection).toHaveBeenCalledWith(files.map((file) => file.path));
@@ -87,7 +88,7 @@ describe("Mux/remux file selection", () => {
   });
 });
 
-describe("Mux/remux removed-track preview", () => {
+describe("MKV Operations removed-track preview", () => {
   it("lists exact IDs and metadata removed by explicit and language filters", () => {
     const file = mediaFile("Episode 01.mkv");
     file.tracks = [

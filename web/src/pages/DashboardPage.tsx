@@ -678,9 +678,16 @@ export function DashboardPage() {
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">Media Info</h3>
                   {selectedFile ? (
-                    <span className="rounded-md bg-input px-2 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-subtle">
-                      {selectedFile.reader}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {isTemplate(selectedFile) ? (
+                        <span className="rounded-md bg-accent/15 px-2 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-accent">
+                          Template File
+                        </span>
+                      ) : null}
+                      <span className="rounded-md bg-input px-2 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-subtle">
+                        {selectedFile.reader}
+                      </span>
+                    </div>
                   ) : null}
                 </div>
                 <dl className="mt-3 grid min-h-0 flex-1 grid-cols-[6.875rem_1fr] gap-x-3 gap-y-2 overflow-auto text-sm">
