@@ -203,13 +203,10 @@ impl RemuxPlanner {
             }
             if request.mode == RemuxMode::Remux
                 && selected_track_ids.len() == file.tracks.len()
-                && request.options.remove_track_ids.is_empty()
-                && !request.options.filter_audio_languages
-                && !request.options.filter_subtitle_languages
             {
                 conflicts.push(PlanConflict::informational(
                     PlanConflictKind::NoChange,
-                    "No track changes are requested",
+                    "Requested filters do not remove any tracks from this file",
                     Some(file.path.clone()),
                 ));
             }
@@ -483,6 +480,36 @@ mod tests {
                 .iter()
                 .any(|conflict| conflict.kind == PlanConflictKind::NoChange)
         );
+    }
+
+    #[test]
+    fn removal_id_missing_from_file_is_no_change() {
+        let request = RemuxPlanRequest {
+            source_access: BTreeMap::new(),
+            mode: RemuxMode::Remux,
+            files: vec![media("movie.mkv")],
+            options: RemuxOptions {
+                remove_track_ids: BTreeSet::from([3]),
+                ..RemuxOptions::default()
+            },
+            external_subtitles: BTreeMap::new(),
+            extractions: BTreeMap::new(),
+            existing_paths: BTreeSet::new(),
+            authorized_roots: Vec::new(),
+            settings_fingerprint: "settings".to_owned(),
+            tool_fingerprints: BTreeMap::new(),
+            expires_in_seconds: 60,
+            idempotency_key: IdempotencyKey::generate(),
+        };
+
+        let plan = RemuxPlanner.build_plan(request).unwrap();
+        let item = &plan.payload.items[0];
+        assert_eq!(item.selected_track_ids, [0]);
+        assert!(!item.can_apply());
+        assert!(item.conflicts.iter().any(|conflict| {
+            conflict.kind == PlanConflictKind::NoChange
+                && conflict.message.contains("do not remove any tracks")
+        }));
     }
 
     fn fixture_kind(value: &str) -> TrackKind {
