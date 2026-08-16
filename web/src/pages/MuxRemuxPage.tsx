@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { RefreshCw, Wand2 } from "lucide-react";
 import {
@@ -45,6 +45,8 @@ export function MuxRemuxPage() {
   const [settingsDefaultsApplied, setSettingsDefaultsApplied] = useState(false);
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
   const [applyJobId, setApplyJobId] = useState<string | null>(null);
+  const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number } | null>(null);
+  const initializedSelectionScope = useRef("");
 
   useEffect(() => {
     if (!currentScan.data) return;
@@ -64,15 +66,25 @@ export function MuxRemuxPage() {
   }, [settings.data, settingsDefaultsApplied]);
 
   useEffect(() => {
-    // The shared selection already drops paths a job removed. Only fill in a
-    // default when nothing is selected, so a deliberate selection — including
-    // one restored after a reload — is never overwritten.
-    if (files.length > 0 && selectedPaths.length === 0) {
-      setSelectedPaths(files.map((file) => file.path));
+    // Initialize each scan once. Stale paths from a previous scan do not count
+    // as a selection, but a deliberate Select None remains empty afterward.
+    const scope = currentScan.data?.updatedUtc ?? files.map((file) => file.path).join("|");
+    if (files.length > 0 && initializedSelectionScope.current !== scope) {
+      initializedSelectionScope.current = scope;
+      const available = new Set(files.map((file) => normalizePath(file.path)));
+      const hasCurrentSelection = selectedPaths.some((path) => available.has(normalizePath(path)));
+      if (!hasCurrentSelection) setSelectedPaths(files.map((file) => file.path));
     }
 
     setSelectedDetailPath((current) => current && files.some((file) => file.path === current) ? current : files[0]?.path ?? "");
-  }, [files]);
+  }, [files, selectedPaths, currentScan.data?.updatedUtc]);
+
+  useEffect(() => {
+    if (!selectionMenu) return;
+    const close = () => setSelectionMenu(null);
+    window.addEventListener("pointerdown", close);
+    return () => window.removeEventListener("pointerdown", close);
+  }, [selectionMenu]);
 
   const mkvFiles = useMemo(() => files.filter((file) => file.extension.toLowerCase() === ".mkv"), [files]);
   const mp4Files = useMemo(() => files.filter((file) => file.extension.toLowerCase() === ".mp4"), [files]);
@@ -319,7 +331,14 @@ export function MuxRemuxPage() {
                 Preview Summary
               </button>
             </div>
-            <div className="mt-3 min-h-0 flex-1 overflow-auto">
+            <div
+              className="mt-3 min-h-0 flex-1 overflow-auto"
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setSelectionMenu({ x: event.clientX, y: event.clientY });
+              }}
+              aria-label="Mux/remux file selection"
+            >
               <table className="w-full min-w-[56.25rem] border-collapse text-left text-sm">
                 <thead className="sticky top-0 bg-card text-xs text-text">
                   <tr>
@@ -449,8 +468,47 @@ export function MuxRemuxPage() {
           onClose={() => setIsSummaryExpanded(false)}
         />
       ) : null}
+      {selectionMenu ? (
+        <div
+          role="menu"
+          aria-label="File selection options"
+          className="fixed z-[60] min-w-40 overflow-hidden rounded-lg border border-border bg-card p-1 shadow-[0_0.75rem_2.5rem_rgba(0,0,0,0.45)]"
+          style={{
+            left: Math.min(selectionMenu.x, window.innerWidth - 180),
+            top: Math.min(selectionMenu.y, window.innerHeight - 92)
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setSelectedPaths(files.map((file) => file.path));
+              setSelectionMenu(null);
+            }}
+            className="flex w-full rounded-md px-3 py-2 text-left text-sm text-muted hover:bg-selected hover:text-text"
+          >
+            Select all
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setSelectedPaths([]);
+              setSelectionMenu(null);
+            }}
+            className="flex w-full rounded-md px-3 py-2 text-left text-sm text-muted hover:bg-selected hover:text-text"
+          >
+            Deselect all
+          </button>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function normalizePath(path: string) {
+  return path.replace(/\\/g, "/").toLowerCase();
 }
 
 function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
