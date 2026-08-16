@@ -21,6 +21,7 @@ import {
   undoRenameBatch
 } from "../api";
 import { OutputModal } from "../components/OutputModal";
+import { PreviewSummaryModal } from "../components/PreviewSummaryModal";
 import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
@@ -797,9 +798,49 @@ export function RenamePage() {
         />
       ) : null}
       {isSummaryExpanded ? (
-        <OutputModal
+        <PreviewSummaryModal
           title="Rename Preview Summary"
-          content={previewSummary || "Build a preview to see planned filename changes."}
+          emptyText="Build a preview to see planned filename changes."
+          available={previewRows.length > 0}
+          status={previewSummary}
+          summary={previewSummary}
+          metrics={[
+            { label: "Files changing", value: previewRows.filter((row) => hasFilenameChange(row) && row.canApply).length, tone: "text-success" },
+            { label: "Selected", value: previewRows.filter((row) => row.selected && row.canApply).length, tone: "text-accent" },
+            { label: "No change", value: previewRows.filter((row) => !hasFilenameChange(row)).length, tone: "text-muted" },
+            { label: "Needs attention", value: previewRows.filter((row) => !row.canApply).length, tone: "text-warning" }
+          ]}
+          sections={[
+            {
+              title: "Planned renames",
+              emptyText: "No filename changes are planned.",
+              rows: previewRows.filter((row) => hasFilenameChange(row) && row.canApply).map((row) => ({
+                key: row.sourcePath,
+                title: row.currentFileName,
+                detail: `New filename: ${row.newFileName}`,
+                meta: `${row.detected}${row.episodeName ? ` · ${row.episodeName}` : ""} · ${row.confidence}`
+              }))
+            },
+            {
+              title: "No change",
+              emptyText: "Every previewed file has a new filename.",
+              rows: previewRows.filter((row) => !hasFilenameChange(row)).map((row) => ({
+                key: row.sourcePath,
+                title: row.currentFileName,
+                detail: row.status || "The generated filename matches the current filename."
+              }))
+            },
+            {
+              title: "Needs attention",
+              emptyText: "No files require attention.",
+              rows: previewRows.filter((row) => !row.canApply).map((row) => ({
+                key: row.sourcePath,
+                title: row.currentFileName,
+                detail: row.status || "This rename cannot be applied.",
+                meta: row.newFileName ? `Proposed filename: ${row.newFileName}` : undefined
+              }))
+            }
+          ]}
           onClose={() => setIsSummaryExpanded(false)}
         />
       ) : null}

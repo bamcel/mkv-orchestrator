@@ -104,6 +104,39 @@ describe("Dashboard empty state", () => {
   });
 });
 
+describe("Dashboard scan source labels", () => {
+  it("shows only the selected folder name while retaining the full path as its tooltip", async () => {
+    window.sessionStorage.setItem("mkvo.web.scanSources", JSON.stringify(["/media/downloads/complete/Superstore"]));
+
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve(emptyScan),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    const label = await screen.findByText("Superstore");
+    expect(label).toHaveAttribute("title", "/media/downloads/complete/Superstore");
+    expect(screen.queryByText("/media/downloads/complete/Superstore")).not.toBeInTheDocument();
+  });
+
+  it("shows only file names when several files are selected", async () => {
+    window.sessionStorage.setItem("mkvo.web.scanSources", JSON.stringify([
+      String.raw`C:\media\Show\Episode 01.mkv`,
+      String.raw`C:\media\Show\Episode 02.mkv`
+    ]));
+
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve(emptyScan),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    expect(await screen.findByText("Episode 01.mkv")).toBeInTheDocument();
+    expect(screen.getByText("Episode 02.mkv")).toBeInTheDocument();
+    expect(screen.queryByText(String.raw`C:\media\Show\Episode 01.mkv`)).not.toBeInTheDocument();
+  });
+});
+
 describe("Dashboard ignored folders", () => {
   /// The ignored list is sent with every scan request, so seeding it from a
   /// local constant silently overrode whatever the user configured in Settings.
@@ -447,5 +480,33 @@ describe("Dashboard template highlighting", () => {
     // A video track's name is exempt from comparison, but not from being
     // marked as the template.
     expect(screen.getByText("Ep01.Release")).toHaveClass("text-accent");
+  });
+
+  it("identifies extra tracks by the mkvmerge ID shown in Track Info", async () => {
+    const user = userEvent.setup();
+    const fileWithExtraTrack = {
+      ...templateFile,
+      path: "/media/Show/Ep02.mkv",
+      fileName: "Ep02.mkv",
+      subtitleSummary: "eng x1",
+      tracks: [
+        ...templateFile.tracks,
+        { id: 3, trackNumber: 4, type: "subtitles", codec: "SubRip/SRT", language: "eng", name: "SDH", default: false, forced: false }
+      ]
+    };
+
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve({
+        ...emptyScan,
+        files: [templateFile, fileWithExtraTrack],
+        summary: { total: 2, mkv: 2, mp4: 0, failed: 0, cached: 0 }
+      }),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    await user.click(await screen.findByRole("row", { name: /Ep02\.mkv/i }));
+    expect(await screen.findByText("Track ID 3 is extra (subtitles).")).toBeInTheDocument();
+    expect(screen.queryByText(/Track 4 is extra/i)).not.toBeInTheDocument();
   });
 });

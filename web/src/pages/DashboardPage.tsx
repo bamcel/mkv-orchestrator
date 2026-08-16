@@ -105,7 +105,7 @@ export function DashboardPage() {
   const sourceSummary = sources.length === 0
     ? "No source selected"
     : sources.length === 1
-      ? sources[0]
+      ? sourceDisplayName(sources[0])
       : `${sources.length} sources selected`;
   const currentScanJob = scanJob.data;
   const isScanning = scanStart.isPending || currentScanJob?.status === "Queued" || currentScanJob?.status === "WaitingForResources" || currentScanJob?.status === "Running" || currentScanJob?.status === "Canceling";
@@ -457,7 +457,7 @@ export function DashboardPage() {
             <div className="flex items-center gap-2">
               <Folder size={15} className="shrink-0 text-accent" />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm text-text" title={sourceSummary}>{sourceSummary}</div>
+                <div className="truncate text-sm text-text" title={sources.length === 1 ? sources[0] : sourceSummary}>{sourceSummary}</div>
                 <div className="mt-0.5 text-xs text-subtle">
                   {sources.length === 0 ? "Browse to choose a folder or file" : `${sources.length} selected`}
                 </div>
@@ -478,7 +478,7 @@ export function DashboardPage() {
               <div className="mt-2 max-h-24 space-y-1 overflow-auto border-t border-border pt-2">
                 {sources.map((path) => (
                   <div key={path} className="flex items-center gap-2 rounded-md bg-input px-2 py-1.5 text-xs text-muted">
-                    <span className="min-w-0 flex-1 truncate" title={path}>{path}</span>
+                    <span className="min-w-0 flex-1 truncate" title={path}>{sourceDisplayName(path)}</span>
                     <button
                       type="button"
                       onClick={() => removeSource(path)}
@@ -829,6 +829,11 @@ function folderName(path: string) {
   return parts[parts.length - 1] ?? path;
 }
 
+function sourceDisplayName(path: string) {
+  const name = folderName(path.trim());
+  return name || path;
+}
+
 function normalizeCompareValue(value: string | null | undefined) {
   const clean = (value ?? "").trim();
   return clean.length === 0 ? "none" : clean.toLowerCase();
@@ -852,19 +857,20 @@ function getTemplateMismatchMessages(file: MediaFileRow, templateFile: MediaFile
   for (let index = 0; index < trackCount; index += 1) {
     const track = file.tracks[index];
     const templateTrack = templateFile.tracks[index];
-    const label = `Track ${index + 1}`;
 
     if (!track && templateTrack) {
-      messages.push(`${label} is missing (template: ${formatCompareValue(templateTrack.type)}).`);
+      messages.push(`Track ID ${templateTrack.id} is missing (template: ${formatCompareValue(templateTrack.type)}).`);
       continue;
     }
     if (track && !templateTrack) {
-      messages.push(`${label} is extra (${formatCompareValue(track.type)}).`);
+      messages.push(`Track ID ${track.id} is extra (${formatCompareValue(track.type)}).`);
       continue;
     }
     if (!track || !templateTrack) continue;
 
-    addValueMismatch(messages, `${label} ID`, `${track.id}/${track.trackNumber}`, `${templateTrack.id}/${templateTrack.trackNumber}`);
+    const label = `Track ID ${track.id}`;
+    addValueMismatch(messages, `Track position ${index + 1} mkvmerge ID`, String(track.id), String(templateTrack.id));
+    addValueMismatch(messages, `${label} property number`, String(track.trackNumber), String(templateTrack.trackNumber));
     addValueMismatch(messages, `${label} type`, track.type, templateTrack.type);
     addValueMismatch(messages, `${label} codec`, track.codec, templateTrack.codec);
     addValueMismatch(messages, `${label} language`, track.language, templateTrack.language);

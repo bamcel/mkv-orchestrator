@@ -11,7 +11,7 @@ import {
   MuxPreviewResponse,
   startMuxApply
 } from "../api";
-import { OutputModal } from "../components/OutputModal";
+import { PreviewSummaryModal } from "../components/PreviewSummaryModal";
 import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
@@ -413,9 +413,39 @@ export function MuxRemuxPage() {
         </div>
       </div>
       {isSummaryExpanded ? (
-        <OutputModal
+        <PreviewSummaryModal
           title="Mux / Remux Preview Summary"
-          content={previewResult?.summary || "Build a preview to see planned mux/remux operations."}
+          emptyText="Build a preview to see planned mux/remux operations."
+          available={previewResult !== null}
+          status={previewResult?.status ?? ""}
+          summary={previewResult?.summary ?? ""}
+          metrics={[
+            { label: "Files changing", value: new Set(previewResult?.actions.map((action) => action.filePath) ?? []).size, tone: "text-success" },
+            { label: "Planned actions", value: previewResult?.actions.length ?? 0, tone: "text-accent" },
+            { label: "No change", value: previewResult?.noChangeFiles.length ?? 0, tone: "text-muted" },
+            { label: "Tools involved", value: new Set(previewResult?.actions.map((action) => action.toolName) ?? []).size, tone: "text-text" }
+          ]}
+          sections={[
+            {
+              title: "Planned operations",
+              emptyText: "No mux/remux operations are needed.",
+              rows: previewResult?.actions.map((action) => ({
+                key: `${action.filePath}-${action.index}`,
+                title: action.fileName,
+                detail: action.description,
+                meta: `${action.operation} · ${action.toolName}`
+              })) ?? []
+            },
+            {
+              title: "No change",
+              emptyText: "Every selected file requires an operation.",
+              rows: previewResult?.noChangeFiles.map((filePath) => ({
+                key: filePath,
+                title: filePath.split(/[\\/]/).pop() || filePath,
+                detail: "No mux/remux changes are required for this file."
+              })) ?? []
+            }
+          ]}
           onClose={() => setIsSummaryExpanded(false)}
         />
       ) : null}

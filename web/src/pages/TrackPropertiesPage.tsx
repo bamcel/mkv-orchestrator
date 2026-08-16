@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { RefreshCw, Wand2 } from "lucide-react";
 import {
@@ -13,8 +13,8 @@ import {
   PropEditTrackConfigRow,
   startPropEditApply
 } from "../api";
-import { OutputModal } from "../components/OutputModal";
 import { SectionHeader } from "../components/SectionHeader";
+import { PreviewSummaryModal } from "../components/PreviewSummaryModal";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 import { useInvalidatePropEditTemplate, usePropEditTemplate } from "../state/propEditTemplate";
 
@@ -24,16 +24,43 @@ type TrackType = "audio" | "subtitle";
 const audioNamePresets = ["English", "Japanese", "Commentary"];
 const subtitleNamePresets = ["English", "English Forced", "English SDH", "Dialogue", "Signs & Songs", "Commentary"];
 const languagePresets = ["eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de"];
+const configurationStorageKey = "mkvo.web.trackPropertiesConfiguration";
+
+type StoredTrackPropertiesConfiguration = {
+  scanUpdatedUtc: string | null;
+  templatePath: string;
+  containerMode: TitleMode;
+  videoMode: TitleMode;
+  customContainerTitle: string;
+  customVideoTitle: string;
+  audioTracks: PropEditTrackConfigRow[];
+  subtitleTracks: PropEditTrackConfigRow[];
+  defaultAudio: string;
+  forcedAudio: string;
+  defaultSubtitle: string;
+  forcedSubtitle: string;
+  customTrackKeys: string[];
+};
+
+function readStoredConfiguration(): StoredTrackPropertiesConfiguration | null {
+  try {
+    const value = sessionStorage.getItem(configurationStorageKey);
+    return value ? JSON.parse(value) as StoredTrackPropertiesConfiguration : null;
+  } catch {
+    return null;
+  }
+}
 
 export function TrackPropertiesPage() {
   const { files, setFiles, selectedPaths, setSelectedPaths, templateFilePath, setTemplateFilePath, syncFromBackend } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
-  const [templatePath, setTemplatePath] = useState("");
-  const [containerMode, setContainerMode] = useState<TitleMode>("keep");
-  const [videoMode, setVideoMode] = useState<TitleMode>("keep");
-  const [customContainerTitle, setCustomContainerTitle] = useState("");
-  const [customVideoTitle, setCustomVideoTitle] = useState("");
+  const storedConfiguration = useRef(readStoredConfiguration());
+  const [templatePath, setTemplatePath] = useState(storedConfiguration.current?.templatePath ?? "");
+  const [containerMode, setContainerMode] = useState<TitleMode>(storedConfiguration.current?.containerMode ?? "keep");
+  const [videoMode, setVideoMode] = useState<TitleMode>(storedConfiguration.current?.videoMode ?? "keep");
+  const [customContainerTitle, setCustomContainerTitle] = useState(storedConfiguration.current?.customContainerTitle ?? "");
+  const [customVideoTitle, setCustomVideoTitle] = useState(storedConfiguration.current?.customVideoTitle ?? "");
   const [template, setTemplate] = useState<PropEditTemplateResponse | null>(null);
   const [audioTracks, setAudioTracks] = useState<PropEditTrackConfigRow[]>([]);
   const [subtitleTracks, setSubtitleTracks] = useState<PropEditTrackConfigRow[]>([]);
@@ -46,6 +73,7 @@ export function TrackPropertiesPage() {
   const [statusText, setStatusText] = useState("Load scanned files from Dashboard, then select a template.");
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
   const [applyJobId, setApplyJobId] = useState<string | null>(null);
+  const [configurationReady, setConfigurationReady] = useState(false);
 
   useEffect(() => {
     if (!currentScan.data) return;
@@ -62,7 +90,7 @@ export function TrackPropertiesPage() {
       );
     }
 
-    if (!templatePath) {
+    if (!templatePath || !files.some((file) => file.path === templatePath)) {
       const nextTemplate = templateFilePath || files.find((file) => file.extension.toLowerCase() === ".mkv")?.path || "";
       setTemplatePath(nextTemplate);
     }
@@ -95,18 +123,70 @@ export function TrackPropertiesPage() {
   const loadedTemplate = templateLoad.data;
   useEffect(() => {
     if (!loadedTemplate) return;
+    const stored = storedConfiguration.current;
+    const canRestore = Boolean(
+      stored
+      && stored.scanUpdatedUtc === (currentScan.data?.updatedUtc ?? null)
+      && stored.templatePath === loadedTemplate.templatePath
+    );
+
     setTemplate(loadedTemplate);
-    setAudioTracks(loadedTemplate.audioTracks);
-    setSubtitleTracks(loadedTemplate.subtitleTracks);
-    setDefaultAudio(loadedTemplate.defaultAudio || "Keep existing");
-    setForcedAudio(loadedTemplate.forcedAudio || "Keep existing");
-    setDefaultSubtitle(loadedTemplate.defaultSubtitle || "Keep existing");
-    setForcedSubtitle(loadedTemplate.forcedSubtitle || "Keep existing");
-    setCustomTrackKeys(new Set());
-    setCustomContainerTitle(loadedTemplate.templateFileName.replace(/\.[^.]+$/, ""));
-    setCustomVideoTitle(loadedTemplate.templateFileName.replace(/\.[^.]+$/, ""));
+    setAudioTracks(canRestore ? stored!.audioTracks : loadedTemplate.audioTracks);
+    setSubtitleTracks(canRestore ? stored!.subtitleTracks : loadedTemplate.subtitleTracks);
+    setDefaultAudio(canRestore ? stored!.defaultAudio : loadedTemplate.defaultAudio || "Keep existing");
+    setForcedAudio(canRestore ? stored!.forcedAudio : loadedTemplate.forcedAudio || "Keep existing");
+    setDefaultSubtitle(canRestore ? stored!.defaultSubtitle : loadedTemplate.defaultSubtitle || "Keep existing");
+    setForcedSubtitle(canRestore ? stored!.forcedSubtitle : loadedTemplate.forcedSubtitle || "Keep existing");
+    setCustomTrackKeys(new Set(canRestore ? stored!.customTrackKeys : []));
+    setContainerMode(canRestore ? stored!.containerMode : "keep");
+    setVideoMode(canRestore ? stored!.videoMode : "keep");
+    setCustomContainerTitle(canRestore ? stored!.customContainerTitle : loadedTemplate.templateFileName.replace(/\.[^.]+$/, ""));
+    setCustomVideoTitle(canRestore ? stored!.customVideoTitle : loadedTemplate.templateFileName.replace(/\.[^.]+$/, ""));
+    storedConfiguration.current = canRestore ? stored : null;
+    setPreviewResult(null);
+    setConfigurationReady(true);
     setStatusText(`Template loaded: ${loadedTemplate.templateFileName}`);
-  }, [loadedTemplate]);
+  }, [loadedTemplate, currentScan.data?.updatedUtc]);
+
+  useEffect(() => {
+    if (!currentScan.data) return;
+    if (!currentScan.data.updatedUtc || currentScan.data.files.length === 0) {
+      try {
+        sessionStorage.removeItem(configurationStorageKey);
+      } catch {
+        // Persistence is a convenience; track editing still works without it.
+      }
+      storedConfiguration.current = null;
+      setConfigurationReady(false);
+      return;
+    }
+    if (!configurationReady || !template) return;
+
+    const value: StoredTrackPropertiesConfiguration = {
+      scanUpdatedUtc: currentScan.data.updatedUtc,
+      templatePath,
+      containerMode,
+      videoMode,
+      customContainerTitle,
+      customVideoTitle,
+      audioTracks,
+      subtitleTracks,
+      defaultAudio,
+      forcedAudio,
+      defaultSubtitle,
+      forcedSubtitle,
+      customTrackKeys: [...customTrackKeys]
+    };
+    try {
+      sessionStorage.setItem(configurationStorageKey, JSON.stringify(value));
+    } catch {
+      // Persistence is a convenience; track editing still works without it.
+    }
+  }, [
+    currentScan.data, configurationReady, template, templatePath, containerMode, videoMode,
+    customContainerTitle, customVideoTitle, audioTracks, subtitleTracks, defaultAudio,
+    forcedAudio, defaultSubtitle, forcedSubtitle, customTrackKeys
+  ]);
 
   useEffect(() => {
     if (!templateLoad.error) return;
@@ -374,9 +454,35 @@ export function TrackPropertiesPage() {
         </div>
       </div>
       {isSummaryExpanded ? (
-        <OutputModal
+        <PreviewSummaryModal
           title="Track Properties Preview Summary"
-          content={previewResult?.summary || "Build a preview to see planned property edits."}
+          emptyText="Build a preview to see planned property edits."
+          available={previewResult !== null}
+          status={previewResult?.status ?? ""}
+          summary={previewResult?.summary ?? ""}
+          metrics={[
+            { label: "Files changing", value: new Set(previewResult?.actions.map((action) => action.filePath) ?? []).size, tone: "text-success" },
+            { label: "Planned edits", value: previewResult?.actions.length ?? 0, tone: "text-accent" },
+            { label: "No change", value: previewResult?.noChange.length ?? 0, tone: "text-muted" },
+            { label: "Skipped", value: previewResult?.skipped.length ?? 0, tone: "text-warning" }
+          ]}
+          sections={[
+            {
+              title: "Planned changes",
+              emptyText: "No property changes are needed.",
+              rows: previewResult?.actions.map((action) => ({ key: `${action.filePath}-${action.index}`, title: action.fileName, detail: action.description })) ?? []
+            },
+            {
+              title: "No change",
+              emptyText: "Every selected file requires a change.",
+              rows: previewResult?.noChange.map((row) => ({ key: row.filePath, title: row.fileName, detail: row.reason })) ?? []
+            },
+            {
+              title: "Skipped",
+              emptyText: "No files were skipped.",
+              rows: previewResult?.skipped.map((row) => ({ key: row.filePath, title: row.fileName, detail: row.reason })) ?? []
+            }
+          ]}
           onClose={() => setIsSummaryExpanded(false)}
         />
       ) : null}
