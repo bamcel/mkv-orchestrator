@@ -125,6 +125,27 @@ impl TvdbClient {
         .await?;
         response_json(ProviderKind::Tvdb, response).await
     }
+
+    async fn localized_series_name(
+        &self,
+        credentials: &ProviderCredentials,
+        id: u64,
+        language: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<String>, ProviderError> {
+        let document = self
+            .get_json(
+                credentials,
+                &format!("series/{id}/extended"),
+                &[
+                    ("meta", "translations".to_owned()),
+                    ("short", "true".to_owned()),
+                ],
+                cancellation,
+            )
+            .await?;
+        Ok(translation_name(&document, language))
+    }
 }
 
 impl Default for TvdbClient {
@@ -165,6 +186,17 @@ impl MetadataProviderClient for TvdbClient {
                 )
                 .await?;
             results.extend(normalize_search_results(&document, kind));
+        }
+        for result in &mut results {
+            if result.kind != MediaKind::Series {
+                continue;
+            }
+            if let Ok(Some(name)) = self
+                .localized_series_name(credentials, result.id, &language, &cancellation)
+                .await
+            {
+                result.name = name;
+            }
         }
         Ok(results)
     }
@@ -344,6 +376,23 @@ fn tvdb_language(value: &str) -> String {
     }
 }
 
+fn translation_name(document: &Value, language: &str) -> Option<String> {
+    document
+        .pointer("/data/translations/nameTranslations")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|translation| {
+            translation
+                .get("language")
+                .and_then(Value::as_str)
+                .is_some_and(|value| value.eq_ignore_ascii_case(language))
+        })
+        .and_then(|translation| translation.get("name").and_then(Value::as_str))
+        .filter(|name| !name.trim().is_empty())
+        .map(str::to_owned)
+}
+
 fn value_u64(value: &Value) -> Option<u64> {
     value.as_u64().or_else(|| value.as_str()?.parse().ok())
 }
@@ -361,6 +410,24 @@ mod tests {
         );
         assert_eq!(results[0].id, 42);
         assert_eq!(results[0].year, Some(2022));
+    }
+
+    #[test]
+    fn selects_the_requested_series_translation() {
+        let document = json!({
+            "data": {
+                "translations": {
+                    "nameTranslations": [
+                        {"language": "jpn", "name": "転生したらスライムだった件"},
+                        {"language": "eng", "name": "That Time I Got Reincarnated as a Slime"}
+                    ]
+                }
+            }
+        });
+        assert_eq!(
+            translation_name(&document, "eng").as_deref(),
+            Some("That Time I Got Reincarnated as a Slime")
+        );
     }
 
     #[test]

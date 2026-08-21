@@ -21,6 +21,7 @@ impl MkvoRuntime {
             .load_rename_episodes(
                 provider,
                 &request.selected_result.media_id(),
+                &request.selected_result.name,
                 request.language.as_deref(),
             )
             .await?;
@@ -471,23 +472,68 @@ impl MkvoRuntime {
         self.get_rename_batches().await
     }
 
-    pub(super) async fn load_rename_episodes(
+    pub(crate) async fn load_rename_episodes(
         &self,
         provider: MetadataProvider,
         media_id: &str,
+        media_name: &str,
         language: Option<&str>,
     ) -> RuntimeResult<Vec<mkvo_domain::EpisodeMetadata>> {
         let client = self
             .provider_client(Some(provider_name(provider)), language)
             .await?;
-        client
+        let episodes = client
             .episodes(
                 media_id,
                 language,
                 tokio_util::sync::CancellationToken::new(),
             )
             .await
-            .map_err(Into::into)
+            .map_err(RuntimeError::from)?;
+
+        if provider == MetadataProvider::AniList
+            && episodes.iter().all(|episode| {
+                episode
+                    .title
+                    .strip_prefix("Episode ")
+                    .is_some_and(|number| number.parse::<u32>().is_ok())
+            })
+        {
+            if let Ok(tvdb) = self.provider_client(Some("tvdb"), language).await {
+                if let Ok(results) = tvdb
+                    .search(
+                        media_name,
+                        language,
+                        tokio_util::sync::CancellationToken::new(),
+                    )
+                    .await
+                {
+                    if let Some(match_result) = results.into_iter().find(|result| {
+                        result.provider == MetadataProvider::Tvdb
+                            && result.title.eq_ignore_ascii_case(media_name)
+                    }) {
+                        if let Ok(fallback) = tvdb
+                            .episodes(
+                                &match_result.id,
+                                language,
+                                tokio_util::sync::CancellationToken::new(),
+                            )
+                            .await
+                            && fallback.iter().any(|episode| {
+                                !episode
+                                    .title
+                                    .strip_prefix("Episode ")
+                                    .is_some_and(|number| number.parse::<u32>().is_ok())
+                            })
+                        {
+                            return Ok(fallback);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(episodes)
     }
 
     pub(super) async fn rename_batch(&self, id: &str) -> RuntimeResult<RenameBatchRecord> {

@@ -1,7 +1,7 @@
 use mkvo_contracts::{RenameProviderTestResponse, RenameScopeRow};
 use tokio_util::sync::CancellationToken;
 
-use super::{MkvoRuntime, rename_search_result};
+use super::{MkvoRuntime, parse_provider, rename_search_result};
 use crate::compat::{
     RenameProviderTestRequest, RenameScopesRequest, RenameSearchRequest, RenameSearchResult,
 };
@@ -32,14 +32,25 @@ impl MkvoRuntime {
         &self,
         request: RenameScopesRequest,
     ) -> RuntimeResult<Vec<RenameScopeRow>> {
-        let provider = self
-            .provider_client(request.provider.as_deref(), request.language.as_deref())
-            .await?;
-        let episodes = provider
-            .episodes(
+        let provider = request
+            .provider
+            .as_deref()
+            .map(parse_provider)
+            .transpose()?
+            .unwrap_or(
+                self.settings_service()
+                    .load()
+                    .await?
+                    .settings
+                    .rename
+                    .provider,
+            );
+        let episodes = self
+            .load_rename_episodes(
+                provider,
                 &request.selected_result.media_id(),
+                &request.selected_result.name,
                 request.language.as_deref(),
-                CancellationToken::new(),
             )
             .await?;
         let mut seasons: Vec<_> = episodes.iter().map(|episode| episode.season).collect();
