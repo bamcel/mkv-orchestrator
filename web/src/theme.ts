@@ -24,6 +24,7 @@ type Palette = {
   subtle: string;
   accent: string;
   accentHover: string;
+  brand?: string;
   success: string;
   warning: string;
   disabled: string;
@@ -49,11 +50,11 @@ function paletteTheme(name: string, palette: Palette): WebTheme {
       Subtle: palette.subtle,
       Accent: palette.accent,
       AccentHover: palette.accentHover,
-      AppTitle: palette.accent,
+      AppTitle: palette.brand ?? palette.accent,
       Success: palette.success,
       Warning: palette.warning,
       Disabled: palette.disabled,
-      Brand: palette.accent
+      Brand: palette.brand ?? palette.accent
     }
   };
 }
@@ -111,6 +112,27 @@ export const webThemes: WebTheme[] = [
       Brand: "#BD93F9"
     }
   },
+  paletteTheme("Emby", {
+    window: "#101010", card: "#1F1F1F", panel: "#262626", sidebar: "#151515",
+    input: "#202020", button: "#303030", hover: "#414141", selected: "#183A64",
+    border: "#3A3A3A", borderStrong: "#5A5A5A", text: "#F5F5F5", muted: "#CCCCCC",
+    subtle: "#999999", accent: "#2E8CFF", accentHover: "#1978E6", success: "#52B54B",
+    warning: "#E5A00D", disabled: "#707070"
+  }),
+  paletteTheme("Jellyfin", {
+    window: "#101010", card: "#181818", panel: "#202020", sidebar: "#000B25",
+    input: "#202020", button: "#303030", hover: "#3D3D3D", selected: "#263D4A",
+    border: "#383838", borderStrong: "#5C5C5C", text: "#F5F5F5", muted: "#D0D0D0",
+    subtle: "#9B9B9B", accent: "#00A4DC", accentHover: "#008DBD", brand: "#AA5CC3", success: "#6CCB72",
+    warning: "#E5B567", disabled: "#707070"
+  }),
+  paletteTheme("Plex", {
+    window: "#111111", card: "#1B1B1B", panel: "#242424", sidebar: "#0A0A0A",
+    input: "#202020", button: "#333333", hover: "#454545", selected: "#493D1D",
+    border: "#3A3A3A", borderStrong: "#626262", text: "#F2F2F2", muted: "#CCCCCC",
+    subtle: "#999999", accent: "#E5A00D", accentHover: "#C48708", success: "#63C174",
+    warning: "#F0B44D", disabled: "#707070"
+  }),
   {
     name: "Mercy",
     colors: {

@@ -1,4 +1,4 @@
-import { Fragment, type MouseEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { Fragment, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronUp, Copy, FileCheck, FileVideo, Folder, FolderOpen, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { authorizeBrowsedRoot, cancelScan, FileSystemEntry, getBackendTransport, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, saveWebSettings, startScan } from "../api";
@@ -30,6 +30,7 @@ export function DashboardPage() {
       return [];
     }
   });
+  const previousSources = useRef<string[] | null>(null);
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
   const [lastBrowsePath, setLastBrowsePath] = useState(() => {
     try {
@@ -55,6 +56,30 @@ export function DashboardPage() {
     } catch {
       // Source persistence is a convenience; browsing and scanning still work.
     }
+  }, [sources]);
+
+  // Source removal is a working-set change, not just a display change. Drop
+  // rows that no longer belong to any selected source immediately; otherwise
+  // the File Info panel continues to show files from a source the user just
+  // removed until the next scan.
+  useEffect(() => {
+    if (previousSources.current === null) {
+      previousSources.current = sources;
+      return;
+    }
+    previousSources.current = sources;
+
+    const remaining = files.filter((file) =>
+      sources.some((source) => isPathWithinSource(file.path, source))
+    );
+    const remainingKeys = new Set(remaining.map((file) => normalizeCompareValue(file.path)));
+    setFiles(remaining);
+    setSelectedPaths(selectedPaths.filter((path) => remainingKeys.has(normalizeCompareValue(path))));
+    setTemplateFilePath(remainingKeys.has(normalizeCompareValue(templateFilePath))
+      ? templateFilePath
+      : remaining[0]?.path ?? "");
+    setSelectedFilePath((selected) => selected && remainingKeys.has(normalizeCompareValue(selected)) ? selected : remaining[0]?.path ?? "");
+    setSelectionAnchorPath((anchor) => anchor && remainingKeys.has(normalizeCompareValue(anchor)) ? anchor : remaining[0]?.path ?? "");
   }, [sources]);
   const scanStart = useMutation({
     mutationFn: startScan,
@@ -844,6 +869,22 @@ function sourceDisplayName(path: string) {
 function normalizeCompareValue(value: string | null | undefined) {
   const clean = (value ?? "").trim();
   return clean.length === 0 ? "none" : clean.toLowerCase();
+}
+
+function isPathWithinSource(filePath: string, sourcePath: string) {
+  const file = normalizePathForSourceComparison(filePath);
+  const source = normalizePathForSourceComparison(sourcePath);
+  if (!file || !source) return false;
+  if (file === source) return true;
+  if (source === "/") return file.startsWith("/");
+  return file.startsWith(`${source}/`);
+}
+
+function normalizePathForSourceComparison(value: string) {
+  const normalized = value.trim().replace(/\\/g, "/").replace(/\/+/g, "/");
+  if (!normalized) return "";
+  if (normalized.length > 1) return normalized.replace(/\/+$/, "").toLowerCase();
+  return normalized.toLowerCase();
 }
 
 function hasTemplateMismatch(file: MediaFileRow, templateFile: MediaFileRow | null) {

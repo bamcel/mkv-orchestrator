@@ -29,6 +29,12 @@ describe("built-in themes", () => {
     );
   });
 
+  it("includes media-server color schemes", () => {
+    expect(webThemes.map((theme) => theme.name)).toEqual(
+      expect.arrayContaining(["Emby", "Plex", "Jellyfin"])
+    );
+  });
+
   it("alphabetizes built-ins and migrates the former theme names", () => {
     const names = webThemes.map((theme) => theme.name);
     expect(names).toEqual([...names].sort((left, right) => left.localeCompare(right)));

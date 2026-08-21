@@ -135,6 +135,46 @@ describe("Dashboard scan source labels", () => {
     expect(screen.getByText("Episode 02.mkv")).toBeInTheDocument();
     expect(screen.queryByText(String.raw`C:\media\Show\Episode 01.mkv`)).not.toBeInTheDocument();
   });
+
+  it("removes file-info rows immediately when their source is cleared", async () => {
+    const user = userEvent.setup();
+    window.sessionStorage.setItem("mkvo.web.scanSources", JSON.stringify([
+      "/media/ShowA",
+      "/media/ShowB"
+    ]));
+    const showA = {
+      path: "/media/ShowA/Episode 01.mkv",
+      fileName: "Episode 01.mkv",
+      extension: ".mkv",
+      status: "Scanned",
+      reader: "mkvmerge",
+      codec: "HEVC/H.265",
+      resolution: "1920x1080",
+      bitDepth: "",
+      hdr: "",
+      videoSummary: "HEVC/H.265 | 1920x1080",
+      audioSummary: "eng x1",
+      subtitleSummary: "eng x1",
+      attachmentSummary: "None",
+      tracks: [],
+      attachments: []
+    };
+    const showB = { ...showA, path: "/media/ShowB/Episode 02.mkv", fileName: "Episode 02.mkv" };
+
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve({ ...emptyScan, files: [showA, showB] }),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    expect(await screen.findByRole("row", { name: /Episode 01\.mkv/i })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Episode 02\.mkv/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /clear selected sources/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("row", { name: /Episode 01\.mkv/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("row", { name: /Episode 02\.mkv/i })).not.toBeInTheDocument();
+    });
+  });
 });
 
 describe("Dashboard ignored folders", () => {
