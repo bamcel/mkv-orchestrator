@@ -133,6 +133,11 @@ impl ProcessRunner {
         let mut command = Command::new(&spec.executable);
         command
             .args(&spec.args)
+            // Media paths and mkvmerge's JSON diagnostics are UTF-8. The
+            // Debian slim image may otherwise inherit a C locale, which can
+            // truncate non-ASCII filenames such as "Bon Appétit".
+            .env("LANG", "C.UTF-8")
+            .env("LC_ALL", "C.UTF-8")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
