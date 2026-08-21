@@ -229,8 +229,8 @@ impl MetadataProviderClient for TvdbClient {
             let document = self
                 .get_json(
                     credentials,
-                    &format!("series/{}/episodes/default", selected.id),
-                    &[("page", page.to_string()), ("language", language.clone())],
+                    &format!("series/{}/episodes/default/{language}", selected.id),
+                    &[("page", page.to_string())],
                     &cancellation,
                 )
                 .await?;
@@ -289,6 +289,7 @@ fn normalize_search_results(document: &Value, kind: MediaKind) -> Vec<SearchResu
 fn normalize_episode_page(document: &Value) -> Vec<EpisodeMetadata> {
     document
         .pointer("/data/episodes")
+        .or_else(|| document.pointer("/data/series/episodes"))
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
@@ -437,5 +438,13 @@ mod tests {
         }]}}));
         assert_eq!(episodes[0].absolute_number, Some(12));
         assert_eq!(episodes[0].scope_name, "Season 1");
+    }
+
+    #[test]
+    fn language_episode_pages_support_tvdbs_nested_response() {
+        let episodes = normalize_episode_page(&json!({"data":{"series":{"episodes":[{
+            "id":5,"seasonNumber":1,"number":2,"name":"Meeting the Goblins"
+        }]}}}));
+        assert_eq!(episodes[0].name, "Meeting the Goblins");
     }
 }
