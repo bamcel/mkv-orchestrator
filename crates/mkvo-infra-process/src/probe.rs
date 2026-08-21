@@ -135,7 +135,7 @@ impl MediaScanAdapter {
         if !accepted_exit {
             return Err(ProbeError::Exit {
                 code: output.exit_code,
-                message: concise_error(&output.stderr),
+                message: probe_message(tool, &output.stdout, &output.stderr),
             });
         }
         let mut scanned = match tool {
@@ -145,7 +145,7 @@ impl MediaScanAdapter {
         };
         scanned.reader = tool;
         if output.exit_code == Some(1) {
-            scanned.warning = Some(concise_error(&output.stderr));
+            scanned.warning = Some(probe_message(tool, &output.stdout, &output.stderr));
         }
         Ok(scanned)
     }
@@ -184,6 +184,39 @@ fn concise_error(stderr: &str) -> String {
     } else {
         message.chars().take(2_000).collect()
     }
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct MkvMergeMessages {
+    #[serde(default)]
+    errors: Vec<String>,
+    #[serde(default)]
+    warnings: Vec<String>,
+}
+
+fn probe_message(tool: ToolKind, stdout: &str, stderr: &str) -> String {
+    let stderr = stderr.trim();
+    if !stderr.is_empty() {
+        return stderr.chars().take(2_000).collect();
+    }
+
+    if tool == ToolKind::MkvMerge
+        && let Ok(messages) = serde_json::from_str::<MkvMergeMessages>(stdout)
+    {
+        let message = messages
+            .errors
+            .into_iter()
+            .chain(messages.warnings)
+            .map(|message| message.trim().to_owned())
+            .filter(|message| !message.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if !message.is_empty() {
+            return message.chars().take(2_000).collect();
+        }
+    }
+
+    concise_error("")
 }
 
 #[derive(Debug, Deserialize)]
@@ -690,6 +723,29 @@ mod tests {
         assert_eq!(media.tracks[0].bit_depth, Some(10));
         assert_eq!(media.tracks[1].language.as_deref(), Some("eng"));
         assert_eq!(media.attachments.len(), 1);
+    }
+
+    #[test]
+    fn reports_mkvmerge_json_errors_written_to_stdout() {
+        let output = serde_json::json!({
+            "errors": ["The file could not be opened for reading: open file error.\n"],
+            "warnings": []
+        })
+        .to_string();
+
+        assert_eq!(
+            probe_message(ToolKind::MkvMerge, &output, ""),
+            "The file could not be opened for reading: open file error."
+        );
+    }
+
+    #[test]
+    fn probe_diagnostics_prefer_nonempty_stderr() {
+        let output = serde_json::json!({ "errors": ["stdout error"] }).to_string();
+        assert_eq!(
+            probe_message(ToolKind::MkvMerge, &output, "stderr error\n"),
+            "stderr error"
+        );
     }
 
     #[test]
