@@ -114,9 +114,9 @@ export const webThemes: WebTheme[] = [
   },
   paletteTheme("Emby", {
     window: "#101010", card: "#1F1F1F", panel: "#262626", sidebar: "#151515",
-    input: "#202020", button: "#303030", hover: "#414141", selected: "#183A64",
+    input: "#202020", button: "#303030", hover: "#414141", selected: "#214A2A",
     border: "#3A3A3A", borderStrong: "#5A5A5A", text: "#F5F5F5", muted: "#CCCCCC",
-    subtle: "#999999", accent: "#2E8CFF", accentHover: "#1978E6", success: "#52B54B",
+    subtle: "#999999", accent: "#52B54B", accentHover: "#3F963A", success: "#6CCB72",
     warning: "#E5A00D", disabled: "#707070"
   }),
   paletteTheme("Jellyfin", {

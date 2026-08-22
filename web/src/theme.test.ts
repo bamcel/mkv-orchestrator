@@ -33,6 +33,9 @@ describe("built-in themes", () => {
     expect(webThemes.map((theme) => theme.name)).toEqual(
       expect.arrayContaining(["Emby", "Plex", "Jellyfin"])
     );
+    expect(getWebTheme("Emby").colors.Accent).toBe("#52B54B");
+    expect(getWebTheme("Plex").colors.Accent).toBe("#E5A00D");
+    expect(getWebTheme("Jellyfin").colors.Accent).toBe("#00A4DC");
   });
 
   it("alphabetizes built-ins and migrates the former theme names", () => {
