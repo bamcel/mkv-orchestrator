@@ -26,10 +26,20 @@ export function Layout() {
         <aside className="flex h-screen min-h-0 flex-col border-r border-border bg-sidebar px-3 py-5">
           <div className="mb-8 flex items-center gap-3 px-1">
             <div className="flex h-9 w-9 items-center justify-center">
-              <img
-                src={mkvoIcon}
-                alt=""
-                className="h-9 w-9 object-contain drop-shadow-[0_0_0.875rem_rgba(139,92,246,0.32)]"
+              <span
+                className="h-9 w-9"
+                style={{
+                  backgroundColor: "var(--color-app-title)",
+                  maskImage: `url(${mkvoIcon})`,
+                  maskPosition: "center",
+                  maskRepeat: "no-repeat",
+                  maskSize: "contain",
+                  WebkitMaskImage: `url(${mkvoIcon})`,
+                  WebkitMaskPosition: "center",
+                  WebkitMaskRepeat: "no-repeat",
+                  WebkitMaskSize: "contain",
+                  filter: "drop-shadow(0 0 0.875rem color-mix(in srgb, var(--color-app-title) 32%, transparent))"
+                }}
                 aria-hidden="true"
               />
             </div>

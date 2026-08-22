@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { SettingsPage } from "./SettingsPage";
@@ -431,6 +431,23 @@ describe("Settings defaults", () => {
     expect(request.languagePresets).toContain("eng");
     expect(request.mkvMergeDefaultAudioLanguages).toBe("eng,jpn");
     expect(request.mkvMergeDefaultSubtitleLanguages).toBe("eng");
+  });
+});
+
+describe("Settings appearance", () => {
+  it("lets users preview and save the shared app-title and logo color", async () => {
+    const user = userEvent.setup();
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^appearance$/i }));
+    const colorInput = await screen.findByLabelText(/app title and logo color/i);
+    fireEvent.change(colorInput, { target: { value: "#12ab34" } });
+
+    expect(document.documentElement.style.getPropertyValue("--color-app-title")).toBe("#12AB34");
+    expect((screen.getByLabelText(/theme json/i) as HTMLTextAreaElement).value).toContain('"AppTitle": "#12AB34"');
   });
 });
 

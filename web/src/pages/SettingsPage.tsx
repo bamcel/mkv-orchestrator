@@ -369,6 +369,18 @@ export function SettingsPage() {
     setSettingsStatus(`Theme reloaded: ${theme.name}`);
   }
 
+  function updateThemeColor(colorName: "AppTitle" | "TemplateHighlight", cssVariable: string, color: string) {
+    try {
+      const parsed = JSON.parse(themeJson);
+      parsed.colors = { ...(parsed.colors ?? parsed.Colors ?? {}), [colorName]: color };
+      delete parsed.Colors;
+      setThemeJson(JSON.stringify(parsed, null, 2));
+      document.documentElement.style.setProperty(cssVariable, color);
+    } catch {
+      setSettingsStatus("Theme JSON must be valid before editing theme colors.");
+    }
+  }
+
   function saveCustomTheme() {
     try {
       const parsed = JSON.parse(themeJson);
@@ -1030,6 +1042,19 @@ export function SettingsPage() {
                     Reload Theme
                   </button>
                 </div>
+                <div className="mt-4 grid max-w-xl grid-cols-2 gap-3">
+                  <ThemeColorField
+                    label="App title and logo"
+                    value={themeColorValue(themeJson, "AppTitle", "#BD93F9")}
+                    onChange={(color) => updateThemeColor("AppTitle", "--color-app-title", color)}
+                  />
+                  <ThemeColorField
+                    label="Template highlight"
+                    value={themeColorValue(themeJson, "TemplateHighlight", "#BD93F9")}
+                    onChange={(color) => updateThemeColor("TemplateHighlight", "--color-template", color)}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-subtle">Color edits preview immediately. Save them as a custom theme below to keep them.</p>
                 <label className="mt-4 block">
                   <span className="text-xs font-semibold text-muted">Theme JSON</span>
                   <textarea
@@ -1167,6 +1192,34 @@ export function SettingsPage() {
       ) : null}
     </div>
   );
+}
+
+function ThemeColorField({ label, value, onChange }: { label: string; value: string; onChange: (color: string) => void }) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold text-muted">{label}</span>
+      <div className="mt-2 flex h-10 items-center gap-2 rounded-md border border-border bg-input px-2">
+        <input
+          type="color"
+          aria-label={`${label} color`}
+          value={value}
+          onChange={(event) => onChange(event.target.value.toUpperCase())}
+          className="h-7 w-9 cursor-pointer border-0 bg-transparent p-0"
+        />
+        <span className="font-mono text-xs text-text">{value.toUpperCase()}</span>
+      </div>
+    </label>
+  );
+}
+
+function themeColorValue(themeJson: string, colorName: string, fallback: string) {
+  try {
+    const parsed = JSON.parse(themeJson);
+    const value = parsed.colors?.[colorName] ?? parsed.Colors?.[colorName];
+    return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 /** The folder holding a path, so picking a file still yields a directory. */
