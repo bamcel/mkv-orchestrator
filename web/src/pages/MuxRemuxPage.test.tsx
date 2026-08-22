@@ -49,7 +49,9 @@ describe("MKV Operations file selection", () => {
         getCurrentScanFiles: () => Promise.resolve({
           updatedUtc: "2026-08-15T20:00:00Z",
           files,
-          selectedPaths: ["/media/Old/removed.mkv"],
+          // A partial selection from another page must not change MKV
+          // Operations' full-batch default.
+          selectedPaths: [files[0].path],
           summary: { total: 2, mkv: 2, mp4: 0, failed: 0, cached: 0 }
         }),
         getWebSettings: () => Promise.resolve({

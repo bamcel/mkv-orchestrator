@@ -53,11 +53,20 @@ export function MuxRemuxPage() {
 
   useEffect(() => {
     if (!currentScan.data) return;
-    syncFromBackend(currentScan.data);
-    if (currentScan.data.files.length === 0) {
+    const scan = currentScan.data;
+    const selectionScope = scan.updatedUtc ?? scan.files.map((file) => file.path).join("|");
+
+    syncFromBackend(scan);
+    if (scan.files.length === 0) {
       setPreviewResult(null);
       setSelectedDetailPath("");
       setStatusText("Load scanned files from Dashboard, then build a preview.");
+    } else if (initializedSelectionScope.current !== selectionScope) {
+      // MKV Operations starts every newly loaded scan as a full batch. Record
+      // the scan identity first so later user deselection is preserved for the
+      // remainder of this batch instead of being immediately undone.
+      initializedSelectionScope.current = selectionScope;
+      setSelectedPaths(scan.files.map((file) => file.path));
     }
   }, [currentScan.data]);
 
@@ -69,18 +78,8 @@ export function MuxRemuxPage() {
   }, [settings.data, settingsDefaultsApplied]);
 
   useEffect(() => {
-    // Initialize each scan once. Stale paths from a previous scan do not count
-    // as a selection, but a deliberate Select None remains empty afterward.
-    const scope = currentScan.data?.updatedUtc ?? files.map((file) => file.path).join("|");
-    if (files.length > 0 && initializedSelectionScope.current !== scope) {
-      initializedSelectionScope.current = scope;
-      const available = new Set(files.map((file) => normalizePath(file.path)));
-      const hasCurrentSelection = selectedPaths.some((path) => available.has(normalizePath(path)));
-      if (!hasCurrentSelection) setSelectedPaths(files.map((file) => file.path));
-    }
-
     setSelectedDetailPath((current) => current && files.some((file) => file.path === current) ? current : files[0]?.path ?? "");
-  }, [files, selectedPaths, currentScan.data?.updatedUtc]);
+  }, [files]);
 
   useEffect(() => {
     if (!selectionMenu) return;
