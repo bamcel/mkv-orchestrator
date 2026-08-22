@@ -29,14 +29,30 @@ function settings(overrides: Partial<WebSettings> = {}): WebSettings {
 describe("Library sources", () => {
   it("uses manual watch folders and enabled server libraries, not Quick Access", () => {
     expect(librarySourceOptions(settings())).toEqual([
-      { name: "watch", path: "/media/watch" },
-      { name: "Jellyfin — TV", path: "/media/tv" }
+      { id: "watch:/media/watch", name: "watch", paths: ["/media/watch"] },
+      { id: "media:server-1:tv", name: "Jellyfin — TV", paths: ["/media/tv"] }
     ]);
   });
 
   it("deduplicates equivalent manual and server paths", () => {
     expect(librarySourceOptions(settings({ watchFolders: ["/media/tv/"] }))).toEqual([
-      { name: "tv", path: "/media/tv/" }
+      { id: "watch:/media/tv", name: "tv", paths: ["/media/tv/"] },
+      { id: "media:server-1:tv", name: "Jellyfin — TV", paths: ["/media/tv"] }
+    ]);
+  });
+
+  it("groups multiple paths for the same server library", () => {
+    expect(librarySourceOptions(settings({
+      mediaServers: [{
+        ...settings().mediaServers[0],
+        libraries: [
+          { id: "manga-a", name: "Manga", type: "mixed", serverPath: "/anime/manga", containerPath: "/media/anime/manga", isEnabled: true },
+          { id: "manga-b", name: "Manga", type: "mixed", serverPath: "/ereader/comics", containerPath: "/media/e-reader/comics", isEnabled: true }
+        ]
+      }]
+    }))).toEqual([
+      { id: "watch:/media/watch", name: "watch", paths: ["/media/watch"] },
+      { id: "media:server-1:manga", name: "Jellyfin — Manga", paths: ["/media/anime/manga", "/media/e-reader/comics"] }
     ]);
   });
 });

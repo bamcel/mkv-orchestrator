@@ -32,13 +32,7 @@ export function LibraryPage() {
 
   const sourceOptions = useMemo(() => {
     const roots = librarySourceOptions(webSettings.data);
-    const seen = new Set<string>();
-    return roots.filter((root) => {
-      const path = root.path.trim();
-      if (!path || seen.has(path.toLowerCase())) return false;
-      seen.add(path.toLowerCase());
-      return true;
-    });
+    return roots.filter((root) => root.paths.length > 0);
   }, [webSettings.data]);
 
   useEffect(() => {
@@ -46,8 +40,8 @@ export function LibraryPage() {
       setSelectedSource("");
       return;
     }
-    if (!sourceOptions.some((source) => source.path === selectedSource)) {
-      setSelectedSource(sourceOptions[0].path);
+    if (!sourceOptions.some((source) => source.id === selectedSource)) {
+      setSelectedSource(sourceOptions[0].id);
     }
   }, [selectedSource, sourceOptions]);
 
@@ -126,7 +120,7 @@ export function LibraryPage() {
         setPendingOverviewScan(false);
         audit.mutate(currentScanJob.files);
       } else {
-        setStatusText(`Loaded ${currentScanJob.summary.total} file(s) from ${selectedSource || "selected source"}.`);
+        setStatusText(`Loaded ${currentScanJob.summary.total} file(s) from ${sourceOptions.find((source) => source.id === selectedSource)?.name || "selected library"}.`);
       }
       currentScan.refetch();
     } else if (currentScanJob.status === "Failed") {
@@ -136,7 +130,7 @@ export function LibraryPage() {
       setPendingOverviewScan(false);
       setStatusText("Library overview build canceled.");
     }
-  }, [audit, cacheProgressText, currentScan, currentScanJob, pendingOverviewScan, selectedSource, setFiles]);
+  }, [audit, cacheProgressText, currentScan, currentScanJob, pendingOverviewScan, selectedSource, setFiles, sourceOptions]);
 
   const selected = useMemo(() => {
     return auditResult?.items.find((item) => item.folderPath === selectedFolder) ?? auditResult?.items[0] ?? null;
@@ -147,6 +141,7 @@ export function LibraryPage() {
     return showWarningsOnly ? items.filter((item) => item.hasIssues) : items;
   }, [auditResult, showWarningsOnly]);
 
+  const selectedSourceOption = sourceOptions.find((source) => source.id === selectedSource);
   const detailSummary = selected
     ? selected.hasIssues
       ? `Will send ${selected.issueFilePaths.length} mismatched file(s) plus template: ${selected.templateFileName}`
@@ -165,7 +160,8 @@ export function LibraryPage() {
   }
 
   function runBuildOverview() {
-    if (!selectedSource.trim()) {
+    const source = sourceOptions.find((item) => item.id === selectedSource);
+    if (!source) {
       setStatusText("Select a watch folder first.");
       return;
     }
@@ -173,7 +169,7 @@ export function LibraryPage() {
     setAuditResult(null);
     setSelectedFolder("");
     setPendingOverviewScan(true);
-    scanStart.mutate({ sources: [selectedSource], ignoredFolderNames: [], forceRefresh: false });
+    scanStart.mutate({ sources: source.paths, ignoredFolderNames: [], forceRefresh: false });
   }
 
   function cancelLibraryBuild() {
@@ -226,7 +222,7 @@ export function LibraryPage() {
         <section className="rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <h2 className="text-base font-semibold">Library Source</h2>
           <div className="mt-3 grid grid-cols-[7.5rem_minmax(16.25rem,26.25rem)_1fr] items-center gap-3">
-            <label className="text-sm text-muted" htmlFor="library-source">Source</label>
+            <label className="text-sm text-muted" htmlFor="library-source">Library</label>
             <select
               id="library-source"
               value={selectedSource}
@@ -235,15 +231,23 @@ export function LibraryPage() {
             >
               {sourceOptions.length === 0 ? <option value="">No library sources configured</option> : null}
               {sourceOptions.map((source) => (
-                <option key={source.path} value={source.path}>{source.name}: {source.path}</option>
+                <option key={source.id} value={source.id}>{source.name}</option>
               ))}
             </select>
           </div>
+          {selectedSourceOption ? (
+            <div className="mt-3 rounded-md border border-border bg-panel px-3 py-2 text-xs">
+              <div className="font-semibold text-muted">Source paths ({selectedSourceOption.paths.length})</div>
+              <div className="mt-1 space-y-1 text-subtle">
+                {selectedSourceOption.paths.map((path) => <div key={path} className="truncate" title={path}>{path}</div>)}
+              </div>
+            </div>
+          ) : null}
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <button type="button" onClick={refreshLibrarySource} className="h-9 whitespace-nowrap rounded-md border border-border bg-button px-5 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text">
               Refresh
             </button>
-            <button type="button" onClick={runBuildOverview} disabled={isBusy || !selectedSource} className="h-9 whitespace-nowrap rounded-md bg-accent px-5 text-sm font-semibold text-window transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled">
+            <button type="button" onClick={runBuildOverview} disabled={isBusy || !selectedSourceOption} className="h-9 whitespace-nowrap rounded-md bg-accent px-5 text-sm font-semibold text-window transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled">
               {isBusy ? "Building..." : "Build Overview"}
             </button>
             <button type="button" onClick={() => sendSelectionToDashboard(selected)} disabled={!selected || isBusy} className="h-9 whitespace-nowrap rounded-md border border-border bg-button px-5 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled">
@@ -352,28 +356,48 @@ export function LibraryPage() {
   );
 }
 
-export function librarySourceOptions(settings: WebSettings | undefined) {
+export type LibrarySourceOption = {
+  id: string;
+  name: string;
+  paths: string[];
+};
+
+export function librarySourceOptions(settings: WebSettings | undefined): LibrarySourceOption[] {
   if (!settings) return [];
 
-  const roots = [
-    ...settings.watchFolders.map((path) => ({ name: folderName(path) || "Watch Folder", path })),
-    ...settings.mediaServers.flatMap((server) =>
-      server.libraries
-        .filter((library) => library.isEnabled)
-        .map((library) => ({
+  const roots: LibrarySourceOption[] = settings.watchFolders
+    .map((path) => ({
+      id: `watch:${normalizePath(path)}`,
+      name: folderName(path) || "Watch Folder",
+      paths: [path]
+    }))
+    .filter((root) => root.paths[0].trim());
+  const grouped = new Map<string, LibrarySourceOption>();
+
+  for (const server of settings.mediaServers) {
+    for (const library of server.libraries) {
+      if (!library.isEnabled || !library.containerPath.trim()) continue;
+      const groupKey = `${server.id}:${library.name.trim().toLowerCase()}`;
+      const current = grouped.get(groupKey);
+      if (current) {
+        if (!current.paths.some((path) => normalizePath(path) === normalizePath(library.containerPath))) {
+          current.paths.push(library.containerPath);
+        }
+      } else {
+        grouped.set(groupKey, {
+          id: `media:${groupKey}`,
           name: `${server.name} — ${library.name}`,
-          path: library.containerPath
-        }))
-    )
-  ];
-  const seen = new Set<string>();
-  return roots.filter((root) => {
-    const path = root.path.trim();
-    const key = path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-    if (!path || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+          paths: [library.containerPath]
+        });
+      }
+    }
+  }
+
+  return [...roots, ...grouped.values()];
+}
+
+function normalizePath(path: string) {
+  return path.trim().replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }
 
 function folderName(path: string) {
