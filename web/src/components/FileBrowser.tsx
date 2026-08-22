@@ -36,9 +36,9 @@ type FileBrowserProps = {
   homeRoot?: FileBrowserRoot;
   onCancel: () => void;
   /** Called with the chosen folder or media file. */
-  onSelect: (path: string, kind: "folder" | "file") => void;
+  onSelect: (path: string, kind: "folder" | "file", browsePath?: string) => void;
   /** Enables desktop-style multi-selection and submits all chosen entries. */
-  onSelectMany?: (entries: Array<{ path: string; kind: "folder" | "file" }>) => void | Promise<void>;
+  onSelectMany?: (entries: Array<{ path: string; kind: "folder" | "file" }>, browsePath?: string) => void | Promise<void>;
   /** Persist a folder as a named Quick Access shortcut. */
   onPinToQuickAccess?: (path: string, name: string) => void | Promise<void>;
   /** Remove a user-pinned Quick Access shortcut. */
@@ -319,12 +319,12 @@ export function FileBrowser({
 
   function submitSelection(selectedEntries: FileSystemEntry[]) {
     if (onSelectMany && selectedEntries.length > 1) {
-      void onSelectMany(selectedEntries.map((entry) => ({ path: entry.path, kind: entry.kind })));
+      void onSelectMany(selectedEntries.map((entry) => ({ path: entry.path, kind: entry.kind })), currentPath);
       return;
     }
     const entry = selectedEntries[0];
-    if (entry) onSelect(entry.path, entry.kind);
-    else if (currentPath) onSelect(currentPath, "folder");
+    if (entry) onSelect(entry.path, entry.kind, currentPath);
+    else if (currentPath) onSelect(currentPath, "folder", currentPath);
   }
 
   function onListKeyDown(event: React.KeyboardEvent) {
@@ -747,7 +747,7 @@ export function FileBrowser({
               type="button"
               role="menuitem"
               onClick={() => {
-                onSelect(folderMenu.entry.path, "folder");
+                onSelect(folderMenu.entry.path, "folder", currentPath);
                 setFolderMenu(null);
               }}
               className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs text-muted transition hover:bg-selected hover:text-text"

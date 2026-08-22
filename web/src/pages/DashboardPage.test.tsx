@@ -498,15 +498,13 @@ describe("Dashboard template highlighting", () => {
     expect(screen.getByText("Template: Ep02.mkv")).toBeInTheDocument();
   });
 
-  /// The other Media Info fields already marked the template in accent; the
-  /// filename was left plain, so the one row naming the file did not match.
-  it("colours the template's filename like the rest of its details", async () => {
+  it("keeps the template filename white like the other file details", async () => {
     renderWithTemplate();
 
     const rows = await screen.findAllByText("Ep01.mkv");
     const detail = rows.find((element) => element.tagName === "DD");
     expect(detail).toBeDefined();
-    expect(detail).toHaveClass("text-accent");
+    expect(detail).toHaveClass("text-text");
   });
 
   it("labels the selected template beside its media reader", async () => {
@@ -517,17 +515,13 @@ describe("Dashboard template highlighting", () => {
     expect(templateBadge.nextElementSibling).toHaveTextContent("mkvmerge");
   });
 
-  /// Track rows are compared against the template, so the template itself has
-  /// nothing to compare against and reads as the reference.
-  it("colours the template's track rows as the reference", async () => {
+  it("keeps the template's track rows white for a uniform schema", async () => {
     renderWithTemplate();
 
     const codec = (await screen.findAllByText("AC-3"))[0];
-    expect(codec).toHaveClass("text-accent");
+    expect(codec).toHaveClass("text-text");
 
-    // A video track's name is exempt from comparison, but not from being
-    // marked as the template.
-    expect(screen.getByText("Ep01.Release")).toHaveClass("text-accent");
+    expect(screen.getByText("Ep01.Release")).toHaveClass("text-text");
   });
 
   it("identifies extra tracks by the mkvmerge ID shown in Track Info", async () => {

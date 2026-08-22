@@ -187,7 +187,7 @@ export function DashboardPage() {
         // Not compared like the fields below it: every file's name differs from
         // the template's, so comparing would mark them all as mismatched. It
         // only needs to say whether this row is the template.
-        className: isTemplate(selectedFile) ? "truncate text-accent" : "truncate text-text",
+        className: "truncate text-text",
         title: selectedFile.path
       },
       { label: "Codec", value: selectedFile.codec || "Unknown", className: compareTextClass(selectedFile, (row) => row.codec), title: undefined },
@@ -305,7 +305,7 @@ export function DashboardPage() {
     setIsBrowseOpen(true);
   }
 
-  async function addBrowsePath(path: string, kind: FileSystemEntry["kind"] = "folder") {
+  async function addBrowsePath(path: string, kind: FileSystemEntry["kind"] = "folder", browsePath?: string) {
     // Browsing may range wider than the authorized roots, so the chosen folder
     // is not usable as a scan source until the backend grants it. Choosing it
     // is the user's explicit act; the backend still validates the path.
@@ -317,11 +317,11 @@ export function DashboardPage() {
       return;
     }
     addSource(path);
-    rememberBrowsePath(folder || path);
+    rememberBrowsePath(browsePath || folder || path);
     setIsBrowseOpen(false);
   }
 
-  async function addBrowsePaths(entries: Array<{ path: string; kind: "folder" | "file" }>) {
+  async function addBrowsePaths(entries: Array<{ path: string; kind: "folder" | "file" }>, browsePath?: string) {
     try {
       await Promise.all(entries.map((entry) => {
         const folder = entry.kind === "file" ? getParentPath(entry.path) : entry.path;
@@ -340,8 +340,7 @@ export function DashboardPage() {
       }
       return next;
     });
-    const first = entries[0];
-    if (first) rememberBrowsePath(first.kind === "file" ? getParentPath(first.path) : first.path);
+    if (browsePath) rememberBrowsePath(browsePath);
     setIsBrowseOpen(false);
   }
 
@@ -452,7 +451,7 @@ export function DashboardPage() {
   }
 
   function compareTextClass(file: MediaFileRow, selector: (row: MediaFileRow) => string, normal = "text-text") {
-    if (isTemplate(file)) return "text-accent";
+    if (isTemplate(file)) return normal;
     return isDifferent(file, selector) ? "text-warning" : normal;
   }
 
@@ -460,7 +459,7 @@ export function DashboardPage() {
     if (!selectedFile) return "text-text";
     // The template is what everything else is measured against, so its own
     // tracks read as the reference rather than as a match or a mismatch.
-    if (isTemplate(selectedFile)) return "text-accent";
+    if (isTemplate(selectedFile)) return "text-text";
     if (!templateFile) return "text-text";
     const selectedTrack = selectedFile.tracks[index];
     const templateTrack = templateFile.tracks[index];
@@ -668,7 +667,7 @@ export function DashboardPage() {
                           className={[
                             "cursor-pointer bg-card hover:bg-selected",
                             rowSelected ? "bg-selected" : "",
-                            templateRow ? "text-accent" : mismatchRow ? "text-warning" : "text-text"
+                            mismatchRow ? "text-warning" : "text-text"
                           ].join(" ")}
                         >
                           <td className="max-w-[21.25rem] truncate border-b border-border px-3 py-2" title={file.path}>{file.fileName}</td>

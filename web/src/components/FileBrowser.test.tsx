@@ -121,7 +121,7 @@ describe("file browser navigation", () => {
     await screen.findByText("Show");
     await user.click(screen.getByRole("button", { name: /select this folder/i }));
 
-    expect(onSelect).toHaveBeenCalledWith("C:\\media", "folder");
+    expect(onSelect).toHaveBeenCalledWith("C:\\media", "folder", "C:\\media");
   });
 
   it("returns a picked file rather than the folder holding it", async () => {
@@ -144,7 +144,7 @@ describe("file browser navigation", () => {
     await user.click(await screen.findByText("Ep01.mkv"));
     await user.click(screen.getByRole("button", { name: /select file/i }));
 
-    expect(onSelect).toHaveBeenCalledWith("C:\\media\\Ep01.mkv", "file");
+    expect(onSelect).toHaveBeenCalledWith("C:\\media\\Ep01.mkv", "file", "C:\\media");
   });
 
   it("supports Ctrl toggle and Ctrl+A multi-selection", async () => {
@@ -189,7 +189,7 @@ describe("file browser navigation", () => {
       { path: "C:\\media\\Ep01.mkv", kind: "file" },
       { path: "C:\\media\\Ep02.mkv", kind: "file" },
       { path: "C:\\media\\Ep03.mkv", kind: "file" }
-    ]);
+    ], "C:\\media");
   });
 
   it("offers pin, open, and select actions when a folder is right-clicked", async () => {
@@ -236,7 +236,7 @@ describe("file browser navigation", () => {
 
     fireEvent.contextMenu(seasonRow, { clientX: 120, clientY: 140 });
     await user.click(screen.getByRole("menuitem", { name: /select folder/i }));
-    expect(onSelect).toHaveBeenCalledWith("C:\\media\\Show\\Season 01", "folder");
+    expect(onSelect).toHaveBeenCalledWith("C:\\media\\Show\\Season 01", "folder", "C:\\media\\Show");
   });
 
   it("uses pin icons and removes user-pinned Quick Access folders", async () => {

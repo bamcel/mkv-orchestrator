@@ -25,8 +25,10 @@ const audioNamePresets = ["English", "Japanese", "Commentary"];
 const subtitleNamePresets = ["English", "English Forced", "English SDH", "Dialogue", "Signs & Songs", "Commentary"];
 const languagePresets = ["eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de"];
 const configurationStorageKey = "mkvo.web.trackPropertiesConfiguration";
+const configurationVersion = 2;
 
 type StoredTrackPropertiesConfiguration = {
+  configurationVersion?: number;
   scanUpdatedUtc: string | null;
   templatePath: string;
   containerMode: TitleMode;
@@ -118,6 +120,7 @@ export function TrackPropertiesPage() {
     const stored = storedConfiguration.current;
     const canRestore = Boolean(
       stored
+      && stored.configurationVersion === configurationVersion
       && stored.scanUpdatedUtc === (currentScan.data?.updatedUtc ?? null)
       && stored.templatePath === loadedTemplate.templatePath
     );
@@ -157,6 +160,7 @@ export function TrackPropertiesPage() {
     if (!configurationReady || !template) return;
 
     const value: StoredTrackPropertiesConfiguration = {
+      configurationVersion,
       scanUpdatedUtc: currentScan.data.updatedUtc,
       templatePath,
       containerMode,
@@ -635,13 +639,15 @@ function getTrackKey(type: TrackType, trackNumber: number) {
 
 function buildTrackOptions(configuredValues: string[], ...priorityValues: string[]) {
   const seen = new Set<string>();
-  return [...priorityValues, ...configuredValues]
+  const values = [...priorityValues, ...configuredValues]
     .map((value) => value.trim())
     .filter((value) => {
       if (!value || seen.has(value.toLowerCase())) return false;
       seen.add(value.toLowerCase());
       return true;
     });
+  const hasBlank = [...priorityValues, ...configuredValues].some((value) => !value.trim());
+  return hasBlank ? ["", ...values] : values;
 }
 
 function buildCurrentTrackSummary(track: PropEditTrackConfigRow) {
