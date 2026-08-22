@@ -152,6 +152,16 @@ export interface JobSummary {
   "pending": number;
 }
 
+export interface LibraryArtworkRequest {
+  "serverId": string;
+  "itemId": string;
+}
+
+export interface LibraryArtworkResponse {
+  "contentType": string;
+  "dataBase64": string;
+}
+
 export interface LibraryAuditRequest {
   "files": Array<MediaFileRow>;
 }
@@ -182,6 +192,23 @@ export interface LibraryAuditSummary {
   "files": number;
   "issueGroups": number;
   "standardGroups": number;
+}
+
+export interface LibraryCatalogItem {
+  "id": string;
+  "title": string;
+  "year": number | null;
+  "mediaType": string;
+  "hasPoster": boolean;
+}
+
+export interface LibraryCatalogRequest {
+  "serverId": string;
+  "libraryName": string;
+}
+
+export interface LibraryCatalogResponse {
+  "items": Array<LibraryCatalogItem>;
 }
 
 export interface ListJobsRequest {
@@ -815,10 +842,15 @@ export interface ContractTypes {
   JobSnapshot: JobSnapshot;
   JobStatus: JobStatus;
   JobSummary: JobSummary;
+  LibraryArtworkRequest: LibraryArtworkRequest;
+  LibraryArtworkResponse: LibraryArtworkResponse;
   LibraryAuditRequest: LibraryAuditRequest;
   LibraryAuditResponse: LibraryAuditResponse;
   LibraryAuditRow: LibraryAuditRow;
   LibraryAuditSummary: LibraryAuditSummary;
+  LibraryCatalogItem: LibraryCatalogItem;
+  LibraryCatalogRequest: LibraryCatalogRequest;
+  LibraryCatalogResponse: LibraryCatalogResponse;
   ListJobsRequest: ListJobsRequest;
   LogLevel: LogLevel;
   LogQuery: LogQuery;
@@ -933,10 +965,15 @@ export const contractSchemas: Record<ContractName, ContractSchema> = {
   JobSnapshot: { kind: "object", fields: { "id": { optional: false, schema: { kind: "string" } }, "kind": { optional: false, schema: { kind: "ref", name: "JobKind" } }, "status": { optional: false, schema: { kind: "ref", name: "JobStatus" } }, "correlationId": { optional: false, schema: { kind: "string" } }, "idempotencyKey": { optional: false, schema: { kind: "string" } }, "requestFingerprint": { optional: false, schema: { kind: "string" } }, "planId": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "createdUtc": { optional: false, schema: { kind: "string" } }, "startedUtc": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "completedUtc": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "completed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "failed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "skipped": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "total": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "currentFile": { optional: false, schema: { kind: "string" } }, "currentFilePercent": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "lines": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "result": { optional: true, schema: { kind: "union", variants: [{ kind: "unknown" }, { kind: "null" }] } }, "error": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "revision": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },
   JobStatus: { kind: "union", variants: [{ kind: "literal", value: "Queued" }, { kind: "literal", value: "WaitingForResources" }, { kind: "literal", value: "Running" }, { kind: "literal", value: "Canceling" }, { kind: "literal", value: "Completed" }, { kind: "literal", value: "Failed" }, { kind: "literal", value: "Skipped" }, { kind: "literal", value: "Canceled" }] },
   JobSummary: { kind: "object", fields: { "total": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "completed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "failed": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "skipped": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "canceled": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "pending": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },
+  LibraryArtworkRequest: { kind: "object", fields: { "serverId": { optional: false, schema: { kind: "string" } }, "itemId": { optional: false, schema: { kind: "string" } } }, flatten: [] },
+  LibraryArtworkResponse: { kind: "object", fields: { "contentType": { optional: false, schema: { kind: "string" } }, "dataBase64": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   LibraryAuditRequest: { kind: "object", fields: { "files": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "MediaFileRow" } } } }, flatten: [] },
   LibraryAuditResponse: { kind: "object", fields: { "summary": { optional: false, schema: { kind: "ref", name: "LibraryAuditSummary" } }, "items": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "LibraryAuditRow" } } } }, flatten: [] },
   LibraryAuditRow: { kind: "object", fields: { "folderPath": { optional: false, schema: { kind: "string" } }, "folderName": { optional: false, schema: { kind: "string" } }, "fileCount": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "standardVideo": { optional: false, schema: { kind: "string" } }, "standardAudio": { optional: false, schema: { kind: "string" } }, "standardSubtitles": { optional: false, schema: { kind: "string" } }, "templateFilePath": { optional: false, schema: { kind: "string" } }, "templateFileName": { optional: false, schema: { kind: "string" } }, "hasIssues": { optional: false, schema: { kind: "boolean" } }, "issueSummary": { optional: false, schema: { kind: "string" } }, "issues": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "issueFilePaths": { optional: false, schema: { kind: "array", item: { kind: "string" } } }, "allFilePaths": { optional: false, schema: { kind: "array", item: { kind: "string" } } } }, flatten: [] },
   LibraryAuditSummary: { kind: "object", fields: { "groups": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "files": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "issueGroups": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "standardGroups": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },
+  LibraryCatalogItem: { kind: "object", fields: { "id": { optional: false, schema: { kind: "string" } }, "title": { optional: false, schema: { kind: "string" } }, "year": { optional: false, schema: { kind: "union", variants: [{ kind: "number", integer: true, unsigned: true }, { kind: "null" }] } }, "mediaType": { optional: false, schema: { kind: "string" } }, "hasPoster": { optional: false, schema: { kind: "boolean" } } }, flatten: [] },
+  LibraryCatalogRequest: { kind: "object", fields: { "serverId": { optional: false, schema: { kind: "string" } }, "libraryName": { optional: false, schema: { kind: "string" } } }, flatten: [] },
+  LibraryCatalogResponse: { kind: "object", fields: { "items": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "LibraryCatalogItem" } } } }, flatten: [] },
   ListJobsRequest: { kind: "object", fields: { "kind": { optional: true, schema: { kind: "union", variants: [{ kind: "ref", name: "JobKind" }, { kind: "null" }] } }, "status": { optional: true, schema: { kind: "union", variants: [{ kind: "ref", name: "JobStatus" }, { kind: "null" }] } }, "limit": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },
   LogLevel: { kind: "union", variants: [{ kind: "literal", value: "trace" }, { kind: "literal", value: "debug" }, { kind: "literal", value: "information" }, { kind: "literal", value: "warning" }, { kind: "literal", value: "error" }] },
   LogQuery: { kind: "object", fields: { "area": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "minimumLevel": { optional: true, schema: { kind: "union", variants: [{ kind: "ref", name: "LogLevel" }, { kind: "null" }] } }, "limit": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },

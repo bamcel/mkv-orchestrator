@@ -1,6 +1,128 @@
 use super::*;
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 impl MkvoRuntime {
+    pub async fn get_library_catalog(
+        &self,
+        request: LibraryCatalogRequest,
+    ) -> RuntimeResult<LibraryCatalogResponse> {
+        let loaded = self.settings_service().load().await?;
+        let server = loaded
+            .settings
+            .media_servers
+            .iter()
+            .find(|server| {
+                server
+                    .id
+                    .to_string()
+                    .eq_ignore_ascii_case(&request.server_id)
+            })
+            .ok_or_else(|| {
+                RuntimeError::not_found(format!("media server {}", request.server_id))
+            })?;
+        let server_paths = server
+            .libraries
+            .iter()
+            .filter(|library| {
+                library.enabled && library.name.eq_ignore_ascii_case(&request.library_name)
+            })
+            .map(|library| library.server_path.clone())
+            .collect::<Vec<_>>();
+        if server_paths.is_empty() {
+            return Err(RuntimeError::not_found(format!(
+                "library {:?} on media server {}",
+                request.library_name, request.server_id
+            )));
+        }
+        let connection = self.media_server_connection(server).await?;
+        let client = media_server_client(server.kind, &loaded.settings);
+        let items = client
+            .discover_items(
+                &connection,
+                &request.library_name,
+                &server_paths,
+                CancellationToken::new(),
+            )
+            .await?
+            .into_iter()
+            .map(|item| LibraryCatalogItem {
+                id: item.id,
+                title: item.title,
+                year: item.year,
+                media_type: item.media_type,
+                has_poster: item.has_poster,
+            })
+            .collect();
+        Ok(LibraryCatalogResponse { items })
+    }
+
+    pub async fn get_library_artwork(
+        &self,
+        request: LibraryArtworkRequest,
+    ) -> RuntimeResult<LibraryArtworkResponse> {
+        if request.item_id.is_empty()
+            || request.item_id.len() > 128
+            || !request
+                .item_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        {
+            return Err(RuntimeError::invalid("invalid media-server item id"));
+        }
+        let loaded = self.settings_service().load().await?;
+        let server = loaded
+            .settings
+            .media_servers
+            .iter()
+            .find(|server| {
+                server
+                    .id
+                    .to_string()
+                    .eq_ignore_ascii_case(&request.server_id)
+            })
+            .ok_or_else(|| {
+                RuntimeError::not_found(format!("media server {}", request.server_id))
+            })?;
+        let connection = self.media_server_connection(server).await?;
+        let artwork = media_server_client(server.kind, &loaded.settings)
+            .fetch_artwork(&connection, &request.item_id, CancellationToken::new())
+            .await?;
+        if !artwork
+            .content_type
+            .to_ascii_lowercase()
+            .starts_with("image/")
+        {
+            return Err(RuntimeError::invalid(
+                "media server returned a non-image poster response",
+            ));
+        }
+        Ok(LibraryArtworkResponse {
+            content_type: artwork.content_type,
+            data_base64: STANDARD.encode(artwork.bytes),
+        })
+    }
+
+    async fn media_server_connection(
+        &self,
+        server: &MediaServerSettings,
+    ) -> RuntimeResult<MediaServerConnection> {
+        let key = server
+            .credential
+            .secret_reference
+            .as_deref()
+            .unwrap_or("mediaServer:missing");
+        let legacy_key = format!("mediaServer:{}", server.id);
+        let credential = self
+            .secret_alias(&[key, &legacy_key])
+            .await?
+            .unwrap_or_default();
+        Ok(MediaServerConnection {
+            kind: server.kind,
+            base_url: server.server_url.clone(),
+            credential,
+        })
+    }
+
     pub async fn test_media_server_connection(
         &self,
         request: MediaServerConnectionRequest,

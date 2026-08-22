@@ -81,6 +81,21 @@ pub struct DiscoveredLibrary {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscoveredItem {
+    pub id: String,
+    pub title: String,
+    pub year: Option<u16>,
+    pub media_type: String,
+    pub has_poster: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtworkData {
+    pub content_type: String,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConnectionInfo {
     pub kind: MediaServerKind,
     pub server_name: Option<String>,
@@ -126,6 +141,21 @@ pub trait MediaServerClient: Send + Sync {
         mappings: &[MediaServerPathMapping],
         cancellation: CancellationToken,
     ) -> Result<Vec<DiscoveredLibrary>, MediaServerError>;
+
+    async fn discover_items(
+        &self,
+        server: &MediaServerConfig,
+        library_name: &str,
+        server_paths: &[PathBuf],
+        cancellation: CancellationToken,
+    ) -> Result<Vec<DiscoveredItem>, MediaServerError>;
+
+    async fn fetch_artwork(
+        &self,
+        server: &MediaServerConfig,
+        item_id: &str,
+        cancellation: CancellationToken,
+    ) -> Result<ArtworkData, MediaServerError>;
 }
 
 #[derive(Debug, Clone)]
@@ -246,6 +276,124 @@ impl MediaServerClient for MediaServerDiscoveryClient {
         };
         Ok(deduplicate_libraries(rows))
     }
+
+    async fn discover_items(
+        &self,
+        server: &MediaServerConfig,
+        library_name: &str,
+        server_paths: &[PathBuf],
+        cancellation: CancellationToken,
+    ) -> Result<Vec<DiscoveredItem>, MediaServerError> {
+        let mut items = match server.kind {
+            MediaServerKind::Emby | MediaServerKind::Jellyfin => {
+                let folders: Value = self
+                    .get(server, "Library/VirtualFolders", &cancellation)
+                    .await?
+                    .json()
+                    .await
+                    .map_err(|error| invalid(server.kind, error))?;
+                let parent_id = folders
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .find(|folder| {
+                        json_string(folder, &["Name", "name"])
+                            .is_some_and(|name| name.eq_ignore_ascii_case(library_name))
+                    })
+                    .and_then(|folder| json_string(folder, &["ItemId", "itemId"]));
+                let relative = parent_id.map_or_else(
+                    || "Items?Recursive=true&IncludeItemTypes=Series%2CMovie&Fields=Path%2CProductionYear%2CImageTags&EnableImages=true&Limit=10000".to_owned(),
+                    |id| format!("Items?ParentId={id}&Recursive=true&IncludeItemTypes=Series%2CMovie&Fields=Path%2CProductionYear%2CImageTags&EnableImages=true&Limit=10000"),
+                );
+                let document: Value = self
+                    .get(server, &relative, &cancellation)
+                    .await?
+                    .json()
+                    .await
+                    .map_err(|error| invalid(server.kind, error))?;
+                parse_emby_items(&document, server_paths)
+            }
+            MediaServerKind::Plex => {
+                let sections_xml = self
+                    .get(server, "library/sections", &cancellation)
+                    .await?
+                    .text()
+                    .await
+                    .map_err(|error| invalid(server.kind, error))?;
+                let sections: PlexSections = quick_xml::de::from_str(&sections_xml)
+                    .map_err(|error| invalid(server.kind, error))?;
+                let section_key = sections
+                    .directories
+                    .into_iter()
+                    .find(|section| {
+                        section
+                            .title
+                            .as_deref()
+                            .is_some_and(|title| title.eq_ignore_ascii_case(library_name))
+                    })
+                    .and_then(|section| section.key)
+                    .ok_or_else(|| MediaServerError::InvalidResponse {
+                        kind: server.kind,
+                        message: format!("library {library_name:?} was not found"),
+                    })?;
+                let items_xml = self
+                    .get(
+                        server,
+                        &format!("library/sections/{section_key}/all"),
+                        &cancellation,
+                    )
+                    .await?
+                    .text()
+                    .await
+                    .map_err(|error| invalid(server.kind, error))?;
+                parse_plex_items(&items_xml, server.kind)?
+            }
+        };
+        items.sort_by(|left, right| {
+            left.title
+                .to_ascii_lowercase()
+                .cmp(&right.title.to_ascii_lowercase())
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        items.dedup_by(|left, right| left.id == right.id);
+        Ok(items)
+    }
+
+    async fn fetch_artwork(
+        &self,
+        server: &MediaServerConfig,
+        item_id: &str,
+        cancellation: CancellationToken,
+    ) -> Result<ArtworkData, MediaServerError> {
+        let relative = match server.kind {
+            MediaServerKind::Emby | MediaServerKind::Jellyfin => {
+                format!("Items/{item_id}/Images/Primary?maxWidth=400&quality=85")
+            }
+            MediaServerKind::Plex => format!("library/metadata/{item_id}/thumb"),
+        };
+        let response = self.get(server, &relative, &cancellation).await?;
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("image/jpeg")
+            .to_owned();
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|error| invalid(server.kind, error))?
+            .to_vec();
+        if bytes.len() > 10 * 1024 * 1024 {
+            return Err(MediaServerError::InvalidResponse {
+                kind: server.kind,
+                message: "poster image exceeded the 10 MiB limit".to_owned(),
+            });
+        }
+        Ok(ArtworkData {
+            content_type,
+            bytes,
+        })
+    }
 }
 
 fn build_url(base: &str, relative_path: &str) -> Result<Url, MediaServerError> {
@@ -324,6 +472,64 @@ fn parse_emby_libraries(
         .collect()
 }
 
+fn parse_emby_items(document: &Value, server_paths: &[PathBuf]) -> Vec<DiscoveredItem> {
+    let items = document
+        .get("Items")
+        .or_else(|| document.get("items"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten();
+    items
+        .filter(|item| {
+            if server_paths.is_empty() {
+                return true;
+            }
+            let Some(path) = json_string(item, &["Path", "path"]) else {
+                // ParentId already scopes normal responses. Do not discard a
+                // valid server item merely because that server omitted Path.
+                return true;
+            };
+            server_paths
+                .iter()
+                .any(|root| path_is_within(&path, &root.to_string_lossy()))
+        })
+        .filter_map(|item| {
+            let id = json_string(item, &["Id", "id"])?;
+            let title = json_string(item, &["Name", "name"])?;
+            let media_type = json_string(item, &["Type", "type"])
+                .unwrap_or_else(|| "series".to_owned())
+                .to_ascii_lowercase();
+            let year = item
+                .get("ProductionYear")
+                .or_else(|| item.get("productionYear"))
+                .and_then(Value::as_u64)
+                .and_then(|value| u16::try_from(value).ok());
+            let has_poster = item
+                .get("ImageTags")
+                .or_else(|| item.get("imageTags"))
+                .and_then(|tags| tags.get("Primary").or_else(|| tags.get("primary")))
+                .and_then(Value::as_str)
+                .is_some_and(|tag| !tag.is_empty());
+            Some(DiscoveredItem {
+                id,
+                title,
+                year,
+                media_type,
+                has_poster,
+            })
+        })
+        .collect()
+}
+
+fn path_is_within(path: &str, root: &str) -> bool {
+    let path = normalize_server_path(path).to_ascii_lowercase();
+    let root = normalize_server_path(root).to_ascii_lowercase();
+    path == root
+        || path
+            .strip_prefix(&root)
+            .is_some_and(|suffix| suffix.starts_with('/'))
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename = "MediaContainer")]
 struct PlexIdentity {
@@ -356,6 +562,50 @@ struct PlexDirectory {
 struct PlexLocation {
     #[serde(rename = "@path")]
     path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename = "MediaContainer")]
+struct PlexItems {
+    #[serde(rename = "Directory", default)]
+    directories: Vec<PlexMediaItem>,
+    #[serde(rename = "Video", default)]
+    videos: Vec<PlexMediaItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlexMediaItem {
+    #[serde(rename = "@ratingKey")]
+    rating_key: Option<String>,
+    #[serde(rename = "@title")]
+    title: Option<String>,
+    #[serde(rename = "@year")]
+    year: Option<u16>,
+    #[serde(rename = "@type")]
+    kind: Option<String>,
+    #[serde(rename = "@thumb")]
+    thumb: Option<String>,
+}
+
+fn parse_plex_items(
+    xml: &str,
+    kind: MediaServerKind,
+) -> Result<Vec<DiscoveredItem>, MediaServerError> {
+    let document: PlexItems = quick_xml::de::from_str(xml).map_err(|error| invalid(kind, error))?;
+    Ok(document
+        .directories
+        .into_iter()
+        .chain(document.videos)
+        .filter_map(|item| {
+            Some(DiscoveredItem {
+                id: item.rating_key?,
+                title: item.title?,
+                year: item.year,
+                media_type: item.kind.unwrap_or_else(|| "series".to_owned()),
+                has_poster: item.thumb.is_some_and(|thumb| !thumb.is_empty()),
+            })
+        })
+        .collect())
 }
 
 fn parse_plex_libraries(
@@ -562,6 +812,32 @@ mod tests {
         let rows = parse_plex_libraries(xml, &server(MediaServerKind::Plex), &[]).expect("parse");
         assert_eq!(rows[0].server_path, "/srv/tv");
         assert_eq!(rows[0].collection_type.as_deref(), Some("show"));
+    }
+
+    #[test]
+    fn parses_emby_catalog_items_and_poster_availability() {
+        let rows = parse_emby_items(
+            &json!({"Items":[
+                {"Id":"series-1","Name":"Example Show","Type":"Series","ProductionYear":2024,"Path":"/media/tv/Example Show","ImageTags":{"Primary":"tag"}},
+                {"Id":"movie-1","Name":"Outside","Type":"Movie","Path":"/media/movies/Outside.mkv"}
+            ]}),
+            &[PathBuf::from("/media/tv")],
+        );
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].title, "Example Show");
+        assert_eq!(rows[0].year, Some(2024));
+        assert!(rows[0].has_poster);
+    }
+
+    #[test]
+    fn parses_plex_series_and_movies_as_catalog_items() {
+        let xml = r#"<MediaContainer size="2"><Directory ratingKey="11" type="show" title="Example Show" year="2020" thumb="/library/metadata/11/thumb" /><Video ratingKey="22" type="movie" title="Example Movie" year="2023" /></MediaContainer>"#;
+        let rows = parse_plex_items(xml, MediaServerKind::Plex).expect("parse");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].media_type, "show");
+        assert!(rows[0].has_poster);
+        assert_eq!(rows[1].media_type, "movie");
+        assert!(!rows[1].has_poster);
     }
 
     #[test]

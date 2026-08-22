@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use axum::{
     Router,
-    extract::State,
+    extract::{Path as AxumPath, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::get,
@@ -100,6 +100,26 @@ async fn jellyfin_connection_and_libraries_round_trip_over_http() {
                 ]))
             }),
         )
+        .route(
+            "/Items",
+            get(|| async {
+                axum::Json(serde_json::json!({"Items":[{
+                    "Id":"show-1",
+                    "Name":"Example Show",
+                    "Type":"Series",
+                    "ProductionYear":2024,
+                    "Path":"/data/tv/Example Show",
+                    "ImageTags":{"Primary":"poster-tag"}
+                }]}))
+            }),
+        )
+        .route(
+            "/Items/{id}/Images/Primary",
+            get(|AxumPath(id): AxumPath<String>| async move {
+                assert_eq!(id, "show-1");
+                ([("content-type", "image/jpeg")], vec![1_u8, 2, 3, 4])
+            }),
+        )
         .with_state(seen.clone());
 
     // A trailing slash is what a user typically pastes; URL joining must not
@@ -146,6 +166,25 @@ async fn jellyfin_connection_and_libraries_round_trip_over_http() {
             .as_deref(),
         Some("token-123")
     );
+
+    let items = client
+        .discover_items(
+            &config,
+            "Shows",
+            &[std::path::PathBuf::from("/data/tv")],
+            CancellationToken::new(),
+        )
+        .await
+        .expect("catalog items");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].title, "Example Show");
+    assert!(items[0].has_poster);
+    let artwork = client
+        .fetch_artwork(&config, "show-1", CancellationToken::new())
+        .await
+        .expect("poster artwork");
+    assert_eq!(artwork.content_type, "image/jpeg");
+    assert_eq!(artwork.bytes, vec![1, 2, 3, 4]);
     server.abort();
 }
 

@@ -13,9 +13,14 @@ import type {
   CurrentScanResponse,
   FileSystemEntry,
   FileSystemResponse,
+  LibraryArtworkRequest,
+  LibraryArtworkResponse,
   LibraryAuditResponse,
   LibraryAuditRow,
   LibraryAuditSummary,
+  LibraryCatalogItem,
+  LibraryCatalogRequest,
+  LibraryCatalogResponse,
   MediaFileRow,
   MediaServerSyncResponse,
   MediaServerTestResponse,
@@ -102,9 +107,14 @@ export type {
   CurrentScanResponse,
   FileSystemEntry,
   FileSystemResponse,
+  LibraryArtworkRequest,
+  LibraryArtworkResponse,
   LibraryAuditResponse,
   LibraryAuditRow,
   LibraryAuditSummary,
+  LibraryCatalogItem,
+  LibraryCatalogRequest,
+  LibraryCatalogResponse,
   MediaFileRow,
   MediaServerSyncResponse,
   MediaServerTestResponse,
@@ -313,6 +323,14 @@ export function startPropEditApply(request: PropEditPreviewRequest): Promise<Ope
 
 export function buildLibraryAudit(files: MediaFileRow[]): Promise<LibraryAuditResponse> {
   return getBackendClient().buildLibraryAudit(files);
+}
+
+export function getLibraryCatalog(request: LibraryCatalogRequest): Promise<LibraryCatalogResponse> {
+  return getBackendClient().getLibraryCatalog(request);
+}
+
+export function getLibraryArtwork(request: LibraryArtworkRequest): Promise<LibraryArtworkResponse> {
+  return getBackendClient().getLibraryArtwork(request);
 }
 
 export function getOperationLogs(): Promise<{ entries: OperationLogEntry[] }> {

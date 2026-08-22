@@ -1,7 +1,10 @@
 use std::path::PathBuf;
 
 use async_trait::async_trait;
-use mkvo_application::{MediaServerClient as MediaServerPort, MediaServerConnection, PortError};
+use mkvo_application::{
+    MediaServerArtwork, MediaServerCatalogItem, MediaServerClient as MediaServerPort,
+    MediaServerConnection, PortError,
+};
 use mkvo_domain::{MediaServerKind as DomainServerKind, MediaServerLibrary as DomainLibrary};
 use tokio_util::sync::CancellationToken;
 
@@ -71,6 +74,49 @@ impl MediaServerPort for ConfiguredMediaServerClient {
                         enabled: library.enabled,
                     })
                     .collect()
+            })
+            .map_err(server_port_error)
+    }
+
+    async fn discover_items(
+        &self,
+        connection: &MediaServerConnection,
+        library_name: &str,
+        server_paths: &[PathBuf],
+        cancel: CancellationToken,
+    ) -> Result<Vec<MediaServerCatalogItem>, PortError> {
+        let config = self.config(connection)?;
+        self.client
+            .discover_items(&config, library_name, server_paths, cancel)
+            .await
+            .map(|items| {
+                items
+                    .into_iter()
+                    .map(|item| MediaServerCatalogItem {
+                        id: item.id,
+                        title: item.title,
+                        year: item.year,
+                        media_type: item.media_type,
+                        has_poster: item.has_poster,
+                    })
+                    .collect()
+            })
+            .map_err(server_port_error)
+    }
+
+    async fn fetch_artwork(
+        &self,
+        connection: &MediaServerConnection,
+        item_id: &str,
+        cancel: CancellationToken,
+    ) -> Result<MediaServerArtwork, PortError> {
+        let config = self.config(connection)?;
+        self.client
+            .fetch_artwork(&config, item_id, cancel)
+            .await
+            .map(|artwork| MediaServerArtwork {
+                content_type: artwork.content_type,
+                bytes: artwork.bytes,
             })
             .map_err(server_port_error)
     }

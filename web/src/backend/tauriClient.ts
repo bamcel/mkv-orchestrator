@@ -3,7 +3,11 @@ import type {
   AppStatus,
   CurrentScanResponse,
   FileSystemResponse,
+  LibraryArtworkRequest,
+  LibraryArtworkResponse,
   LibraryAuditResponse,
+  LibraryCatalogRequest,
+  LibraryCatalogResponse,
   MediaFileRow,
   MediaServerSyncResponse,
   MediaServerTestResponse,
@@ -201,6 +205,14 @@ export class TauriBackendClient implements BackendClient {
 
   buildLibraryAudit(files: MediaFileRow[]): Promise<LibraryAuditResponse> {
     return this.invoke<LibraryAuditResponse>("run_library_audit", { request: { files } }, "LibraryAuditResponse");
+  }
+
+  getLibraryCatalog(request: LibraryCatalogRequest): Promise<LibraryCatalogResponse> {
+    return this.invoke<LibraryCatalogResponse>("get_library_catalog", { request }, "LibraryCatalogResponse");
+  }
+
+  getLibraryArtwork(request: LibraryArtworkRequest): Promise<LibraryArtworkResponse> {
+    return this.invoke<LibraryArtworkResponse>("get_library_artwork", { request }, "LibraryArtworkResponse");
   }
 
   getOperationLogs(): Promise<{ entries: OperationLogEntry[] }> {

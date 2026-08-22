@@ -372,6 +372,22 @@ pub async fn run_library_audit(runtime: State<'_, RuntimeState>, request: Value)
     encode_response(runtime.run_library_audit(decode_request(request)?).await)
 }
 
+#[tauri::command]
+pub async fn get_library_catalog(
+    runtime: State<'_, RuntimeState>,
+    request: Value,
+) -> CommandResult {
+    encode_response(runtime.get_library_catalog(decode_request(request)?).await)
+}
+
+#[tauri::command]
+pub async fn get_library_artwork(
+    runtime: State<'_, RuntimeState>,
+    request: Value,
+) -> CommandResult {
+    encode_response(runtime.get_library_artwork(decode_request(request)?).await)
+}
+
 /// Open the OS folder picker and authorize whatever the user chooses.
 ///
 /// A picked folder is an explicit user act, so it earns an authorized-root

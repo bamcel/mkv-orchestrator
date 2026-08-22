@@ -2,7 +2,11 @@ import type {
   AppStatus,
   CurrentScanResponse,
   FileSystemResponse,
+  LibraryArtworkRequest,
+  LibraryArtworkResponse,
   LibraryAuditResponse,
+  LibraryCatalogRequest,
+  LibraryCatalogResponse,
   MediaFileRow,
   MediaServerSyncResponse,
   MediaServerTestResponse,
@@ -166,6 +170,8 @@ export interface PropertyEditClient {
 
 export interface LibraryClient {
   buildLibraryAudit(files: MediaFileRow[]): Promise<LibraryAuditResponse>;
+  getLibraryCatalog(request: LibraryCatalogRequest): Promise<LibraryCatalogResponse>;
+  getLibraryArtwork(request: LibraryArtworkRequest): Promise<LibraryArtworkResponse>;
 }
 
 export interface OperationLogsClient {

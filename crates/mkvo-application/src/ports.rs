@@ -208,6 +208,22 @@ pub struct MediaServerConnection {
     pub credential: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaServerCatalogItem {
+    pub id: String,
+    pub title: String,
+    pub year: Option<u16>,
+    pub media_type: String,
+    pub has_poster: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MediaServerArtwork {
+    pub content_type: String,
+    pub bytes: Vec<u8>,
+}
+
 #[async_trait]
 pub trait MediaServerClient: Send + Sync {
     fn kind(&self) -> MediaServerKind;
@@ -221,6 +237,19 @@ pub trait MediaServerClient: Send + Sync {
         connection: &MediaServerConnection,
         cancel: CancellationToken,
     ) -> Result<Vec<MediaServerLibrary>, PortError>;
+    async fn discover_items(
+        &self,
+        connection: &MediaServerConnection,
+        library_name: &str,
+        server_paths: &[PathBuf],
+        cancel: CancellationToken,
+    ) -> Result<Vec<MediaServerCatalogItem>, PortError>;
+    async fn fetch_artwork(
+        &self,
+        connection: &MediaServerConnection,
+        item_id: &str,
+        cancel: CancellationToken,
+    ) -> Result<MediaServerArtwork, PortError>;
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
