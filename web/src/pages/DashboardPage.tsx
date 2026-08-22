@@ -667,7 +667,7 @@ export function DashboardPage() {
                           className={[
                             "cursor-pointer bg-card hover:bg-selected",
                             rowSelected ? "bg-selected" : "",
-                            mismatchRow ? "text-warning" : "text-text"
+                            templateRow ? "text-accent" : mismatchRow ? "text-warning" : "text-text"
                           ].join(" ")}
                         >
                           <td className="max-w-[21.25rem] truncate border-b border-border px-3 py-2" title={file.path}>{file.fileName}</td>

@@ -515,6 +515,13 @@ describe("Dashboard template highlighting", () => {
     expect(templateBadge.nextElementSibling).toHaveTextContent("mkvmerge");
   });
 
+  it("uses purple text for the template row in File Info", async () => {
+    renderWithTemplate();
+
+    const templateRow = await screen.findByRole("row", { name: /Ep01\.mkv/i });
+    expect(templateRow).toHaveClass("text-accent");
+  });
+
   it("keeps the template's track rows white for a uniform schema", async () => {
     renderWithTemplate();
 
