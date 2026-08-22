@@ -105,7 +105,7 @@ describe("file browser navigation", () => {
     expect(await screen.findByText("Show")).toBeInTheDocument();
   });
 
-  it("returns the current folder when nothing is picked", async () => {
+  it("returns the current folder while preserving its parent as the next browse location", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     const browseFileSystem = filesystem({
@@ -121,7 +121,7 @@ describe("file browser navigation", () => {
     await screen.findByText("Show");
     await user.click(screen.getByRole("button", { name: /select this folder/i }));
 
-    expect(onSelect).toHaveBeenCalledWith("C:\\media", "folder", "C:\\media");
+    expect(onSelect).toHaveBeenCalledWith("C:\\media", "folder", "C:\\");
   });
 
   it("returns a picked file rather than the folder holding it", async () => {

@@ -324,7 +324,12 @@ export function FileBrowser({
     }
     const entry = selectedEntries[0];
     if (entry) onSelect(entry.path, entry.kind, currentPath);
-    else if (currentPath) onSelect(currentPath, "folder", currentPath);
+    // "Select This Folder" chooses the directory currently being viewed. The
+    // next browse should reopen one level above it, just as selecting that
+    // folder from its parent's row would. File selections still pass
+    // currentPath above, so reopening after choosing files stays in their
+    // containing directory.
+    else if (currentPath) onSelect(currentPath, "folder", listing.data?.parentPath ?? parentOf(currentPath));
   }
 
   function onListKeyDown(event: React.KeyboardEvent) {
