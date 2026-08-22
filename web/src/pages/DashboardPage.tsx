@@ -170,7 +170,7 @@ export function DashboardPage() {
     }
 
     const statusClass = isTemplate(selectedFile)
-      ? "text-accent"
+      ? "text-template"
       : hasTemplateMismatch(selectedFile, templateFile)
         ? "text-warning"
         : "text-success";
@@ -667,7 +667,7 @@ export function DashboardPage() {
                           className={[
                             "cursor-pointer bg-card hover:bg-selected",
                             rowSelected ? "bg-selected" : "",
-                            templateRow ? "text-accent" : mismatchRow ? "text-warning" : "text-text"
+                            templateRow ? "text-template" : mismatchRow ? "text-warning" : "text-text"
                           ].join(" ")}
                         >
                           <td className="max-w-[21.25rem] truncate border-b border-border px-3 py-2" title={file.path}>{file.fileName}</td>
@@ -704,7 +704,7 @@ export function DashboardPage() {
                   {selectedFile ? (
                     <div className="flex items-center gap-2">
                       {isTemplate(selectedFile) ? (
-                        <span className="rounded-md bg-accent/15 px-2 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-accent">
+                        <span className="rounded-md bg-template/15 px-2 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-template">
                           Template File
                         </span>
                       ) : null}

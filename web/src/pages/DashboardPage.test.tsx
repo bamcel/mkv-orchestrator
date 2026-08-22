@@ -519,7 +519,7 @@ describe("Dashboard template highlighting", () => {
     renderWithTemplate();
 
     const templateRow = await screen.findByRole("row", { name: /Ep01\.mkv/i });
-    expect(templateRow).toHaveClass("text-accent");
+    expect(templateRow).toHaveClass("text-template");
   });
 
   it("keeps the template's track rows white for a uniform schema", async () => {

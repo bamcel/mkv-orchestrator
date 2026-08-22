@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { applyWebTheme, getWebTheme, webThemes } from "./theme";
+import { applyWebTheme, getWebTheme, loadCustomWebThemes, webThemes } from "./theme";
 
 const chatStyleThemeNames = [
   "Absolutely",
@@ -47,6 +47,24 @@ describe("built-in themes", () => {
     expect(document.documentElement.style.getPropertyValue("--color-accent")).toBe(
       theme.colors.Accent
     );
+    expect(document.documentElement.style.getPropertyValue("--color-template")).toBe(
+      theme.colors.TemplateHighlight
+    );
     expect(window.localStorage.getItem("mkvo.web.theme")).toBe("Everforest");
+  });
+
+  it("gives every built-in theme its own configurable template highlight", () => {
+    for (const theme of webThemes) {
+      expect(theme.colors.TemplateHighlight).toBe(theme.colors.Accent);
+    }
+  });
+
+  it("migrates custom themes to use their accent as the template highlight", () => {
+    window.localStorage.setItem("mkvo.web.customThemes", JSON.stringify([{
+      name: "Legacy Custom",
+      colors: { Accent: "#123456" }
+    }]));
+
+    expect(loadCustomWebThemes()[0].colors.TemplateHighlight).toBe("#123456");
   });
 });
