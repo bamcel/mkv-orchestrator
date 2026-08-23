@@ -32,7 +32,7 @@ describe("Library sources", () => {
       { id: "watch:/media/watch", name: "watch", paths: ["/media/watch"] },
       {
         id: "media:server-1:tv",
-        name: "Jellyfin — TV",
+        name: "TV",
         paths: ["/media/tv"],
         serverId: "server-1",
         libraryName: "TV",
@@ -46,7 +46,7 @@ describe("Library sources", () => {
       { id: "watch:/media/tv", name: "tv", paths: ["/media/tv/"] },
       {
         id: "media:server-1:tv",
-        name: "Jellyfin — TV",
+        name: "TV",
         paths: ["/media/tv"],
         serverId: "server-1",
         libraryName: "TV",
@@ -68,7 +68,7 @@ describe("Library sources", () => {
       { id: "watch:/media/watch", name: "watch", paths: ["/media/watch"] },
       {
         id: "media:server-1:manga",
-        name: "Jellyfin — Manga",
+        name: "Manga",
         paths: ["/media/anime/manga", "/media/e-reader/comics"],
         serverId: "server-1",
         libraryName: "Manga",

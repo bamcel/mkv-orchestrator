@@ -211,6 +211,10 @@ export interface LibraryCatalogResponse {
   "items": Array<LibraryCatalogItem>;
 }
 
+export interface LibraryLocalArtworkRequest {
+  "folderPaths": Array<string>;
+}
+
 export interface ListJobsRequest {
   "kind"?: JobKind | null;
   "status"?: JobStatus | null;
@@ -851,6 +855,7 @@ export interface ContractTypes {
   LibraryCatalogItem: LibraryCatalogItem;
   LibraryCatalogRequest: LibraryCatalogRequest;
   LibraryCatalogResponse: LibraryCatalogResponse;
+  LibraryLocalArtworkRequest: LibraryLocalArtworkRequest;
   ListJobsRequest: ListJobsRequest;
   LogLevel: LogLevel;
   LogQuery: LogQuery;
@@ -974,6 +979,7 @@ export const contractSchemas: Record<ContractName, ContractSchema> = {
   LibraryCatalogItem: { kind: "object", fields: { "id": { optional: false, schema: { kind: "string" } }, "title": { optional: false, schema: { kind: "string" } }, "year": { optional: false, schema: { kind: "union", variants: [{ kind: "number", integer: true, unsigned: true }, { kind: "null" }] } }, "mediaType": { optional: false, schema: { kind: "string" } }, "hasPoster": { optional: false, schema: { kind: "boolean" } } }, flatten: [] },
   LibraryCatalogRequest: { kind: "object", fields: { "serverId": { optional: false, schema: { kind: "string" } }, "libraryName": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   LibraryCatalogResponse: { kind: "object", fields: { "items": { optional: false, schema: { kind: "array", item: { kind: "ref", name: "LibraryCatalogItem" } } } }, flatten: [] },
+  LibraryLocalArtworkRequest: { kind: "object", fields: { "folderPaths": { optional: false, schema: { kind: "array", item: { kind: "string" } } } }, flatten: [] },
   ListJobsRequest: { kind: "object", fields: { "kind": { optional: true, schema: { kind: "union", variants: [{ kind: "ref", name: "JobKind" }, { kind: "null" }] } }, "status": { optional: true, schema: { kind: "union", variants: [{ kind: "ref", name: "JobStatus" }, { kind: "null" }] } }, "limit": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },
   LogLevel: { kind: "union", variants: [{ kind: "literal", value: "trace" }, { kind: "literal", value: "debug" }, { kind: "literal", value: "information" }, { kind: "literal", value: "warning" }, { kind: "literal", value: "error" }] },
   LogQuery: { kind: "object", fields: { "area": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "minimumLevel": { optional: true, schema: { kind: "union", variants: [{ kind: "ref", name: "LogLevel" }, { kind: "null" }] } }, "limit": { optional: false, schema: { kind: "number", integer: true, unsigned: true } } }, flatten: [] },

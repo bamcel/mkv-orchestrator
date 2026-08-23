@@ -428,6 +428,35 @@ mod tests {
         assert_eq!(store.cache_count().expect("count"), 0);
     }
 
+    #[test]
+    fn removes_only_cache_entries_older_than_the_retention_cutoff() {
+        let store = SqliteStore::open_in_memory().expect("open store");
+        for (path, scanned_at_ms) in [("old.mkv", 100), ("boundary.mkv", 200), ("new.mkv", 300)] {
+            store
+                .upsert_media(&CachedMedia {
+                    fingerprint: fingerprint(path, 10),
+                    scanned_at_ms,
+                    payload: json!({"tracks": 1}),
+                })
+                .expect("upsert");
+        }
+
+        assert_eq!(store.remove_media_older_than(200).expect("prune"), 1);
+        assert_eq!(store.cache_count().expect("count"), 2);
+        assert!(
+            store
+                .get_valid_media(&fingerprint("boundary.mkv", 10))
+                .expect("boundary")
+                .is_some()
+        );
+        assert!(
+            store
+                .get_valid_media(&fingerprint("new.mkv", 10))
+                .expect("new")
+                .is_some()
+        );
+    }
+
     /// A scan writes canonicalized paths (`\\?\C:\...` on Windows) while
     /// filesystem-watch events report the plain form. If those are two keys, a
     /// deletion never matches a cache row and pruning silently does nothing,

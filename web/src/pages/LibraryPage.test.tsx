@@ -93,6 +93,7 @@ describe("Library poster workflow", () => {
       selectedPaths,
       summary: { total: 4, mkv: 4, mp4: 0, failed: 0, cached: 0 }
     }));
+    const getLibraryLocalArtwork = vi.fn().mockRejectedValue(new Error("No local poster"));
     const completedJob = {
       id: "scan-1",
       status: "Completed",
@@ -109,6 +110,7 @@ describe("Library poster workflow", () => {
       {
         getWebSettings: () => Promise.resolve(settings()),
         getLibraryCatalog: () => Promise.resolve({ items: [{ id: "series-1", title: "Example Show", year: 2024, mediaType: "series", hasPoster: false }] }),
+        getLibraryLocalArtwork,
         startScan: () => Promise.resolve({ ...completedJob, status: "Queued", files: [] }),
         getScanJob: () => Promise.resolve(completedJob),
         buildLibraryAudit: () => Promise.resolve({ summary: { groups: 2, files: 4, issueGroups: 1, standardGroups: 1 }, items: rows }),
@@ -118,6 +120,12 @@ describe("Library poster workflow", () => {
 
     await user.click(await screen.findByRole("button", { name: /build library/i }));
     const card = await screen.findByRole("button", { name: /open example show library details/i });
+    await waitFor(() => expect(getLibraryLocalArtwork).toHaveBeenCalledWith({
+      folderPaths: [
+        "/media/tv/Example Show/Season 1",
+        "/media/tv/Example Show/Season 2"
+      ]
+    }));
     expect(screen.getByText(/no poster found/i)).toBeInTheDocument();
     expect(screen.getByText(/mismatch · 1/i)).toBeInTheDocument();
 

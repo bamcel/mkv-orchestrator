@@ -21,6 +21,7 @@ import type {
   LibraryCatalogItem,
   LibraryCatalogRequest,
   LibraryCatalogResponse,
+  LibraryLocalArtworkRequest,
   MediaFileRow,
   MediaServerSyncResponse,
   MediaServerTestResponse,
@@ -115,6 +116,7 @@ export type {
   LibraryCatalogItem,
   LibraryCatalogRequest,
   LibraryCatalogResponse,
+  LibraryLocalArtworkRequest,
   MediaFileRow,
   MediaServerSyncResponse,
   MediaServerTestResponse,
@@ -331,6 +333,10 @@ export function getLibraryCatalog(request: LibraryCatalogRequest): Promise<Libra
 
 export function getLibraryArtwork(request: LibraryArtworkRequest): Promise<LibraryArtworkResponse> {
   return getBackendClient().getLibraryArtwork(request);
+}
+
+export function getLibraryLocalArtwork(request: LibraryLocalArtworkRequest): Promise<LibraryArtworkResponse> {
+  return getBackendClient().getLibraryLocalArtwork(request);
 }
 
 export function getOperationLogs(): Promise<{ entries: OperationLogEntry[] }> {

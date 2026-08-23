@@ -102,6 +102,69 @@ impl MkvoRuntime {
         })
     }
 
+    pub async fn get_library_local_artwork(
+        &self,
+        request: LibraryLocalArtworkRequest,
+    ) -> RuntimeResult<LibraryArtworkResponse> {
+        if request.folder_paths.is_empty() || request.folder_paths.len() > 256 {
+            return Err(RuntimeError::invalid(
+                "local artwork requires between 1 and 256 folder paths",
+            ));
+        }
+
+        let mut directories = Vec::<PathBuf>::new();
+        for folder_path in request.folder_paths {
+            let Ok(folder) = self
+                .inner
+                .dependencies
+                .paths
+                .authorize_read(Path::new(&folder_path))
+                .await
+            else {
+                continue;
+            };
+            if !folder.is_dir() {
+                continue;
+            }
+
+            // A series audit is grouped by season folder, while poster.jpg is
+            // normally stored beside those seasons in the series directory.
+            // Prefer that shared series poster, then allow a season poster.
+            if is_season_directory(&folder)
+                && let Some(parent) = folder.parent()
+                && let Ok(parent) = self.inner.dependencies.paths.authorize_read(parent).await
+            {
+                push_unique_path(&mut directories, parent);
+            }
+            push_unique_path(&mut directories, folder);
+        }
+
+        for directory in directories {
+            let Some(candidate) = find_local_poster(&directory).await? else {
+                continue;
+            };
+            let poster = self
+                .inner
+                .dependencies
+                .paths
+                .authorize_read(&candidate)
+                .await?;
+            let metadata = tokio::fs::metadata(&poster).await?;
+            if metadata.len() == 0 || metadata.len() > 10 * 1024 * 1024 {
+                continue;
+            }
+            let bytes = tokio::fs::read(&poster).await?;
+            return Ok(LibraryArtworkResponse {
+                content_type: local_poster_content_type(&poster).to_owned(),
+                data_base64: STANDARD.encode(bytes),
+            });
+        }
+
+        Err(RuntimeError::not_found(
+            "no local poster artwork was found for this library title",
+        ))
+    }
+
     async fn media_server_connection(
         &self,
         server: &MediaServerSettings,
@@ -299,5 +362,95 @@ impl MkvoRuntime {
         let limit = limit.unwrap_or(50).clamp(1, 500);
         let jobs = self.inner.dependencies.jobs.list_recent(limit).await?;
         Ok(RecentJobsResponse { jobs })
+    }
+}
+
+const LOCAL_POSTER_NAMES: [&str; 9] = [
+    "poster.jpg",
+    "poster.jpeg",
+    "poster.png",
+    "folder.jpg",
+    "folder.jpeg",
+    "folder.png",
+    "cover.jpg",
+    "cover.jpeg",
+    "cover.png",
+];
+
+fn is_season_directory(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    let normalized = name.trim().to_ascii_lowercase();
+    normalized.strip_prefix("season").is_some_and(|suffix| {
+        suffix
+            .trim()
+            .chars()
+            .all(|character| character.is_ascii_digit())
+    }) || normalized.strip_prefix('s').is_some_and(|suffix| {
+        !suffix.is_empty() && suffix.chars().all(|character| character.is_ascii_digit())
+    })
+}
+
+fn push_unique_path(paths: &mut Vec<PathBuf>, candidate: PathBuf) {
+    if !paths.iter().any(|existing| same_path(existing, &candidate)) {
+        paths.push(candidate);
+    }
+}
+
+async fn find_local_poster(directory: &Path) -> RuntimeResult<Option<PathBuf>> {
+    let mut matches = HashMap::<String, PathBuf>::new();
+    let mut entries = tokio::fs::read_dir(directory).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        if entry.file_type().await?.is_file() {
+            matches.insert(
+                entry.file_name().to_string_lossy().to_ascii_lowercase(),
+                entry.path(),
+            );
+        }
+    }
+    Ok(LOCAL_POSTER_NAMES
+        .iter()
+        .find_map(|name| matches.get(*name).cloned()))
+}
+
+fn local_poster_content_type(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("png") => "image/png",
+        _ => "image/jpeg",
+    }
+}
+
+#[cfg(test)]
+mod local_artwork_tests {
+    use super::*;
+
+    #[test]
+    fn recognizes_common_season_directory_names() {
+        assert!(is_season_directory(Path::new("/shows/Example/Season 01")));
+        assert!(is_season_directory(Path::new("/shows/Example/S2")));
+        assert!(!is_season_directory(Path::new("/shows/Example")));
+        assert!(!is_season_directory(Path::new("/movies/Seven")));
+    }
+
+    #[tokio::test]
+    async fn finds_poster_names_case_insensitively() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        tokio::fs::write(directory.path().join("Poster.JPG"), b"poster")
+            .await
+            .expect("write poster");
+        let found = find_local_poster(directory.path())
+            .await
+            .expect("search")
+            .expect("poster");
+        assert_eq!(
+            found.file_name().and_then(|value| value.to_str()),
+            Some("Poster.JPG")
+        );
     }
 }

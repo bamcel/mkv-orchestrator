@@ -100,6 +100,11 @@ impl MetadataCache for SqliteRepositories {
             .await
     }
 
+    async fn remove_older_than(&self, cutoff: DateTime<Utc>) -> Result<u64, PortError> {
+        self.blocking(move |store| store.remove_media_older_than(cutoff.timestamp_millis()))
+            .await
+    }
+
     async fn count(&self) -> Result<u64, PortError> {
         self.blocking(|store| store.cache_count()).await
     }

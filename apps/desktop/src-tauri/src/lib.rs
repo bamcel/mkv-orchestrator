@@ -87,6 +87,7 @@ pub fn run() {
             commands::run_library_audit,
             commands::get_library_catalog,
             commands::get_library_artwork,
+            commands::get_library_local_artwork,
             commands::select_source_folder,
             commands::get_watch_health,
             commands::list_recent_jobs,

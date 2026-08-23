@@ -7,6 +7,7 @@ import type {
   LibraryAuditResponse,
   LibraryCatalogRequest,
   LibraryCatalogResponse,
+  LibraryLocalArtworkRequest,
   MediaFileRow,
   MediaServerSyncResponse,
   MediaServerTestResponse,
@@ -172,6 +173,7 @@ export interface LibraryClient {
   buildLibraryAudit(files: MediaFileRow[]): Promise<LibraryAuditResponse>;
   getLibraryCatalog(request: LibraryCatalogRequest): Promise<LibraryCatalogResponse>;
   getLibraryArtwork(request: LibraryArtworkRequest): Promise<LibraryArtworkResponse>;
+  getLibraryLocalArtwork(request: LibraryLocalArtworkRequest): Promise<LibraryArtworkResponse>;
 }
 
 export interface OperationLogsClient {

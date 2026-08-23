@@ -9,8 +9,8 @@ use axum::{
 };
 use futures::stream;
 use mkvo_contracts::{
-    FileSelectionRequest, LibraryArtworkRequest, LibraryCatalogRequest, ScanRequest,
-    WebSettingsRequest,
+    FileSelectionRequest, LibraryArtworkRequest, LibraryCatalogRequest, LibraryLocalArtworkRequest,
+    ScanRequest, WebSettingsRequest,
 };
 use mkvo_runtime::{
     RuntimeError,
@@ -89,6 +89,7 @@ pub(crate) fn api_router(state: AppState) -> Router {
         .route("/api/library/audit", post(run_library_audit))
         .route("/api/library/catalog", post(get_library_catalog))
         .route("/api/library/artwork", post(get_library_artwork))
+        .route("/api/library/local-artwork", post(get_library_local_artwork))
         .route("/api/watch/health", get(get_watch_health))
         .route("/api/jobs/recent", get(list_recent_jobs))
         .route("/api/logs/export", get(export_logs))
@@ -396,6 +397,15 @@ async fn get_library_artwork(
     Json(request): Json<LibraryArtworkRequest>,
 ) -> Result<impl IntoResponse, HttpError> {
     Ok(Json(state.runtime.get_library_artwork(request).await?))
+}
+
+async fn get_library_local_artwork(
+    State(state): State<AppState>,
+    Json(request): Json<LibraryLocalArtworkRequest>,
+) -> Result<impl IntoResponse, HttpError> {
+    Ok(Json(
+        state.runtime.get_library_local_artwork(request).await?,
+    ))
 }
 
 async fn api_not_found(uri: Uri) -> HttpError {

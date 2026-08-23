@@ -11,10 +11,10 @@ use mkvo_application::{
 use mkvo_contracts::{
     AppStatus, CurrentScanResponse, FileSystemEntry, FileSystemEntryKind, FileSystemResponse,
     JobCompletion, JobKind, JobSnapshot, JobStatus, LibraryArtworkRequest, LibraryArtworkResponse,
-    LibraryCatalogItem, LibraryCatalogRequest, LibraryCatalogResponse, LogQuery, MediaFileRow,
-    MediaServerSyncResponse, MediaServerTestResponse, ScanJobResponse, ScanRequest, SecretUpdate,
-    SourceRoot, WebMediaServer, WebMediaServerLibraryPath, WebMediaServerPathMapping, WebSettings,
-    WebSettingsRequest,
+    LibraryCatalogItem, LibraryCatalogRequest, LibraryCatalogResponse, LibraryLocalArtworkRequest,
+    LogQuery, MediaFileRow, MediaServerSyncResponse, MediaServerTestResponse, ScanJobResponse,
+    ScanRequest, SecretUpdate, SourceRoot, WebMediaServer, WebMediaServerLibraryPath,
+    WebMediaServerPathMapping, WebSettings, WebSettingsRequest,
 };
 use mkvo_domain::{
     AppSettings, CredentialState, IdempotencyKey, JobId, LibraryRoot, MediaFile, MediaServerId,

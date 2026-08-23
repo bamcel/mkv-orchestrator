@@ -567,6 +567,13 @@ pub struct LibraryArtworkRequest {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LibraryLocalArtworkRequest {
+    #[serde(default)]
+    pub folder_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LibraryArtworkResponse {
     pub content_type: String,
     pub data_base64: String,

@@ -1,6 +1,6 @@
 # Generated MKVO contracts
 
-`contracts.ts` is generated from the serde-annotated Rust DTOs in `crates/mkvo-contracts`. It currently contains 74 boundary DTOs and 26 referenced domain enums. It also includes zero-dependency runtime validators.
+`contracts.ts` is generated from the serde-annotated Rust DTOs in `crates/mkvo-contracts`. It currently contains 75 boundary DTOs and 26 referenced domain enums. It also includes zero-dependency runtime validators.
 
 Generate bindings:
 

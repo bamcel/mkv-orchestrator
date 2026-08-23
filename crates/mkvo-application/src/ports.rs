@@ -46,6 +46,7 @@ pub trait MetadataCache: Send + Sync {
     async fn upsert(&self, file: &MediaFile) -> Result<(), PortError>;
     async fn remove(&self, path: &Path) -> Result<bool, PortError>;
     async fn remove_under(&self, root: &Path) -> Result<u64, PortError>;
+    async fn remove_older_than(&self, cutoff: DateTime<Utc>) -> Result<u64, PortError>;
     async fn count(&self) -> Result<u64, PortError>;
     async fn list_under(&self, root: &Path) -> Result<Vec<MediaFile>, PortError>;
 }

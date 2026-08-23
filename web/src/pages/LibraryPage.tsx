@@ -7,6 +7,7 @@ import {
   cancelScan,
   getLibraryArtwork,
   getLibraryCatalog,
+  getLibraryLocalArtwork,
   getScanJob,
   getWebSettings,
   LibraryAuditResponse,
@@ -34,6 +35,7 @@ export function LibraryPage() {
   const [filter, setFilter] = useState<LibraryFilter>("all");
   const [searchText, setSearchText] = useState("");
   const [statusText, setStatusText] = useState("Choose a library and build its overview.");
+  const [artworkGeneration, setArtworkGeneration] = useState(0);
 
   const sourceOptions = useMemo(
     () => librarySourceOptions(webSettings.data).filter((root) => root.paths.length > 0),
@@ -65,6 +67,7 @@ export function LibraryPage() {
     mutationFn: buildLibraryAudit,
     onSuccess: (response) => {
       setAuditResult(response);
+      setArtworkGeneration((current) => current + 1);
       setStatusText(`Library ready: ${response.summary.groups} season/folder groups, ${response.summary.files} files, ${response.summary.issueGroups} warning groups.`);
     },
     onError: (error) => {
@@ -246,7 +249,7 @@ export function LibraryPage() {
             <div className="grid h-full min-h-72 place-items-center text-sm text-muted"><div className="text-center"><RefreshCw size={28} className="mx-auto mb-3 animate-spin text-accent" />Scanning {progressText}</div></div>
           ) : displayedTitles.length > 0 ? (
             <div className="grid gap-x-5 gap-y-6 [grid-template-columns:repeat(auto-fill,minmax(9.375rem,1fr))]">
-              {displayedTitles.map((title) => <LibraryPosterCard key={title.id} title={title} serverId={selectedSourceOption?.serverId} onOpen={() => setSelectedTitleId(title.id)} />)}
+              {displayedTitles.map((title) => <LibraryPosterCard key={title.id} title={title} serverId={selectedSourceOption?.serverId} artworkGeneration={artworkGeneration} onOpen={() => setSelectedTitleId(title.id)} />)}
             </div>
           ) : (
             <div className="grid h-full min-h-72 place-items-center rounded-lg border border-dashed border-border bg-panel/40 px-6 text-center text-sm text-subtle">
@@ -261,11 +264,21 @@ export function LibraryPage() {
   );
 }
 
-function LibraryPosterCard({ title, serverId, onOpen }: { title: LibraryTitle; serverId?: string; onOpen: () => void }) {
+function LibraryPosterCard({ title, serverId, artworkGeneration, onOpen }: { title: LibraryTitle; serverId?: string; artworkGeneration: number; onOpen: () => void }) {
   const artwork = useQuery({
-    queryKey: ["library-artwork", serverId, title.catalogItem?.id],
-    queryFn: () => getLibraryArtwork({ serverId: serverId!, itemId: title.catalogItem!.id }),
-    enabled: Boolean(serverId && title.catalogItem?.hasPoster),
+    queryKey: ["library-artwork", serverId, title.catalogItem?.id, title.id, artworkGeneration],
+    queryFn: async () => {
+      if (serverId && title.catalogItem?.hasPoster) {
+        try {
+          return await getLibraryArtwork({ serverId, itemId: title.catalogItem.id });
+        } catch {
+          // The media-server catalog can advertise a stale or inaccessible
+          // primary image. Fall through to local poster discovery.
+        }
+      }
+      return getLibraryLocalArtwork({ folderPaths: title.seasons.map((season) => season.folderPath) });
+    },
+    enabled: title.seasons.length > 0,
     staleTime: Number.POSITIVE_INFINITY
   });
   const imageUrl = artwork.data ? `data:${artwork.data.contentType};base64,${artwork.data.dataBase64}` : "";
@@ -336,7 +349,7 @@ export function librarySourceOptions(settings: WebSettings | undefined): Library
       if (current) {
         if (!current.paths.some((path) => normalizePath(path) === normalizePath(library.containerPath))) current.paths.push(library.containerPath);
       } else {
-        grouped.set(groupKey, { id: `media:${groupKey}`, name: `${server.name} — ${library.name}`, paths: [library.containerPath], serverId: server.id, libraryName: library.name, mediaType: library.type });
+        grouped.set(groupKey, { id: `media:${groupKey}`, name: library.name, paths: [library.containerPath], serverId: server.id, libraryName: library.name, mediaType: library.type });
       }
     }
   }

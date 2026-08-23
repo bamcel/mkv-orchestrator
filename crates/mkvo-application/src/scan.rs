@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use chrono::{TimeDelta, Utc};
 use futures::{StreamExt, stream};
 use mkvo_contracts::{JobEvent, MediaFileDto, ScanRequest, ScanResponse, ScanSummary};
 use mkvo_domain::MediaFile;
@@ -12,6 +13,8 @@ use crate::{
     ApplicationError, ApplicationResult, AuthorizedPathPolicy, JobContext, MediaCatalog,
     MediaEnumerationRequest, MediaProbe, MetadataCache,
 };
+
+const MEDIA_CACHE_RETENTION_DAYS: i64 = 7;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScanSkip {
@@ -151,6 +154,12 @@ impl ScanService {
             ));
         }
 
+        // Temporary working directories are the common scan source. Prune old
+        // probe payloads before looking up this scan so moved-away files cannot
+        // accumulate indefinitely in the persistent SQLite database.
+        let cache_cutoff = Utc::now() - TimeDelta::days(MEDIA_CACHE_RETENTION_DAYS);
+        self.cache.remove_older_than(cache_cutoff).await?;
+
         let enumeration = MediaEnumerationRequest {
             roots,
             ignored_folder_names: request
@@ -287,30 +296,40 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct Cache(RwLock<HashMap<PathBuf, MediaFile>>);
+    struct Cache {
+        files: RwLock<HashMap<PathBuf, MediaFile>>,
+        prune_cutoffs: RwLock<Vec<chrono::DateTime<Utc>>>,
+    }
     #[async_trait]
     impl MetadataCache for Cache {
         async fn get_valid(
             &self,
             fingerprint: &FileFingerprint,
         ) -> Result<Option<MediaFile>, PortError> {
-            Ok(self.0.read().await.get(&fingerprint.path).cloned())
+            Ok(self.files.read().await.get(&fingerprint.path).cloned())
         }
         async fn upsert(&self, file: &MediaFile) -> Result<(), PortError> {
-            self.0.write().await.insert(file.path.clone(), file.clone());
+            self.files
+                .write()
+                .await
+                .insert(file.path.clone(), file.clone());
             Ok(())
         }
         async fn remove(&self, path: &Path) -> Result<bool, PortError> {
-            Ok(self.0.write().await.remove(path).is_some())
+            Ok(self.files.write().await.remove(path).is_some())
         }
         async fn remove_under(&self, _root: &Path) -> Result<u64, PortError> {
             Ok(0)
         }
+        async fn remove_older_than(&self, cutoff: chrono::DateTime<Utc>) -> Result<u64, PortError> {
+            self.prune_cutoffs.write().await.push(cutoff);
+            Ok(0)
+        }
         async fn count(&self) -> Result<u64, PortError> {
-            Ok(self.0.read().await.len() as u64)
+            Ok(self.files.read().await.len() as u64)
         }
         async fn list_under(&self, _root: &Path) -> Result<Vec<MediaFile>, PortError> {
-            Ok(self.0.read().await.values().cloned().collect())
+            Ok(self.files.read().await.values().cloned().collect())
         }
     }
 
@@ -359,7 +378,7 @@ mod tests {
         let service = ScanService::new(
             Arc::new(Catalog(vec![one, two])),
             Arc::new(Probe),
-            cache,
+            cache.clone(),
             Arc::new(Paths),
             2,
         );
@@ -378,5 +397,9 @@ mod tests {
         assert_eq!(outcome.summary.cached, 1);
         assert_eq!(outcome.summary.mkv, 1);
         assert_eq!(outcome.summary.mp4, 1);
+        let cutoffs = cache.prune_cutoffs.read().await;
+        assert_eq!(cutoffs.len(), 1);
+        let expected = Utc::now() - TimeDelta::days(MEDIA_CACHE_RETENTION_DAYS);
+        assert!((cutoffs[0] - expected).num_seconds().abs() <= 1);
     }
 }

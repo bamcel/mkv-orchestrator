@@ -8,6 +8,7 @@ import type {
   LibraryAuditResponse,
   LibraryCatalogRequest,
   LibraryCatalogResponse,
+  LibraryLocalArtworkRequest,
   MediaFileRow,
   MediaServerSyncResponse,
   MediaServerTestResponse,
@@ -288,6 +289,10 @@ export class HttpBackendClient implements BackendClient {
 
   getLibraryArtwork(request: LibraryArtworkRequest): Promise<LibraryArtworkResponse> {
     return this.json<LibraryArtworkResponse>("/api/library/artwork", "POST", request, "LibraryArtworkResponse");
+  }
+
+  getLibraryLocalArtwork(request: LibraryLocalArtworkRequest): Promise<LibraryArtworkResponse> {
+    return this.json<LibraryArtworkResponse>("/api/library/local-artwork", "POST", request, "LibraryArtworkResponse");
   }
 
   getOperationLogs(): Promise<{ entries: OperationLogEntry[] }> {
