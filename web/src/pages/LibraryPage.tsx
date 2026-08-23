@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Film, RefreshCw, Search, X } from "lucide-react";
 import {
@@ -37,21 +37,29 @@ const libraryViewCache = new Map<string, LibraryViewSnapshot>();
 
 export function LibraryPage() {
   const navigate = useNavigate();
-  const { setFiles, setSelectedPaths, setTemplateFilePath } = useMediaLibrary();
+  const queryClient = useQueryClient();
+  const { setWorkingView } = useMediaLibrary();
   const webSettings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const [auditResult, setAuditResult] = useState<LibraryAuditResponse | null>(null);
   const [libraryFiles, setLibraryFiles] = useState<MediaFileRow[]>([]);
   const [selectedTitleId, setSelectedTitleId] = useState("");
   const [selectedSource, setSelectedSource] = useState("");
   const [scanJobId, setScanJobId] = useState<string | null>(null);
-  const [scanSourceId, setScanSourceId] = useState("");
   const [pendingOverviewScanId, setPendingOverviewScanId] = useState<string | null>(null);
+  const [isAuditingLibraries, setIsAuditingLibraries] = useState(false);
   const [filter, setFilter] = useState<LibraryFilter>("all");
   const [searchText, setSearchText] = useState("");
   const [statusText, setStatusText] = useState("Choose a library and build its overview.");
   const [artworkGeneration, setArtworkGeneration] = useState(0);
   const selectedSourceRef = useRef(selectedSource);
+  const buildSourcesRef = useRef<LibrarySourceOption[]>([]);
+  const automaticBuildKey = useRef("");
+  const mounted = useRef(true);
   selectedSourceRef.current = selectedSource;
+
+  useEffect(() => () => {
+    mounted.current = false;
+  }, []);
 
   const sourceOptions = useMemo(
     () => librarySourceOptions(webSettings.data).filter((root) => root.paths.length > 0),
@@ -80,39 +88,12 @@ export function LibraryPage() {
     gcTime: Number.POSITIVE_INFINITY
   });
 
-  const audit = useMutation({
-    mutationFn: ({ files }: { sourceId: string; files: MediaFileRow[] }) => buildLibraryAudit(files),
-    onSuccess: (response, request) => {
-      const status = `Library ready: ${response.summary.groups} season/folder groups, ${response.summary.files} files, ${response.summary.issueGroups} warning groups.`;
-      const generation = (libraryViewCache.get(request.sourceId)?.artworkGeneration ?? 0) + 1;
-      const snapshot = {
-        auditResult: response,
-        libraryFiles: request.files,
-        statusText: status,
-        artworkGeneration: generation
-      };
-      libraryViewCache.set(request.sourceId, snapshot);
-      if (selectedSourceRef.current === request.sourceId) {
-        setAuditResult(snapshot.auditResult);
-        setLibraryFiles(snapshot.libraryFiles);
-        setArtworkGeneration(snapshot.artworkGeneration);
-        setStatusText(snapshot.statusText);
-      }
-    },
-    onError: (error, request) => {
-      setPendingOverviewScanId(null);
-      if (selectedSourceRef.current === request.sourceId) {
-        setStatusText(error instanceof Error ? error.message : "Library audit failed.");
-      }
-    }
-  });
-
   const scanStart = useMutation({
     mutationFn: startScan,
     onSuccess: (job) => {
       setScanJobId(job.id);
       setPendingOverviewScanId(job.id);
-      setStatusText("Scanning the selected library...");
+      setStatusText("Loading all configured libraries...");
     },
     onError: (error) => {
       setPendingOverviewScanId(null);
@@ -136,7 +117,7 @@ export function LibraryPage() {
 
   const currentScanJob = scanJob.data;
   const isBusy = scanStart.isPending
-    || audit.isPending
+    || isAuditingLibraries
     || currentScanJob?.status === "Queued"
     || currentScanJob?.status === "WaitingForResources"
     || currentScanJob?.status === "Running"
@@ -151,7 +132,29 @@ export function LibraryPage() {
     }
     if (currentScanJob.status === "Completed" && currentScanJob.id === pendingOverviewScanId) {
       setPendingOverviewScanId(null);
-      audit.mutate({ sourceId: scanSourceId, files: currentScanJob.files });
+      setIsAuditingLibraries(true);
+      const sources = buildSourcesRef.current;
+      void Promise.allSettled(sources.map(async (source) => {
+        const files = filesForLibrarySource(currentScanJob.files, source);
+        const response = await buildLibraryAudit(files);
+        const snapshot = librarySnapshot(source.id, files, response);
+        libraryViewCache.set(source.id, snapshot);
+        if (mounted.current && selectedSourceRef.current === source.id) {
+          setAuditResult(snapshot.auditResult);
+          setLibraryFiles(snapshot.libraryFiles);
+          setArtworkGeneration(snapshot.artworkGeneration);
+          setStatusText(snapshot.statusText);
+        }
+      })).then((results) => {
+        const selectedIndex = sources.findIndex((source) => source.id === selectedSourceRef.current);
+        const selectedResult = selectedIndex >= 0 ? results[selectedIndex] : undefined;
+        if (mounted.current && selectedResult?.status === "rejected") {
+          const error = selectedResult.reason;
+          setStatusText(error instanceof Error ? error.message : "Library audit failed.");
+        }
+      }).finally(() => {
+        if (mounted.current) setIsAuditingLibraries(false);
+      });
     } else if (currentScanJob.status === "Failed" && currentScanJob.id === pendingOverviewScanId) {
       setPendingOverviewScanId(null);
       setStatusText(currentScanJob.error || "Library scan failed.");
@@ -159,7 +162,30 @@ export function LibraryPage() {
       setPendingOverviewScanId(null);
       setStatusText("Library scan canceled.");
     }
-  }, [currentScanJob, pendingOverviewScanId, scanSourceId]);
+  }, [currentScanJob, pendingOverviewScanId]);
+
+  useEffect(() => {
+    if (sourceOptions.length === 0) return;
+    for (const source of sourceOptions) {
+      if (!source.serverId || !source.libraryName) continue;
+      void queryClient.prefetchQuery({
+        queryKey: ["library-catalog", source.serverId, source.libraryName],
+        queryFn: () => getLibraryCatalog({
+          serverId: source.serverId!,
+          libraryName: source.libraryName!
+        }),
+        staleTime: 5 * 60 * 1000,
+        gcTime: Number.POSITIVE_INFINITY
+      });
+    }
+    const key = sourceOptions
+      .map((source) => `${source.id}:${source.paths.map(normalizePath).join("|")}`)
+      .join(";");
+    if (automaticBuildKey.current === key) return;
+    automaticBuildKey.current = key;
+    if (sourceOptions.every((source) => libraryViewCache.has(source.id))) return;
+    startLibraryBuild(false);
+  }, [sourceOptions, webSettings.data?.ignoredScanFolderNames, queryClient]);
 
   const titles = useMemo(
     () => buildLibraryTitles(auditResult?.items ?? [], catalog.data?.items ?? []),
@@ -188,12 +214,12 @@ export function LibraryPage() {
     setAuditResult(cached?.auditResult ?? null);
     setLibraryFiles(cached?.libraryFiles ?? []);
     setArtworkGeneration(cached?.artworkGeneration ?? 0);
-    setStatusText(cached?.statusText ?? "Build the selected library to inspect its metadata health.");
+    setStatusText(cached?.statusText ?? "Loading this library automatically...");
   }
 
   function runBuildOverview(forceRefresh: boolean) {
-    if (!selectedSourceOption) {
-      setStatusText("Select a library first.");
+    if (sourceOptions.length === 0) {
+      setStatusText("Configure a library first.");
       return;
     }
     // Keep a completed view visible during Refresh/Rebuild. It is replaced
@@ -202,9 +228,14 @@ export function LibraryPage() {
       setLibraryFiles([]);
     }
     setSelectedTitleId("");
-    setScanSourceId(selectedSource);
+    startLibraryBuild(forceRefresh);
+  }
+
+  function startLibraryBuild(forceRefresh: boolean) {
+    buildSourcesRef.current = sourceOptions;
+    setStatusText("Loading all configured libraries...");
     scanStart.mutate({
-      sources: selectedSourceOption.paths,
+      sources: uniquePaths(sourceOptions.flatMap((source) => source.paths)),
       ignoredFolderNames: webSettings.data?.ignoredScanFolderNames ?? [],
       forceRefresh
     });
@@ -228,9 +259,7 @@ export function LibraryPage() {
       if (normalizePath(right.path) === normalizePath(templatePath)) return 1;
       return left.path.localeCompare(right.path);
     });
-    setFiles(selectedFiles);
-    setSelectedPaths(selectedFiles.map((file) => file.path));
-    setTemplateFilePath(templatePath);
+    setWorkingView(selectedFiles, selectedFiles.map((file) => file.path), templatePath);
     navigate("/dashboard");
   }
 
@@ -255,7 +284,7 @@ export function LibraryPage() {
                 <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
                 <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Filter titles..." aria-label="Filter library titles" className="h-9 w-56 rounded-md border border-border bg-input pl-9 pr-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent" />
               </label>
-              <button type="button" onClick={() => runBuildOverview(false)} disabled={isBusy || !selectedSourceOption} className="h-9 rounded-md bg-accent px-4 text-sm font-semibold text-window disabled:bg-button disabled:text-disabled">{auditResult ? "Rebuild" : "Build Library"}</button>
+              <button type="button" onClick={() => runBuildOverview(false)} disabled={isBusy || !selectedSourceOption} className="h-9 rounded-md bg-accent px-4 text-sm font-semibold text-window disabled:bg-button disabled:text-disabled">Rebuild Libraries</button>
               <button type="button" onClick={() => runBuildOverview(true)} disabled={isBusy || !selectedSourceOption} className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled"><RefreshCw size={14} className={isBusy ? "animate-spin" : ""} /> Refresh</button>
               {isBusy ? <button type="button" onClick={() => scanJobId && scanCancel.mutate(scanJobId)} disabled={scanCancel.isPending} className="h-9 rounded-md border border-warning px-3 text-sm font-semibold text-warning">Cancel</button> : null}
             </div>
@@ -293,7 +322,7 @@ export function LibraryPage() {
             </div>
           ) : (
             <div className="grid h-full min-h-72 place-items-center rounded-lg border border-dashed border-border bg-panel/40 px-6 text-center text-sm text-subtle">
-              {auditResult ? "No titles match the current filter." : selectedSourceOption ? "Build this library to create its poster overview." : "Configure a watch folder or media-server library in Settings."}
+              {auditResult ? "No titles match the current filter." : selectedSourceOption ? "Loading this library automatically..." : "Configure a watch folder or media-server library in Settings."}
             </div>
           )}
         </div>
@@ -444,6 +473,21 @@ function titleKey(value: string) {
 }
 function normalizePath(path: string) {
   return path.trim().replace(/\\/g, "/").replace(/\/+$/, "").toLocaleLowerCase();
+}
+function filesForLibrarySource(files: MediaFileRow[], source: LibrarySourceOption) {
+  const roots = source.paths.map(normalizePath);
+  return files.filter((file) => {
+    const path = normalizePath(file.path);
+    return roots.some((root) => path === root || path.startsWith(`${root}/`));
+  });
+}
+function librarySnapshot(sourceId: string, files: MediaFileRow[], response: LibraryAuditResponse): LibraryViewSnapshot {
+  return {
+    auditResult: response,
+    libraryFiles: files,
+    statusText: `Library ready: ${response.summary.groups} season/folder groups, ${response.summary.files} files, ${response.summary.issueGroups} warning groups.`,
+    artworkGeneration: (libraryViewCache.get(sourceId)?.artworkGeneration ?? 0) + 1
+  };
 }
 function uniquePaths(paths: string[]) {
   const seen = new Set<string>();

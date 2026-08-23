@@ -4,6 +4,9 @@ import { CurrentScanResponse, getCurrentScanFiles, MediaFileRow, setFileSelectio
 type MediaLibraryContextValue = {
   files: MediaFileRow[];
   setFiles: (files: MediaFileRow[]) => void;
+  /** Replace the visible operation scope without replacing the backend scan. */
+  setWorkingView: (files: MediaFileRow[], selectedPaths: string[], templatePath: string) => void;
+  isWorkingView: boolean;
   /**
    * Paths the user has selected to operate on.
    *
@@ -79,6 +82,8 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
   const [adoptedUpdatedUtc, setAdoptedUpdatedUtc] = useState<string | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const selectionPush = useRef<Promise<void>>(Promise.resolve());
+  const workingViewPaths = useRef<Set<string> | null>(null);
+  const [isWorkingView, setIsWorkingView] = useState(false);
   const [templateFilePath, setTemplateFilePath] = useState(() => {
     try {
       return sessionStorage.getItem(templateStorageKey) ?? "";
@@ -122,6 +127,10 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
   const value = useMemo<MediaLibraryContextValue>(() => ({
     files,
     setFiles: (nextFiles) => {
+      // A direct replacement is a new Dashboard scan or an explicit clear and
+      // therefore ends a scoped Library handoff.
+      workingViewPaths.current = null;
+      setIsWorkingView(false);
       setFilesState(nextFiles);
       setTemplateFilePath((current) => {
         if (nextFiles.length === 0) return "";
@@ -140,6 +149,15 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
         );
       }
     },
+    setWorkingView: (nextFiles, nextSelectedPaths, nextTemplatePath) => {
+      workingViewPaths.current = new Set(nextFiles.map((file) => pathKey(file.path)));
+      setIsWorkingView(true);
+      setFilesState(nextFiles);
+      setSelectedPathsState(nextSelectedPaths);
+      setTemplateFilePath(nextTemplatePath || nextFiles[0]?.path || "");
+      pushSelection(nextSelectedPaths);
+    },
+    isWorkingView,
     selectedPaths,
     selectionError,
     setSelectedPaths: (paths) => {
@@ -162,16 +180,31 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
       }
 
       setAdoptedUpdatedUtc(scan.updatedUtc ?? null);
-      setFilesState(scan.files);
-      setSelectedPathsState(scan.selectedPaths);
+      const viewPaths = workingViewPaths.current;
+      const nextFiles = viewPaths
+        ? scan.files.filter((file) => viewPaths.has(pathKey(file.path)))
+        : scan.files;
+      setFilesState(nextFiles);
+      if (viewPaths) {
+        const available = new Set(nextFiles.map((file) => pathKey(file.path)));
+        setSelectedPathsState((current) => current.filter((path) => available.has(pathKey(path))));
+      } else {
+        setSelectedPathsState(scan.selectedPaths);
+      }
       setTemplateFilePath((current) => {
-        if (scan.files.length === 0) return "";
-        return current && scan.files.some((file) => file.path === current) ? current : scan.files[0].path;
+        if (nextFiles.length === 0) return "";
+        return current && nextFiles.some((file) => pathKey(file.path) === pathKey(current)) ? current : nextFiles[0].path;
       });
     },
     templateFilePath,
     setTemplateFilePath,
     updateFilesAfterRename: (renames) => {
+      if (workingViewPaths.current) {
+        workingViewPaths.current = new Set([...workingViewPaths.current].map((path) => {
+          const rename = renames.find((item) => pathKey(item.oldPath) === path);
+          return rename ? pathKey(rename.newPath) : path;
+        }));
+      }
       setFilesState((current) => current.map((file) => {
         const rename = renames.find((item) => pathKey(item.oldPath) === pathKey(file.path));
         if (!rename) return file;
@@ -194,7 +227,7 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
         return rename ? rename.newPath : current;
       });
     }
-  }), [files, selectedPaths, selectionError, templateFilePath, adoptedUpdatedUtc, pushSelection]);
+  }), [files, selectedPaths, selectionError, templateFilePath, adoptedUpdatedUtc, isWorkingView, pushSelection]);
 
   return (
     <MediaLibraryContext.Provider value={value}>

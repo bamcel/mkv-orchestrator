@@ -16,7 +16,7 @@ import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
 export function MuxRemuxPage() {
-  const { files, setFiles, selectedPaths, setSelectedPaths, toggleSelectedPath, syncFromBackend } = useMediaLibrary();
+  const { files, selectedPaths, setSelectedPaths, toggleSelectedPath, syncFromBackend, isWorkingView } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const [activeTab, setActiveTab] = useState<"remux" | "subtitles">("remux");
@@ -66,9 +66,9 @@ export function MuxRemuxPage() {
       // the scan identity first so later user deselection is preserved for the
       // remainder of this batch instead of being immediately undone.
       initializedSelectionScope.current = selectionScope;
-      setSelectedPaths(scan.files.map((file) => file.path));
+      setSelectedPaths((isWorkingView ? files : scan.files).map((file) => file.path));
     }
-  }, [currentScan.data]);
+  }, [currentScan.data, isWorkingView]);
 
   useEffect(() => {
     if (!settings.data || settingsDefaultsApplied) return;
@@ -157,7 +157,7 @@ export function MuxRemuxPage() {
 
     setApplyJobId(null);
     currentScan.refetch().then((result) => {
-      if (result.data?.files.length) setFiles(result.data.files);
+      if (result.data) syncFromBackend(result.data);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runningJob?.status, runningJob?.completed, runningJob?.currentFile, runningJob?.currentFilePercent]);
@@ -190,7 +190,7 @@ export function MuxRemuxPage() {
   async function refreshFiles() {
     const result = await currentScan.refetch();
     if (result.data?.files.length) {
-      setFiles(result.data.files);
+      syncFromBackend(result.data);
       setStatusText(`Loaded ${result.data.files.length} scanned file(s).`);
     } else {
       setStatusText("No Dashboard scan is available yet.");

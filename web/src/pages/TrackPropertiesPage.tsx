@@ -57,7 +57,7 @@ function readStoredConfiguration(): StoredTrackPropertiesConfiguration | null {
 }
 
 export function TrackPropertiesPage() {
-  const { files, setFiles, templateFilePath, setTemplateFilePath, syncFromBackend } = useMediaLibrary();
+  const { files, templateFilePath, setTemplateFilePath, syncFromBackend } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const storedConfiguration = useRef(readStoredConfiguration());
@@ -251,7 +251,7 @@ export function TrackPropertiesPage() {
 
     setApplyJobId(null);
     currentScan.refetch().then((result) => {
-      if (result.data?.files.length) setFiles(result.data.files);
+      if (result.data) syncFromBackend(result.data);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runningJob?.status, runningJob?.completed, runningJob?.currentFile]);
@@ -312,7 +312,7 @@ export function TrackPropertiesPage() {
   async function refreshFiles() {
     const result = await currentScan.refetch();
     if (result.data?.files.length) {
-      setFiles(result.data.files);
+      syncFromBackend(result.data);
       setStatusText(`Loaded ${result.data.files.length} scanned file(s).`);
     } else {
       setStatusText("No Dashboard scan is available yet.");

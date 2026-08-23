@@ -137,7 +137,6 @@ describe("Library poster workflow", () => {
       }
     );
 
-    await user.click(await screen.findByRole("button", { name: /build library/i }));
     const card = await screen.findByRole("button", { name: /open example show library details/i });
     await waitFor(() => expect(getLibraryLocalArtwork).toHaveBeenCalledWith({
       folderPaths: [
@@ -159,7 +158,7 @@ describe("Library poster workflow", () => {
     ]));
   });
 
-  it("restores completed libraries immediately when switching tabs", async () => {
+  it("loads every library automatically and restores each one immediately", async () => {
     const user = userEvent.setup();
     const rowFor = (title: string, folder: string): LibraryAuditRow => {
       const base = `/media/${folder}/${title}/Season 1`;
@@ -179,8 +178,11 @@ describe("Library poster workflow", () => {
     const startScan = vi.fn().mockImplementation((request: { sources: string[] }) => {
       scanNumber += 1;
       const id = `scan-${scanNumber}`;
-      const row = request.sources[0].includes("alpha") ? alpha : beta;
-      scanFiles.set(id, row.allFilePaths.map(media));
+      const rows = [
+        ...(request.sources.some((source) => source.includes("alpha")) ? [alpha] : []),
+        ...(request.sources.some((source) => source.includes("beta")) ? [beta] : [])
+      ];
+      scanFiles.set(id, rows.flatMap((row) => row.allFilePaths.map(media)));
       return Promise.resolve({ id, status: "Queued", files: [], completed: 0, total: 0 } as ScanJobResponse);
     });
     const persistentSettings = {
@@ -227,15 +229,17 @@ describe("Library poster workflow", () => {
       }
     );
 
-    await user.click(await screen.findByRole("button", { name: /build library/i }));
     expect(await screen.findByRole("button", { name: /open alpha show library details/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Beta", exact: true }));
-    await user.click(screen.getByRole("button", { name: /build library/i }));
     expect(await screen.findByRole("button", { name: /open beta show library details/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Alpha", exact: true }));
     expect(screen.getByRole("button", { name: /open alpha show library details/i })).toBeInTheDocument();
-    expect(startScan).toHaveBeenCalledTimes(2);
+    expect(startScan).toHaveBeenCalledTimes(1);
+    expect(startScan).toHaveBeenCalledWith(expect.objectContaining({
+      sources: expect.arrayContaining(["/media/alpha", "/media/beta"]),
+      forceRefresh: false
+    }));
   });
 });

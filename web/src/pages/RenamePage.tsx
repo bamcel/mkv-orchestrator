@@ -72,7 +72,7 @@ function loadRenameState(): StoredRenameState {
 }
 
 export function RenamePage() {
-  const { files, setFiles, updateFilesAfterRename, syncFromBackend } = useMediaLibrary();
+  const { files, updateFilesAfterRename, syncFromBackend } = useMediaLibrary();
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const queryClient = useQueryClient();
@@ -548,7 +548,7 @@ export function RenamePage() {
   async function refreshScannedFiles() {
     const result = await currentScan.refetch();
     if (result.data?.files.length) {
-      setFiles(result.data.files);
+      syncFromBackend(result.data);
       setStatusText(`Loaded ${result.data.files.length} scanned file(s) from Dashboard.`);
     } else {
       setStatusText("No Dashboard scan is available yet.");

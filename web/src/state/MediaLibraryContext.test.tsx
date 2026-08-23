@@ -176,6 +176,31 @@ describe("working set persistence", () => {
 });
 
 describe("adopting the backend working set", () => {
+  it("keeps a scoped Library handoff when the backend scan contains other titles", async () => {
+    const { result } = library();
+    const template = file("/media/tv/Superstore/Season 1/Episode 01.mkv");
+    const mismatch = file("/media/tv/Superstore/Season 1/Episode 02.mkv");
+    const unrelated = file("/media/tv/House/Season 1/Episode 01.mkv");
+
+    await act(async () => {
+      result.current.setWorkingView(
+        [template, mismatch],
+        [template.path, mismatch.path],
+        template.path
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    act(() => result.current.syncFromBackend({
+      summary: { ...emptySummary, total: 3, mkv: 3 },
+      updatedUtc: "2026-08-22T10:00:00Z",
+      files: [template, mismatch, unrelated],
+      selectedPaths: [template.path, mismatch.path]
+    }));
+
+    expect(result.current.files.map((item) => item.path)).toEqual([template.path, mismatch.path]);
+    expect(result.current.templateFilePath).toBe(template.path);
+  });
+
   /// Pages used to adopt the backend only while holding nothing, so the first
   /// scan won and every later change -- a rename, a property edit -- stayed
   /// invisible until the app restarted.
