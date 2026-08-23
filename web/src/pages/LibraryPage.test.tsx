@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { buildLibraryTitles, LibraryPage } from "./LibraryPage";
@@ -241,5 +241,60 @@ describe("Library poster workflow", () => {
       sources: expect.arrayContaining(["/media/alpha", "/media/beta"]),
       forceRefresh: false
     }));
+  });
+
+  it("rebuilds only the right-clicked title and refreshes its cached audit", async () => {
+    const user = userEvent.setup();
+    const rows = [auditRow(1, false), auditRow(2, false)];
+    const files = rows.flatMap((row) => row.allFilePaths.map(media));
+    const startScan = vi.fn()
+      .mockResolvedValueOnce({ id: "overview-scan", status: "Queued", files: [], completed: 0, total: 0 } as ScanJobResponse)
+      .mockResolvedValueOnce({ id: "title-scan", status: "Queued", files: [], completed: 0, total: 0 } as ScanJobResponse);
+    const buildLibraryAudit = vi.fn().mockImplementation((scannedFiles: MediaFileRow[]) => Promise.resolve({
+      summary: { groups: rows.length, files: scannedFiles.length, issueGroups: 0, standardGroups: rows.length },
+      items: rows
+    }));
+    const titleSettings = {
+      ...settings(),
+      mediaServers: [{
+        ...settings().mediaServers[0],
+        id: "title-rebuild-server",
+        libraries: [{ id: "title-tv", name: "Title TV", type: "tvshows", serverPath: "/srv/tv", containerPath: "/media/tv", isEnabled: true }]
+      }]
+    } as WebSettings;
+
+    renderWithBackend(
+      <MediaLibraryProvider><LibraryPage /></MediaLibraryProvider>,
+      {
+        getWebSettings: () => Promise.resolve(titleSettings),
+        getLibraryCatalog: () => Promise.resolve({ items: [{ id: "example", title: "Example Show", year: 2024, mediaType: "series", hasPoster: false }] }),
+        getLibraryLocalArtwork: () => Promise.reject(new Error("No local poster")),
+        startScan,
+        getScanJob: (id) => Promise.resolve({
+          id,
+          status: "Completed",
+          completed: files.length,
+          total: files.length,
+          files,
+          summary: { total: files.length, mkv: files.length, mp4: 0, failed: 0, cached: 0 },
+          skipped: [],
+          error: ""
+        } as ScanJobResponse),
+        buildLibraryAudit
+      }
+    );
+
+    const card = await screen.findByRole("button", { name: /open example show library details/i });
+    fireEvent.contextMenu(card, { clientX: 120, clientY: 140 });
+    await user.click(screen.getByRole("menuitem", { name: /rebuild this title/i }));
+
+    await waitFor(() => expect(startScan).toHaveBeenCalledTimes(2));
+    expect(startScan).toHaveBeenLastCalledWith({
+      sources: ["/media/tv/Example Show"],
+      ignoredFolderNames: [],
+      forceRefresh: true
+    });
+    await waitFor(() => expect(buildLibraryAudit).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/example show rebuilt: 4 files/i)).toBeInTheDocument();
   });
 });

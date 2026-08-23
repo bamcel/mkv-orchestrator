@@ -29,6 +29,12 @@ type LibraryViewSnapshot = {
   artworkGeneration: number;
 };
 
+type PendingTitleRebuild = {
+  jobId: string;
+  sourceId: string;
+  title: LibraryTitle;
+};
+
 // Library audits can contain hundreds of detailed file rows, so keeping them
 // in memory avoids browser-storage size limits. The module lives for the full
 // UI session, including route changes, and a server/page restart naturally
@@ -51,6 +57,8 @@ export function LibraryPage() {
   const [searchText, setSearchText] = useState("");
   const [statusText, setStatusText] = useState("Choose a library and build its overview.");
   const [artworkGeneration, setArtworkGeneration] = useState(0);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; titleId: string } | null>(null);
+  const [pendingTitleRebuild, setPendingTitleRebuild] = useState<PendingTitleRebuild | null>(null);
   const selectedSourceRef = useRef(selectedSource);
   const buildSourcesRef = useRef<LibrarySourceOption[]>([]);
   const automaticBuildKey = useRef("");
@@ -100,6 +108,18 @@ export function LibraryPage() {
       setStatusText(error instanceof Error ? error.message : "Library scan failed to start.");
     }
   });
+  const titleScanStart = useMutation({
+    mutationFn: ({ title: _title, sourceId: _sourceId, ...request }: { title: LibraryTitle; sourceId: string; sources: string[]; ignoredFolderNames: string[]; forceRefresh: boolean }) => startScan(request),
+    onSuccess: (job, variables) => {
+      setScanJobId(job.id);
+      setPendingTitleRebuild({ jobId: job.id, sourceId: variables.sourceId, title: variables.title });
+      setStatusText(`Rebuilding ${variables.title.title}...`);
+    },
+    onError: (error) => {
+      setPendingTitleRebuild(null);
+      setStatusText(error instanceof Error ? error.message : "Title rebuild failed to start.");
+    }
+  });
   const scanCancel = useMutation({
     mutationFn: cancelScan,
     onSuccess: () => setStatusText("Cancel requested for the library scan."),
@@ -117,6 +137,7 @@ export function LibraryPage() {
 
   const currentScanJob = scanJob.data;
   const isBusy = scanStart.isPending
+    || titleScanStart.isPending
     || isAuditingLibraries
     || currentScanJob?.status === "Queued"
     || currentScanJob?.status === "WaitingForResources"
@@ -127,10 +148,30 @@ export function LibraryPage() {
   useEffect(() => {
     if (!currentScanJob) return;
     if (["Queued", "WaitingForResources", "Running", "Canceling"].includes(currentScanJob.status)) {
-      setStatusText(`Scanning library: ${progressText}`);
+      setStatusText(pendingTitleRebuild?.jobId === currentScanJob.id
+        ? `Rebuilding ${pendingTitleRebuild.title.title}: ${progressText}`
+        : `Scanning library: ${progressText}`);
       return;
     }
-    if (currentScanJob.status === "Completed" && currentScanJob.id === pendingOverviewScanId) {
+    if (currentScanJob.status === "Completed" && currentScanJob.id === pendingTitleRebuild?.jobId) {
+      const pending = pendingTitleRebuild;
+      setPendingTitleRebuild(null);
+      setIsAuditingLibraries(true);
+      void buildLibraryAudit(currentScanJob.files).then((response) => {
+        const snapshot = mergeTitleSnapshot(pending.sourceId, pending.title, currentScanJob.files, response);
+        libraryViewCache.set(pending.sourceId, snapshot);
+        if (mounted.current && selectedSourceRef.current === pending.sourceId) {
+          setAuditResult(snapshot.auditResult);
+          setLibraryFiles(snapshot.libraryFiles);
+          setArtworkGeneration(snapshot.artworkGeneration);
+          setStatusText(snapshot.statusText);
+        }
+      }).catch((error) => {
+        if (mounted.current) setStatusText(error instanceof Error ? error.message : "Title audit failed.");
+      }).finally(() => {
+        if (mounted.current) setIsAuditingLibraries(false);
+      });
+    } else if (currentScanJob.status === "Completed" && currentScanJob.id === pendingOverviewScanId) {
       setPendingOverviewScanId(null);
       setIsAuditingLibraries(true);
       const sources = buildSourcesRef.current;
@@ -155,6 +196,12 @@ export function LibraryPage() {
       }).finally(() => {
         if (mounted.current) setIsAuditingLibraries(false);
       });
+    } else if (currentScanJob.status === "Failed" && currentScanJob.id === pendingTitleRebuild?.jobId) {
+      setPendingTitleRebuild(null);
+      setStatusText(currentScanJob.error || "Title rebuild failed.");
+    } else if (currentScanJob.status === "Canceled" && currentScanJob.id === pendingTitleRebuild?.jobId) {
+      setPendingTitleRebuild(null);
+      setStatusText("Title rebuild canceled.");
     } else if (currentScanJob.status === "Failed" && currentScanJob.id === pendingOverviewScanId) {
       setPendingOverviewScanId(null);
       setStatusText(currentScanJob.error || "Library scan failed.");
@@ -162,7 +209,25 @@ export function LibraryPage() {
       setPendingOverviewScanId(null);
       setStatusText("Library scan canceled.");
     }
-  }, [currentScanJob, pendingOverviewScanId]);
+  }, [currentScanJob, pendingOverviewScanId, pendingTitleRebuild]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const closeOnKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("mousedown", close);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("keydown", closeOnKey);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("keydown", closeOnKey);
+    };
+  }, [contextMenu]);
 
   useEffect(() => {
     if (sourceOptions.length === 0) return;
@@ -238,6 +303,19 @@ export function LibraryPage() {
       sources: uniquePaths(sourceOptions.flatMap((source) => source.paths)),
       ignoredFolderNames: webSettings.data?.ignoredScanFolderNames ?? [],
       forceRefresh
+    });
+  }
+
+  function rebuildTitle(title: LibraryTitle) {
+    if (!selectedSourceOption || isBusy) return;
+    setContextMenu(null);
+    setSelectedTitleId("");
+    titleScanStart.mutate({
+      title,
+      sourceId: selectedSourceOption.id,
+      sources: titleSourcePaths(title),
+      ignoredFolderNames: webSettings.data?.ignoredScanFolderNames ?? [],
+      forceRefresh: true
     });
   }
 
@@ -318,7 +396,10 @@ export function LibraryPage() {
             <div className="grid h-full min-h-72 place-items-center text-sm text-muted"><div className="text-center"><RefreshCw size={28} className="mx-auto mb-3 animate-spin text-accent" />Scanning {progressText}</div></div>
           ) : displayedTitles.length > 0 ? (
             <div className="grid gap-x-5 gap-y-6 [grid-template-columns:repeat(auto-fill,minmax(9.375rem,1fr))]">
-              {displayedTitles.map((title) => <LibraryPosterCard key={title.id} title={title} serverId={selectedSourceOption?.serverId} artworkGeneration={artworkGeneration} onOpen={() => setSelectedTitleId(title.id)} />)}
+              {displayedTitles.map((title) => <LibraryPosterCard key={title.id} title={title} serverId={selectedSourceOption?.serverId} artworkGeneration={artworkGeneration} onOpen={() => setSelectedTitleId(title.id)} onContextMenu={(event) => {
+                event.preventDefault();
+                setContextMenu({ x: event.clientX, y: event.clientY, titleId: title.id });
+              }} />)}
             </div>
           ) : (
             <div className="grid h-full min-h-72 place-items-center rounded-lg border border-dashed border-border bg-panel/40 px-6 text-center text-sm text-subtle">
@@ -329,11 +410,12 @@ export function LibraryPage() {
       </section>
 
       {selectedTitle ? <LibraryTitleDialog title={selectedTitle} serverId={selectedSourceOption?.serverId} onClose={() => setSelectedTitleId("")} onSendMismatches={() => handoffToDashboard(selectedTitle, "mismatch")} onSendAll={() => handoffToDashboard(selectedTitle, "all")} /> : null}
+      {contextMenu ? <LibraryPosterContextMenu x={contextMenu.x} y={contextMenu.y} title={titles.find((title) => title.id === contextMenu.titleId) ?? null} disabled={isBusy} onRebuild={rebuildTitle} /> : null}
     </div>
   );
 }
 
-function LibraryPosterCard({ title, serverId, artworkGeneration, onOpen }: { title: LibraryTitle; serverId?: string; artworkGeneration: number; onOpen: () => void }) {
+function LibraryPosterCard({ title, serverId, artworkGeneration, onOpen, onContextMenu }: { title: LibraryTitle; serverId?: string; artworkGeneration: number; onOpen: () => void; onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => void }) {
   const artwork = useQuery({
     queryKey: ["library-artwork", serverId, title.catalogItem?.id, title.id, artworkGeneration],
     queryFn: async () => {
@@ -353,7 +435,7 @@ function LibraryPosterCard({ title, serverId, artworkGeneration, onOpen }: { tit
   });
   const imageUrl = artwork.data ? `data:${artwork.data.contentType};base64,${artwork.data.dataBase64}` : "";
   return (
-    <button type="button" onClick={onOpen} className="group min-w-0 select-none text-left" title={title.title} aria-label={`Open ${title.title} library details`}>
+    <button type="button" onClick={onOpen} onContextMenu={onContextMenu} className="group min-w-0 select-none text-left" title={title.title} aria-label={`Open ${title.title} library details`}>
       <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-[#64748B] ring-1 ring-border transition duration-150 group-hover:-translate-y-1 group-hover:ring-2 group-hover:ring-accent group-focus-visible:ring-2 group-focus-visible:ring-accent">
         {imageUrl ? <img src={imageUrl} alt={`${title.title} poster`} loading="lazy" className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center bg-[#64748B] px-4 text-center text-xs font-bold uppercase tracking-wider text-white"><div><Film size={34} className="mx-auto mb-3 opacity-80" />No poster found</div></div>}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-2 pb-2 pt-10">
@@ -362,6 +444,17 @@ function LibraryPosterCard({ title, serverId, artworkGeneration, onOpen }: { tit
       </div>
       <div className="mt-2 px-0.5"><div className="truncate text-sm font-semibold text-text">{title.title}</div><div className="mt-0.5 truncate text-xs text-subtle">{title.catalogItem?.year ? `${title.catalogItem.year} · ` : ""}{title.seasons.length} season{title.seasons.length === 1 ? "" : "s"} · {title.fileCount} files</div></div>
     </button>
+  );
+}
+
+function LibraryPosterContextMenu({ x, y, title, disabled, onRebuild }: { x: number; y: number; title: LibraryTitle | null; disabled: boolean; onRebuild: (title: LibraryTitle) => void }) {
+  if (!title) return null;
+  return (
+    <div role="menu" aria-label={`${title.title} actions`} onMouseDown={(event) => event.stopPropagation()} style={{ left: x, top: y }} className="fixed z-[60] min-w-52 overflow-hidden rounded-lg border border-border bg-card p-1 shadow-[0_0.75rem_2.5rem_rgba(0,0,0,0.45)]">
+      <button type="button" role="menuitem" disabled={disabled} onClick={() => onRebuild(title)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-text hover:bg-button-hover disabled:text-disabled">
+        <RefreshCw size={15} /> Rebuild this title
+      </button>
+    </div>
   );
 }
 
@@ -488,6 +581,52 @@ function librarySnapshot(sourceId: string, files: MediaFileRow[], response: Libr
     statusText: `Library ready: ${response.summary.groups} season/folder groups, ${response.summary.files} files, ${response.summary.issueGroups} warning groups.`,
     artworkGeneration: (libraryViewCache.get(sourceId)?.artworkGeneration ?? 0) + 1
   };
+}
+function mergeTitleSnapshot(sourceId: string, title: LibraryTitle, files: MediaFileRow[], response: LibraryAuditResponse): LibraryViewSnapshot {
+  const previous = libraryViewCache.get(sourceId);
+  const roots = title.seasons.map((season) => normalizePath(season.folderPath));
+  const isInTitle = (path: string) => {
+    const normalized = normalizePath(path);
+    return roots.some((root) => normalized === root || normalized.startsWith(`${root}/`));
+  };
+  const items = [
+    ...(previous?.auditResult.items ?? []).filter((row) => !isInTitle(row.folderPath)),
+    ...response.items
+  ];
+  const libraryFiles = uniqueFiles([
+    ...(previous?.libraryFiles ?? []).filter((file) => !isInTitle(file.path)),
+    ...files
+  ]);
+  const issueGroups = items.filter((row) => row.hasIssues).length;
+  return {
+    auditResult: {
+      items,
+      summary: {
+        groups: items.length,
+        files: items.reduce((total, row) => total + row.fileCount, 0),
+        issueGroups,
+        standardGroups: items.length - issueGroups
+      }
+    },
+    libraryFiles,
+    statusText: `${title.title} rebuilt: ${response.summary.files} files, ${response.summary.issueGroups} warning groups.`,
+    artworkGeneration: (previous?.artworkGeneration ?? 0) + 1
+  };
+}
+function titleSourcePaths(title: LibraryTitle) {
+  return uniquePaths(title.seasons.map((season) => {
+    const folder = folderName(season.folderPath);
+    return isSeasonFolderName(folder) ? parentPath(season.folderPath) : season.folderPath;
+  }));
+}
+function uniqueFiles(files: MediaFileRow[]) {
+  const seen = new Set<string>();
+  return files.filter((file) => {
+    const key = normalizePath(file.path);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 function uniquePaths(paths: string[]) {
   const seen = new Set<string>();
