@@ -25,7 +25,7 @@ const audioNamePresets = ["English", "Japanese", "Commentary"];
 const subtitleNamePresets = ["English", "English Forced", "English SDH", "Dialogue", "Signs & Songs", "Commentary"];
 const languagePresets = ["eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de"];
 const configurationStorageKey = "mkvo.web.trackPropertiesConfiguration";
-const configurationVersion = 3;
+const configurationVersion = 4;
 const metadataTrackNameValue = "__mkvo_metadata_track_name__";
 
 type StoredTrackPropertiesConfiguration = {
@@ -616,7 +616,7 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
                           )}
                           className="h-8 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
                         >
-                          {type === "audio" && <option value={metadataTrackNameValue}>From metadata — {metadataName}</option>}
+                          {type === "audio" && <option value={metadataTrackNameValue}>{metadataName}</option>}
                           {nameOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                         </select>
                       )}

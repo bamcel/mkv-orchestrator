@@ -433,6 +433,10 @@ fn track_flag_edit(selection: &str, track_label: &str) -> Option<bool> {
 }
 
 fn prop_track_row(index: usize, track: &MediaTrack) -> PropEditTrackConfigRow {
+    let has_name = track
+        .name
+        .as_deref()
+        .is_some_and(|name| !name.trim().is_empty());
     PropEditTrackConfigRow {
         track_number: u32::try_from(index + 1).unwrap_or(u32::MAX),
         track_label: format!("{} {}", track_kind_label(track.kind), index + 1),
@@ -443,7 +447,7 @@ fn prop_track_row(index: usize, track: &MediaTrack) -> PropEditTrackConfigRow {
         current_channels: track.channels,
         current_default: track.default,
         edited_name: track.name.clone().unwrap_or_default(),
-        name_from_metadata: false,
+        name_from_metadata: track.kind == TrackKind::Audio && !has_name,
         edited_language: track.language_or_undetermined().to_owned(),
     }
 }
@@ -794,6 +798,23 @@ mod tests {
         assert_eq!(edits[0].language.as_deref(), Some("eng"));
         assert_eq!(edits[0].default, Some(true));
         assert_eq!(edits[0].forced, None);
+    }
+
+    #[test]
+    fn unnamed_audio_tracks_default_to_metadata_names() {
+        let mut audio = media("episode.mkv").tracks.remove(0);
+        audio.kind = TrackKind::Audio;
+        audio.codec = "AAC".to_owned();
+        audio.language = Some("eng".to_owned());
+        audio.channels = Some(6);
+
+        let unnamed = prop_track_row(0, &audio);
+        assert!(unnamed.name_from_metadata);
+
+        audio.name = Some("Main Audio".to_owned());
+        let named = prop_track_row(0, &audio);
+        assert!(!named.name_from_metadata);
+        assert_eq!(named.edited_name, "Main Audio");
     }
 
     #[test]
