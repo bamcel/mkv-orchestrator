@@ -161,6 +161,8 @@ pub struct MediaTrackDto {
     pub codec: String,
     pub language: String,
     pub name: String,
+    #[serde(default)]
+    pub channels: Option<u16>,
     pub default: bool,
     pub forced: bool,
 }
@@ -174,6 +176,7 @@ impl From<&MediaTrack> for MediaTrackDto {
             codec: value.codec.clone(),
             language: value.language.clone().unwrap_or_default(),
             name: value.name.clone().unwrap_or_default(),
+            channels: value.channels,
             default: value.default,
             forced: value.forced,
         }

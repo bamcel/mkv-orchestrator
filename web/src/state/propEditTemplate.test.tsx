@@ -25,7 +25,7 @@ function file(path: string, name = ""): MediaFileRow {
     subtitleSummary: "",
     attachmentSummary: "None",
     tracks: [
-      { id: 1, trackNumber: 2, type: "audio", codec: "AC-3", language: "eng", name, default: true, forced: false }
+      { id: 1, trackNumber: 2, type: "audio", codec: "AC-3", language: "eng", name, channels: 6, default: true, forced: false }
     ],
     attachments: []
   };

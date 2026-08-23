@@ -94,10 +94,10 @@ describe("MKV Operations removed-track preview", () => {
   it("lists exact IDs and metadata removed by explicit and language filters", () => {
     const file = mediaFile("Episode 01.mkv");
     file.tracks = [
-      { id: 0, trackNumber: 1, type: "video", codec: "HEVC/H.265", language: "und", name: "Main", default: true, forced: false },
-      { id: 1, trackNumber: 2, type: "audio", codec: "E-AC-3", language: "eng", name: "English", default: true, forced: false },
-      { id: 2, trackNumber: 3, type: "audio", codec: "AAC", language: "spa", name: "Spanish", default: false, forced: false },
-      { id: 3, trackNumber: 4, type: "subtitle", codec: "SubRip/SRT", language: "eng", name: "SDH", default: false, forced: true }
+      { id: 0, trackNumber: 1, type: "video", codec: "HEVC/H.265", language: "und", name: "Main", channels: null, default: true, forced: false },
+      { id: 1, trackNumber: 2, type: "audio", codec: "E-AC-3", language: "eng", name: "English", channels: 6, default: true, forced: false },
+      { id: 2, trackNumber: 3, type: "audio", codec: "AAC", language: "spa", name: "Spanish", channels: 2, default: false, forced: false },
+      { id: 3, trackNumber: 4, type: "subtitle", codec: "SubRip/SRT", language: "eng", name: "SDH", channels: null, default: false, forced: true }
     ];
 
     const details = buildRemovedTrackDetails({

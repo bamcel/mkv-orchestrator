@@ -98,7 +98,7 @@ fn scanned_to_domain(scanned: ScannedMedia) -> Result<MediaFile, std::io::Error>
                     track.color_transfer.as_deref(),
                     track.color_primaries.as_deref(),
                 ),
-                channels: None,
+                channels: track.channels,
                 sampling_frequency_hz: None,
                 default: track.default,
                 forced: track.forced,

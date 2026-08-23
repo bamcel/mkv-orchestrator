@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Film, RefreshCw, Search, X } from "lucide-react";
@@ -22,6 +22,19 @@ import { useMediaLibrary } from "../state/MediaLibraryContext";
 
 type LibraryFilter = "all" | "matching" | "mismatch";
 
+type LibraryViewSnapshot = {
+  auditResult: LibraryAuditResponse;
+  libraryFiles: MediaFileRow[];
+  statusText: string;
+  artworkGeneration: number;
+};
+
+// Library audits can contain hundreds of detailed file rows, so keeping them
+// in memory avoids browser-storage size limits. The module lives for the full
+// UI session, including route changes, and a server/page restart naturally
+// starts clean.
+const libraryViewCache = new Map<string, LibraryViewSnapshot>();
+
 export function LibraryPage() {
   const navigate = useNavigate();
   const { setFiles, setSelectedPaths, setTemplateFilePath } = useMediaLibrary();
@@ -31,11 +44,14 @@ export function LibraryPage() {
   const [selectedTitleId, setSelectedTitleId] = useState("");
   const [selectedSource, setSelectedSource] = useState("");
   const [scanJobId, setScanJobId] = useState<string | null>(null);
-  const [pendingOverviewScan, setPendingOverviewScan] = useState(false);
+  const [scanSourceId, setScanSourceId] = useState("");
+  const [pendingOverviewScanId, setPendingOverviewScanId] = useState<string | null>(null);
   const [filter, setFilter] = useState<LibraryFilter>("all");
   const [searchText, setSearchText] = useState("");
   const [statusText, setStatusText] = useState("Choose a library and build its overview.");
   const [artworkGeneration, setArtworkGeneration] = useState(0);
+  const selectedSourceRef = useRef(selectedSource);
+  selectedSourceRef.current = selectedSource;
 
   const sourceOptions = useMemo(
     () => librarySourceOptions(webSettings.data).filter((root) => root.paths.length > 0),
@@ -48,7 +64,7 @@ export function LibraryPage() {
       return;
     }
     if (!sourceOptions.some((source) => source.id === selectedSource)) {
-      setSelectedSource(sourceOptions[0].id);
+      activateSource(sourceOptions[0].id);
     }
   }, [selectedSource, sourceOptions]);
 
@@ -60,19 +76,34 @@ export function LibraryPage() {
       libraryName: selectedSourceOption!.libraryName!
     }),
     enabled: Boolean(selectedSourceOption?.serverId && selectedSourceOption.libraryName),
-    staleTime: 5 * 60 * 1000
+    staleTime: 5 * 60 * 1000,
+    gcTime: Number.POSITIVE_INFINITY
   });
 
   const audit = useMutation({
-    mutationFn: buildLibraryAudit,
-    onSuccess: (response) => {
-      setAuditResult(response);
-      setArtworkGeneration((current) => current + 1);
-      setStatusText(`Library ready: ${response.summary.groups} season/folder groups, ${response.summary.files} files, ${response.summary.issueGroups} warning groups.`);
+    mutationFn: ({ files }: { sourceId: string; files: MediaFileRow[] }) => buildLibraryAudit(files),
+    onSuccess: (response, request) => {
+      const status = `Library ready: ${response.summary.groups} season/folder groups, ${response.summary.files} files, ${response.summary.issueGroups} warning groups.`;
+      const generation = (libraryViewCache.get(request.sourceId)?.artworkGeneration ?? 0) + 1;
+      const snapshot = {
+        auditResult: response,
+        libraryFiles: request.files,
+        statusText: status,
+        artworkGeneration: generation
+      };
+      libraryViewCache.set(request.sourceId, snapshot);
+      if (selectedSourceRef.current === request.sourceId) {
+        setAuditResult(snapshot.auditResult);
+        setLibraryFiles(snapshot.libraryFiles);
+        setArtworkGeneration(snapshot.artworkGeneration);
+        setStatusText(snapshot.statusText);
+      }
     },
-    onError: (error) => {
-      setPendingOverviewScan(false);
-      setStatusText(error instanceof Error ? error.message : "Library audit failed.");
+    onError: (error, request) => {
+      setPendingOverviewScanId(null);
+      if (selectedSourceRef.current === request.sourceId) {
+        setStatusText(error instanceof Error ? error.message : "Library audit failed.");
+      }
     }
   });
 
@@ -80,10 +111,11 @@ export function LibraryPage() {
     mutationFn: startScan,
     onSuccess: (job) => {
       setScanJobId(job.id);
+      setPendingOverviewScanId(job.id);
       setStatusText("Scanning the selected library...");
     },
     onError: (error) => {
-      setPendingOverviewScan(false);
+      setPendingOverviewScanId(null);
       setStatusText(error instanceof Error ? error.message : "Library scan failed to start.");
     }
   });
@@ -117,18 +149,17 @@ export function LibraryPage() {
       setStatusText(`Scanning library: ${progressText}`);
       return;
     }
-    if (currentScanJob.status === "Completed" && pendingOverviewScan) {
-      setPendingOverviewScan(false);
-      setLibraryFiles(currentScanJob.files);
-      audit.mutate(currentScanJob.files);
-    } else if (currentScanJob.status === "Failed") {
-      setPendingOverviewScan(false);
+    if (currentScanJob.status === "Completed" && currentScanJob.id === pendingOverviewScanId) {
+      setPendingOverviewScanId(null);
+      audit.mutate({ sourceId: scanSourceId, files: currentScanJob.files });
+    } else if (currentScanJob.status === "Failed" && currentScanJob.id === pendingOverviewScanId) {
+      setPendingOverviewScanId(null);
       setStatusText(currentScanJob.error || "Library scan failed.");
-    } else if (currentScanJob.status === "Canceled") {
-      setPendingOverviewScan(false);
+    } else if (currentScanJob.status === "Canceled" && currentScanJob.id === pendingOverviewScanId) {
+      setPendingOverviewScanId(null);
       setStatusText("Library scan canceled.");
     }
-  }, [currentScanJob, pendingOverviewScan]);
+  }, [currentScanJob, pendingOverviewScanId, scanSourceId]);
 
   const titles = useMemo(
     () => buildLibraryTitles(auditResult?.items ?? [], catalog.data?.items ?? []),
@@ -145,13 +176,19 @@ export function LibraryPage() {
   const selectedTitle = titles.find((title) => title.id === selectedTitleId) ?? null;
 
   function selectSource(id: string) {
-    setSelectedSource(id);
-    setAuditResult(null);
-    setLibraryFiles([]);
+    activateSource(id);
     setSelectedTitleId("");
     setFilter("all");
     setSearchText("");
-    setStatusText("Build the selected library to inspect its metadata health.");
+  }
+
+  function activateSource(id: string) {
+    const cached = libraryViewCache.get(id);
+    setSelectedSource(id);
+    setAuditResult(cached?.auditResult ?? null);
+    setLibraryFiles(cached?.libraryFiles ?? []);
+    setArtworkGeneration(cached?.artworkGeneration ?? 0);
+    setStatusText(cached?.statusText ?? "Build the selected library to inspect its metadata health.");
   }
 
   function runBuildOverview(forceRefresh: boolean) {
@@ -159,10 +196,13 @@ export function LibraryPage() {
       setStatusText("Select a library first.");
       return;
     }
-    setAuditResult(null);
-    setLibraryFiles([]);
+    // Keep a completed view visible during Refresh/Rebuild. It is replaced
+    // atomically when the new scan and audit finish.
+    if (!auditResult) {
+      setLibraryFiles([]);
+    }
     setSelectedTitleId("");
-    setPendingOverviewScan(true);
+    setScanSourceId(selectedSource);
     scanStart.mutate({
       sources: selectedSourceOption.paths,
       ignoredFolderNames: webSettings.data?.ignoredScanFolderNames ?? [],
@@ -279,7 +319,8 @@ function LibraryPosterCard({ title, serverId, artworkGeneration, onOpen }: { tit
       return getLibraryLocalArtwork({ folderPaths: title.seasons.map((season) => season.folderPath) });
     },
     enabled: title.seasons.length > 0,
-    staleTime: Number.POSITIVE_INFINITY
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY
   });
   const imageUrl = artwork.data ? `data:${artwork.data.contentType};base64,${artwork.data.dataBase64}` : "";
   return (

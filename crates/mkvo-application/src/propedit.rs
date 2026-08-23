@@ -43,6 +43,7 @@ pub enum TextEdit {
     #[default]
     Keep,
     FromFileName,
+    FromTrackMetadata,
     Set(String),
     Delete,
 }
@@ -219,8 +220,14 @@ fn build_item(
             ));
             continue;
         };
+        let resolved_name = match &edit.name {
+            TextEdit::FromTrackMetadata => {
+                TextEdit::Set(metadata_track_name(track, edit.language.as_deref()))
+            }
+            _ => edit.name.clone(),
+        };
         add_track_name_edit(
-            &edit.name,
+            &resolved_name,
             track.name.as_deref(),
             &file_stem,
             selector,
@@ -282,6 +289,7 @@ fn add_container_edit(
                 value: file_stem.to_owned(),
             });
         }
+        TextEdit::FromTrackMetadata => {}
         TextEdit::Set(value) if current != Some(value.as_str()) => {
             mutations.push(PropertyMutation::SetContainerTitle {
                 value: value.clone(),
@@ -289,6 +297,72 @@ fn add_container_edit(
         }
         TextEdit::Delete | TextEdit::FromFileName | TextEdit::Set(_) => {}
     }
+}
+
+fn metadata_track_name(track: &mkvo_domain::MediaTrack, edited_language: Option<&str>) -> String {
+    let language = language_display_name(
+        edited_language
+            .filter(|value| !value.trim().is_empty())
+            .or(track.language.as_deref())
+            .unwrap_or("und"),
+    );
+    let codec = codec_display_name(&track.codec);
+    let mut details = Vec::new();
+    if let Some(channels) = track.channels {
+        details.push(channel_display_name(channels));
+    }
+    if !codec.is_empty() {
+        details.push(codec);
+    }
+    details
+        .into_iter()
+        .fold(language, |name, detail| format!("{name} [{detail}]"))
+}
+
+fn channel_display_name(channels: u16) -> String {
+    match channels {
+        1 => "1.0".to_owned(),
+        2 => "2.0".to_owned(),
+        6 => "5.1".to_owned(),
+        8 => "7.1".to_owned(),
+        value => format!("{value}.0"),
+    }
+}
+
+fn codec_display_name(codec: &str) -> String {
+    match codec.trim().to_ascii_lowercase().as_str() {
+        "aac" => "AAC".to_owned(),
+        "ac-3" | "ac3" => "AC-3".to_owned(),
+        "e-ac-3" | "eac3" => "E-AC-3".to_owned(),
+        "dts" => "DTS".to_owned(),
+        "truehd" => "TrueHD".to_owned(),
+        "opus" => "Opus".to_owned(),
+        "flac" => "FLAC".to_owned(),
+        _ => codec.trim().to_owned(),
+    }
+}
+
+fn language_display_name(language: &str) -> String {
+    let name = match language.trim().to_ascii_lowercase().as_str() {
+        "eng" | "en" => "English",
+        "jpn" | "ja" => "Japanese",
+        "spa" | "es" => "Spanish",
+        "fra" | "fre" | "fr" => "French",
+        "deu" | "ger" | "de" => "German",
+        "ita" | "it" => "Italian",
+        "por" | "pt" => "Portuguese",
+        "kor" | "ko" => "Korean",
+        "zho" | "chi" | "zh" => "Chinese",
+        "rus" | "ru" => "Russian",
+        "ara" | "ar" => "Arabic",
+        "hin" | "hi" => "Hindi",
+        "nld" | "dut" | "nl" => "Dutch",
+        "pol" | "pl" => "Polish",
+        "tur" | "tr" => "Turkish",
+        "und" | "" => "Undetermined",
+        _ => return language.trim().to_owned(),
+    };
+    name.to_owned()
 }
 
 fn add_track_name_edit(
@@ -309,6 +383,7 @@ fn add_track_name_edit(
                 value: file_stem.to_owned(),
             });
         }
+        TextEdit::FromTrackMetadata => {}
         TextEdit::Set(value) if current != Some(value.as_str()) => {
             if value.is_empty() {
                 mutations.push(PropertyMutation::DeleteTrackName { selector });
@@ -419,5 +494,25 @@ mod tests {
             forced: None,
         };
         assert!(validate_track_intents(&[edit.clone(), edit]).is_err());
+    }
+
+    #[test]
+    fn metadata_audio_name_uses_language_channels_and_codec() {
+        let mut audio = track(1, TrackKind::Audio, None);
+        audio.codec = "aac".to_owned();
+        audio.channels = Some(6);
+
+        assert_eq!(
+            metadata_track_name(&audio, Some("eng")),
+            "English [5.1] [AAC]"
+        );
+    }
+
+    #[test]
+    fn metadata_audio_name_omits_unknown_channels() {
+        let mut audio = track(1, TrackKind::Audio, None);
+        audio.codec = "opus".to_owned();
+
+        assert_eq!(metadata_track_name(&audio, Some("jpn")), "Japanese [Opus]");
     }
 }

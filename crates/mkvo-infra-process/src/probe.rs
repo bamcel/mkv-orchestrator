@@ -41,6 +41,7 @@ pub struct TrackMetadata {
     pub pixel_format: Option<String>,
     pub color_transfer: Option<String>,
     pub color_primaries: Option<String>,
+    pub channels: Option<u16>,
     pub default: bool,
     pub forced: bool,
 }
@@ -275,6 +276,7 @@ struct MkvTrackProperties {
     color_bits_per_channel: Option<serde_json::Value>,
     video_color_bits_per_channel: Option<serde_json::Value>,
     bit_depth: Option<serde_json::Value>,
+    audio_channels: Option<serde_json::Value>,
     #[serde(default, deserialize_with = "lenient_string")]
     color_transfer_characteristics: Option<String>,
     #[serde(default, deserialize_with = "lenient_string")]
@@ -363,6 +365,11 @@ pub fn parse_mkvmerge_json(path: &Path, json: &str) -> Result<ScannedMedia, Prob
                 pixel_format: None,
                 color_transfer: properties.color_transfer_characteristics,
                 color_primaries: properties.color_primaries,
+                channels: properties
+                    .audio_channels
+                    .as_ref()
+                    .and_then(value_u32)
+                    .and_then(|value| u16::try_from(value).ok()),
                 default: properties
                     .default_track
                     .as_ref()
@@ -439,6 +446,7 @@ struct FfStream {
     pix_fmt: Option<String>,
     color_transfer: Option<String>,
     color_primaries: Option<String>,
+    channels: Option<serde_json::Value>,
     #[serde(default)]
     tags: FfTags,
     #[serde(default)]
@@ -513,6 +521,11 @@ pub fn parse_ffprobe_json(path: &Path, json: &str) -> Result<ScannedMedia, Probe
                 pixel_format: stream.pix_fmt,
                 color_transfer: stream.color_transfer,
                 color_primaries: stream.color_primaries,
+                channels: stream
+                    .channels
+                    .as_ref()
+                    .and_then(value_u32)
+                    .and_then(|value| u16::try_from(value).ok()),
                 default: stream.disposition.default.as_ref().and_then(value_u32) == Some(1),
                 forced: stream.disposition.forced.as_ref().and_then(value_u32) == Some(1),
             }
@@ -711,7 +724,7 @@ mod tests {
           "container":{"properties":{"container_type":"Matroska","title":"Episode","duration":1234000000}},
           "tracks":[
             {"id":0,"type":"video","codec":"AVC/H.264","properties":{"number":1,"pixel_dimensions":"1920x1080","bit_depth":10,"default_track":true}},
-            {"id":1,"type":"audio","codec":"AAC","properties":{"number":2,"language":"eng","track_name":"English"}}
+            {"id":1,"type":"audio","codec":"AAC","properties":{"number":2,"language":"eng","track_name":"English","audio_channels":6}}
           ],
           "attachments":[{"id":2,"file_name":"cover.jpg","content_type":"image/jpeg","size":42}]
         }"#;
@@ -722,6 +735,7 @@ mod tests {
         assert_eq!(media.tracks[0].width, Some(1920));
         assert_eq!(media.tracks[0].bit_depth, Some(10));
         assert_eq!(media.tracks[1].language.as_deref(), Some("eng"));
+        assert_eq!(media.tracks[1].channels, Some(6));
         assert_eq!(media.attachments.len(), 1);
     }
 
@@ -753,7 +767,8 @@ mod tests {
         let json = r#"{
           "streams":[
             {"index":0,"codec_type":"video","codec_name":"hevc","width":3840,"height":2160,"pix_fmt":"yuv420p10le","bits_per_raw_sample":"10","color_transfer":"smpte2084","disposition":{"default":1}},
-            {"index":1,"codec_type":"subtitle","codec_name":"subrip","tags":{"language":"eng","title":"English Forced"},"disposition":{"forced":1}}
+            {"index":1,"codec_type":"subtitle","codec_name":"subrip","tags":{"language":"eng","title":"English Forced"},"disposition":{"forced":1}},
+            {"index":2,"codec_type":"audio","codec_name":"aac","channels":2,"tags":{"language":"eng"},"disposition":{}}
           ],
           "format":{"format_name":"mov,mp4","duration":"12.345","tags":{"title":"Movie"}}
         }"#;
@@ -763,6 +778,7 @@ mod tests {
         assert_eq!(media.tracks[0].kind, TrackType::Video);
         assert_eq!(media.tracks[0].bit_depth, Some(10));
         assert!(media.tracks[1].forced);
+        assert_eq!(media.tracks[2].channels, Some(2));
     }
 
     #[test]

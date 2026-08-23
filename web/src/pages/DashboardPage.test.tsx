@@ -356,6 +356,7 @@ describe("Dashboard detail panels", () => {
           codec: "HEVC/H.265",
           language: "und",
           name: "",
+          channels: null,
           default: true,
           forced: false
         }
@@ -443,8 +444,8 @@ describe("Dashboard template highlighting", () => {
     subtitleSummary: "eng x1",
     attachmentSummary: "None",
     tracks: [
-      { id: 0, trackNumber: 1, type: "video", codec: "HEVC/H.265", language: "und", name: "Ep01.Release", default: true, forced: false },
-      { id: 1, trackNumber: 2, type: "audio", codec: "AC-3", language: "eng", name: "", default: true, forced: false }
+      { id: 0, trackNumber: 1, type: "video", codec: "HEVC/H.265", language: "und", name: "Ep01.Release", channels: null, default: true, forced: false },
+      { id: 1, trackNumber: 2, type: "audio", codec: "AC-3", language: "eng", name: "", channels: 6, default: true, forced: false }
     ],
     attachments: []
   };
@@ -540,7 +541,7 @@ describe("Dashboard template highlighting", () => {
       subtitleSummary: "eng x1",
       tracks: [
         ...templateFile.tracks,
-        { id: 3, trackNumber: 4, type: "subtitles", codec: "SubRip/SRT", language: "eng", name: "SDH", default: false, forced: false }
+        { id: 3, trackNumber: 4, type: "subtitles", codec: "SubRip/SRT", language: "eng", name: "SDH", channels: null, default: false, forced: false }
       ]
     };
 

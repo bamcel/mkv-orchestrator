@@ -180,7 +180,7 @@ fn tracks_from_row(row: &mkvo_contracts::MediaFileRow) -> Vec<MediaTrack> {
             resolution: None,
             bit_depth: None,
             hdr: None,
-            channels: None,
+            channels: track.channels,
             sampling_frequency_hz: None,
             default: track.default,
             forced: track.forced,
@@ -397,7 +397,9 @@ fn append_track_edits(
         // for every target, even when the user did not alter the template row.
         // Encoding an unchanged template value as Keep made every mismatching
         // target keep its own value instead of converging on the template.
-        let name = if row.edited_name.trim().is_empty() {
+        let name = if row.name_from_metadata {
+            TextEdit::FromTrackMetadata
+        } else if row.edited_name.trim().is_empty() {
             TextEdit::Delete
         } else {
             TextEdit::Set(row.edited_name.trim().to_owned())
@@ -437,8 +439,11 @@ fn prop_track_row(index: usize, track: &MediaTrack) -> PropEditTrackConfigRow {
         track_type: track_kind_label(track.kind).to_ascii_lowercase(),
         current_name: track.name.clone().unwrap_or_default(),
         current_language: track.language_or_undetermined().to_owned(),
+        current_codec: track.codec.clone(),
+        current_channels: track.channels,
         current_default: track.default,
         edited_name: track.name.clone().unwrap_or_default(),
+        name_from_metadata: false,
         edited_language: track.language_or_undetermined().to_owned(),
     }
 }
@@ -766,8 +771,11 @@ mod tests {
                 track_type: "audio".to_owned(),
                 current_name: "English".to_owned(),
                 current_language: "eng".to_owned(),
+                current_codec: "AAC".to_owned(),
+                current_channels: Some(2),
                 current_default: true,
                 edited_name: "English".to_owned(),
+                name_from_metadata: false,
                 edited_language: "eng".to_owned(),
             }],
             subtitle_tracks: Vec::new(),

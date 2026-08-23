@@ -25,7 +25,8 @@ const audioNamePresets = ["English", "Japanese", "Commentary"];
 const subtitleNamePresets = ["English", "English Forced", "English SDH", "Dialogue", "Signs & Songs", "Commentary"];
 const languagePresets = ["eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de"];
 const configurationStorageKey = "mkvo.web.trackPropertiesConfiguration";
-const configurationVersion = 2;
+const configurationVersion = 3;
+const metadataTrackNameValue = "__mkvo_metadata_track_name__";
 
 type StoredTrackPropertiesConfiguration = {
   configurationVersion?: number;
@@ -331,6 +332,7 @@ export function TrackPropertiesPage() {
       else next.delete(key);
       return next;
     });
+    if (value) updateTrack(type, trackNumber, { nameFromMetadata: false });
   }
 
   const audioFlagOptions = ["Keep existing", ...audioTracks.map((track) => track.trackLabel), "None"];
@@ -585,6 +587,8 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
                 const isCustom = customTrackKeys.has(getTrackKey(type, track.trackNumber));
                 const nameOptions = buildTrackOptions(namePresets, track.editedName, track.currentName);
                 const languageOptions = buildTrackOptions(languagePresets, track.editedLanguage, track.currentLanguage);
+                const metadataName = buildMetadataTrackName(track);
+                const selectedName = track.nameFromMetadata ? metadataTrackNameValue : track.editedName;
 
                 return (
                   <tr key={`${type}-${track.trackNumber}`} className="bg-card hover:bg-selected">
@@ -596,16 +600,23 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
                       {isCustom ? (
                         <input
                           value={track.editedName}
-                          onChange={(event) => onChange(type, track.trackNumber, { editedName: event.target.value })}
+                          onChange={(event) => onChange(type, track.trackNumber, { editedName: event.target.value, nameFromMetadata: false })}
                           placeholder="Type custom name"
                           className="h-8 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                         />
                       ) : (
                         <select
-                          value={track.editedName}
-                          onChange={(event) => onChange(type, track.trackNumber, { editedName: event.target.value })}
+                          value={selectedName}
+                          onChange={(event) => onChange(
+                            type,
+                            track.trackNumber,
+                            event.target.value === metadataTrackNameValue
+                              ? { nameFromMetadata: true }
+                              : { editedName: event.target.value, nameFromMetadata: false }
+                          )}
                           className="h-8 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
                         >
+                          {type === "audio" && <option value={metadataTrackNameValue}>From metadata — {metadataName}</option>}
                           {nameOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                         </select>
                       )}
@@ -657,4 +668,49 @@ function buildCurrentTrackSummary(track: PropEditTrackConfigRow) {
   ];
   if (track.currentDefault) parts.push("default");
   return parts.join(" | ");
+}
+
+function buildMetadataTrackName(track: PropEditTrackConfigRow) {
+  const language = languageDisplayName(track.editedLanguage || track.currentLanguage || "und");
+  const codec = codecDisplayName(track.currentCodec);
+  const details = [
+    track.currentChannels == null ? "" : channelDisplayName(track.currentChannels),
+    codec
+  ].filter(Boolean);
+  return details.reduce((name, detail) => `${name} [${detail}]`, language);
+}
+
+function channelDisplayName(channels: number) {
+  if (channels === 1) return "1.0";
+  if (channels === 2) return "2.0";
+  if (channels === 6) return "5.1";
+  if (channels === 8) return "7.1";
+  return `${channels}.0`;
+}
+
+function codecDisplayName(codec: string) {
+  const normalized = codec.trim().toLowerCase();
+  if (normalized === "aac") return "AAC";
+  if (normalized === "ac-3" || normalized === "ac3") return "AC-3";
+  if (normalized === "e-ac-3" || normalized === "eac3") return "E-AC-3";
+  if (normalized === "dts") return "DTS";
+  if (normalized === "truehd") return "TrueHD";
+  if (normalized === "opus") return "Opus";
+  if (normalized === "flac") return "FLAC";
+  return codec.trim();
+}
+
+function languageDisplayName(language: string) {
+  const normalized = language.trim().toLowerCase();
+  const names: Record<string, string> = {
+    eng: "English", en: "English", jpn: "Japanese", ja: "Japanese",
+    spa: "Spanish", es: "Spanish", fra: "French", fre: "French", fr: "French",
+    deu: "German", ger: "German", de: "German", ita: "Italian", it: "Italian",
+    por: "Portuguese", pt: "Portuguese", kor: "Korean", ko: "Korean",
+    zho: "Chinese", chi: "Chinese", zh: "Chinese", rus: "Russian", ru: "Russian",
+    ara: "Arabic", ar: "Arabic", hin: "Hindi", hi: "Hindi", nld: "Dutch",
+    dut: "Dutch", nl: "Dutch", pol: "Polish", pl: "Polish", tur: "Turkish",
+    tr: "Turkish", und: "Undetermined"
+  };
+  return names[normalized] ?? language.trim();
 }

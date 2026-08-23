@@ -21,6 +21,8 @@ pub struct TrackRow {
     pub codec: String,
     pub language: String,
     pub name: String,
+    #[serde(default)]
+    pub channels: Option<u16>,
     pub default: bool,
     pub forced: bool,
 }
@@ -82,6 +84,7 @@ impl From<&MediaFile> for MediaFileRow {
                     codec: track.codec.clone(),
                     language: track.language_or_undetermined().to_owned(),
                     name: track.name.clone().unwrap_or_default(),
+                    channels: track.channels,
                     default: track.default,
                     forced: track.forced,
                 })
@@ -812,8 +815,14 @@ pub struct PropEditTrackConfigRow {
     pub track_type: String,
     pub current_name: String,
     pub current_language: String,
+    #[serde(default)]
+    pub current_codec: String,
+    #[serde(default)]
+    pub current_channels: Option<u16>,
     pub current_default: bool,
     pub edited_name: String,
+    #[serde(default)]
+    pub name_from_metadata: bool,
     pub edited_language: String,
 }
 

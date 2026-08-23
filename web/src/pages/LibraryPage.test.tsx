@@ -158,4 +158,84 @@ describe("Library poster workflow", () => {
       "/media/tv/Example Show/Season 1/Episode 02.mkv"
     ]));
   });
+
+  it("restores completed libraries immediately when switching tabs", async () => {
+    const user = userEvent.setup();
+    const rowFor = (title: string, folder: string): LibraryAuditRow => {
+      const base = `/media/${folder}/${title}/Season 1`;
+      return {
+        ...auditRow(1, false),
+        folderPath: base,
+        folderName: `${title} / Season 1`,
+        templateFilePath: `${base}/Episode 01.mkv`,
+        issueFilePaths: [],
+        allFilePaths: [`${base}/Episode 01.mkv`, `${base}/Episode 02.mkv`]
+      };
+    };
+    const alpha = rowFor("Alpha Show", "alpha");
+    const beta = rowFor("Beta Show", "beta");
+    const scanFiles = new Map<string, MediaFileRow[]>();
+    let scanNumber = 0;
+    const startScan = vi.fn().mockImplementation((request: { sources: string[] }) => {
+      scanNumber += 1;
+      const id = `scan-${scanNumber}`;
+      const row = request.sources[0].includes("alpha") ? alpha : beta;
+      scanFiles.set(id, row.allFilePaths.map(media));
+      return Promise.resolve({ id, status: "Queued", files: [], completed: 0, total: 0 } as ScanJobResponse);
+    });
+    const persistentSettings = {
+      ...settings(),
+      mediaServers: [{
+        ...settings().mediaServers[0],
+        id: "persistent-server",
+        libraries: [
+          { id: "alpha", name: "Alpha", type: "tvshows", serverPath: "/srv/alpha", containerPath: "/media/alpha", isEnabled: true },
+          { id: "beta", name: "Beta", type: "tvshows", serverPath: "/srv/beta", containerPath: "/media/beta", isEnabled: true }
+        ]
+      }]
+    } as WebSettings;
+
+    renderWithBackend(
+      <MediaLibraryProvider><LibraryPage /></MediaLibraryProvider>,
+      {
+        getWebSettings: () => Promise.resolve(persistentSettings),
+        getLibraryCatalog: ({ libraryName }) => Promise.resolve({
+          items: [{ id: libraryName, title: `${libraryName} Show`, year: 2024, mediaType: "series", hasPoster: false }]
+        }),
+        getLibraryLocalArtwork: () => Promise.reject(new Error("No local poster")),
+        startScan,
+        getScanJob: (id) => {
+          const files = scanFiles.get(id) ?? [];
+          return Promise.resolve({
+            id,
+            status: "Completed",
+            completed: files.length,
+            total: files.length,
+            files,
+            summary: { total: files.length, mkv: files.length, mp4: 0, failed: 0, cached: 0 },
+            skipped: [],
+            error: ""
+          } as ScanJobResponse);
+        },
+        buildLibraryAudit: (files) => {
+          const row = files[0]?.path.includes("/alpha/") ? alpha : beta;
+          return Promise.resolve({
+            summary: { groups: 1, files: files.length, issueGroups: 0, standardGroups: 1 },
+            items: [row]
+          });
+        }
+      }
+    );
+
+    await user.click(await screen.findByRole("button", { name: /build library/i }));
+    expect(await screen.findByRole("button", { name: /open alpha show library details/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Beta", exact: true }));
+    await user.click(screen.getByRole("button", { name: /build library/i }));
+    expect(await screen.findByRole("button", { name: /open beta show library details/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Alpha", exact: true }));
+    expect(screen.getByRole("button", { name: /open alpha show library details/i })).toBeInTheDocument();
+    expect(startScan).toHaveBeenCalledTimes(2);
+  });
 });
