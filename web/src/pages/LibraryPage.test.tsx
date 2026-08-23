@@ -80,6 +80,25 @@ describe("Library title aggregation", () => {
     expect(titles[0].seasons).toHaveLength(2);
     expect(titles[0].catalogItem?.id).toBe("series-1");
   });
+
+  it("combines audit groups whose folder labels include the series and season", () => {
+    const season1 = {
+      ...auditRow(1, false),
+      folderPath: "/media/tv/Roseanne (1988)/Roseanne - Season 01",
+      folderName: "Roseanne - Season 01 / movie/single folder"
+    };
+    const season2 = {
+      ...auditRow(2, false),
+      folderPath: "/media/tv/Roseanne (1988)/Roseanne - Season 02",
+      folderName: "Roseanne - Season 02 / movie/single folder"
+    };
+
+    const titles = buildLibraryTitles([season1, season2], []);
+
+    expect(titles).toHaveLength(1);
+    expect(titles[0].title).toBe("Roseanne (1988)");
+    expect(titles[0].seasons).toHaveLength(2);
+  });
 });
 
 describe("Library poster workflow", () => {

@@ -81,16 +81,20 @@ fn group_key(root: &Path, file: &Path) -> AuditGroupKey {
             sort_season: 0,
         };
     }
-    if let Some((index, season)) = segments
-        .iter()
-        .enumerate()
-        .rev()
-        .find_map(|(index, value)| parse_season_folder(value).map(|season| (index, season)))
+    if let Some((index, season, title_prefix)) =
+        segments
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(index, value)| {
+                parse_season_folder(value)
+                    .map(|(season, title_prefix)| (index, season, title_prefix))
+            })
     {
         let show_name = if index > 0 {
             segments[index - 1].clone()
         } else {
-            segments[0].clone()
+            title_prefix.unwrap_or_else(|| segments[0].clone())
         };
         let relative_folder = segments[..=index].iter().collect();
         return AuditGroupKey {
@@ -362,19 +366,49 @@ fn display_signature(value: &str) -> &str {
     }
 }
 
-fn parse_season_folder(value: &str) -> Option<u32> {
+fn parse_season_folder(value: &str) -> Option<(u32, Option<String>)> {
     let compact: String = value
         .to_ascii_lowercase()
         .chars()
         .filter(|character| !character.is_whitespace())
         .collect();
-    let digits = compact
+    if let Some(digits) = compact
         .strip_prefix("season")
-        .or_else(|| compact.strip_prefix('s'))?;
-    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
+        .or_else(|| compact.strip_prefix('s'))
+        && !digits.is_empty()
+        && digits.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return digits.parse().ok().map(|season| (season, None));
     }
-    digits.parse().ok()
+
+    let lower = value.to_ascii_lowercase();
+    for marker in ["season", "s"] {
+        let Some(index) = lower.rfind(marker) else {
+            continue;
+        };
+        let boundary_before = index == 0
+            || lower[..index]
+                .chars()
+                .next_back()
+                .is_some_and(|character| !character.is_ascii_alphanumeric());
+        if !boundary_before {
+            continue;
+        }
+        let digits = lower[index + marker.len()..].trim();
+        if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            continue;
+        }
+        let title = value[..index]
+            .trim_end_matches(|character: char| {
+                character.is_whitespace() || matches!(character, '-' | '_' | '.')
+            })
+            .trim();
+        return digits
+            .parse()
+            .ok()
+            .map(|season| (season, (!title.is_empty()).then(|| title.to_owned())));
+    }
+    None
 }
 
 #[must_use]
@@ -580,6 +614,32 @@ mod tests {
                 .iter()
                 .any(|issue| issue.kind == LibraryIssueKind::PossibleMissingEpisode)
         );
+    }
+
+    #[test]
+    fn named_season_folders_stay_grouped_under_the_parent_series() {
+        let files = vec![
+            media(
+                "root/Roseanne (1988)/Roseanne - Season 01/Roseanne S01E01.mkv",
+                "eng",
+            ),
+            media(
+                "root/Roseanne (1988)/Roseanne - Season 02/Roseanne S02E01.mkv",
+                "eng",
+            ),
+        ];
+        let audit = LibraryAuditService.build("root", &files, &[]);
+
+        assert_eq!(audit.summary.shows, 1);
+        assert_eq!(audit.groups.len(), 2);
+        assert!(
+            audit
+                .groups
+                .iter()
+                .all(|group| group.show_name == "Roseanne (1988)")
+        );
+        assert_eq!(audit.groups[0].season_folder, "Roseanne - Season 01");
+        assert_eq!(audit.groups[1].season_folder, "Roseanne - Season 02");
     }
 
     fn fixture_track(id: u64, value: &Value) -> MediaTrack {

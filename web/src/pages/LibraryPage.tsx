@@ -376,14 +376,27 @@ export function buildLibraryTitles(rows: LibraryAuditRow[], catalogItems: Librar
 }
 
 function auditTitle(row: LibraryAuditRow) {
-  const label = row.folderName.split(" / ")[0]?.trim();
-  if (label) return label;
   const folder = folderName(row.folderPath);
-  return /^season\s*\d+/i.test(folder) ? folderName(parentPath(row.folderPath)) : folder || "Library item";
+  if (isSeasonFolderName(folder)) {
+    const parent = folderName(parentPath(row.folderPath));
+    if (parent) return parent;
+  }
+  const label = row.folderName.split(" / ")[0]?.trim();
+  if (label) return stripSeasonSuffix(label);
+  return isSeasonFolderName(folder) ? folderName(parentPath(row.folderPath)) : stripSeasonSuffix(folder) || "Library item";
 }
 function seasonLabel(row: LibraryAuditRow) {
   const parts = row.folderName.split(" / ");
-  return parts[1]?.trim() || folderName(row.folderPath) || "Movie";
+  const reported = parts[1]?.trim();
+  return reported && reported.toLocaleLowerCase() !== "movie/single folder"
+    ? reported
+    : folderName(row.folderPath) || "Movie";
+}
+function stripSeasonSuffix(value: string) {
+  return value.replace(/\s*(?:[-_.]\s*)?(?:season\s*|s)\d+\s*$/i, "").trim() || value.trim();
+}
+function isSeasonFolderName(value: string) {
+  return /(?:^|\s|[-_.])(?:season\s*|s)\d+\s*$/i.test(value.trim());
 }
 function titleKey(value: string) {
   return value.normalize("NFKD").toLocaleLowerCase().replace(/\s*\(\d{4}\)\s*$/, "").replace(/[^\p{L}\p{N}]+/gu, "").trim();

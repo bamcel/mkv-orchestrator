@@ -382,14 +382,29 @@ fn is_season_directory(path: &Path) -> bool {
         return false;
     };
     let normalized = name.trim().to_ascii_lowercase();
-    normalized.strip_prefix("season").is_some_and(|suffix| {
+    let exact = normalized.strip_prefix("season").is_some_and(|suffix| {
         suffix
             .trim()
             .chars()
             .all(|character| character.is_ascii_digit())
     }) || normalized.strip_prefix('s').is_some_and(|suffix| {
         !suffix.is_empty() && suffix.chars().all(|character| character.is_ascii_digit())
-    })
+    });
+    exact
+        || ["season", "s"].into_iter().any(|marker| {
+            let Some(index) = normalized.rfind(marker) else {
+                return false;
+            };
+            let boundary_before = index == 0
+                || normalized[..index]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|character| !character.is_ascii_alphanumeric());
+            let digits = normalized[index + marker.len()..].trim();
+            boundary_before
+                && !digits.is_empty()
+                && digits.chars().all(|character| character.is_ascii_digit())
+        })
 }
 
 fn push_unique_path(paths: &mut Vec<PathBuf>, candidate: PathBuf) {
@@ -434,6 +449,9 @@ mod local_artwork_tests {
     fn recognizes_common_season_directory_names() {
         assert!(is_season_directory(Path::new("/shows/Example/Season 01")));
         assert!(is_season_directory(Path::new("/shows/Example/S2")));
+        assert!(is_season_directory(Path::new(
+            "/shows/Example/Example - Season 03"
+        )));
         assert!(!is_season_directory(Path::new("/shows/Example")));
         assert!(!is_season_directory(Path::new("/movies/Seven")));
     }
