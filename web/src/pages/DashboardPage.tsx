@@ -246,8 +246,12 @@ export function DashboardPage() {
   // so this adopts anything newer rather than only filling an empty page.
   useEffect(() => {
     if (!currentScan.data) return;
-    syncFromBackend(currentScan.data);
-  }, [currentScan.data]);
+    // The Library page uses the same backend working set while it builds its
+    // overview. Keep that shared result scoped to the folders selected here,
+    // otherwise a Library scan can replace Dashboard rows with another
+    // library's files when this query refreshes.
+    syncFromBackend(currentScan.data, sources);
+  }, [currentScan.data, sources, syncFromBackend]);
 
   useEffect(() => {
     if (files.length === 0) {

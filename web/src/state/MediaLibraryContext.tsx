@@ -29,7 +29,7 @@ type MediaLibraryContextValue = {
    * which meant the very first scan won and every later change -- a rename, a
    * property edit -- was invisible until the app was restarted.
    */
-  syncFromBackend: (scan: CurrentScanResponse) => void;
+  syncFromBackend: (scan: CurrentScanResponse, sourcePaths?: string[]) => void;
   templateFilePath: string;
   setTemplateFilePath: (path: string) => void;
   updateFilesAfterRename: (renames: Array<{ oldPath: string; newPath: string; newFileName: string; status?: string }>) => void;
@@ -61,6 +61,12 @@ function write(storage: Storage, key: string, value: unknown): void {
 
 function pathKey(path: string): string {
   return path.replace(/\\/g, "/").toLowerCase();
+}
+
+function isPathWithinSource(filePath: string, sourcePath: string): boolean {
+  const file = pathKey(filePath).replace(/\/+$/, "");
+  const source = pathKey(sourcePath).replace(/\/+$/, "");
+  return Boolean(file && source && (file === source || file.startsWith(`${source}/`)));
 }
 
 /**
@@ -174,20 +180,23 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
       });
     },
     hydrateSelection: (paths) => setSelectedPathsState(paths),
-    syncFromBackend: (scan) => {
+    syncFromBackend: (scan, sourcePaths) => {
       if (scan.updatedUtc && adoptedUpdatedUtc && scan.updatedUtc <= adoptedUpdatedUtc) {
         return;
       }
 
       setAdoptedUpdatedUtc(scan.updatedUtc ?? null);
       const viewPaths = workingViewPaths.current;
-      const nextFiles = viewPaths
-        ? scan.files.filter((file) => viewPaths.has(pathKey(file.path)))
+      const scopedFiles = sourcePaths?.length
+        ? scan.files.filter((file) => sourcePaths.some((source) => isPathWithinSource(file.path, source)))
         : scan.files;
+      const nextFiles = viewPaths
+        ? scopedFiles.filter((file) => viewPaths.has(pathKey(file.path)))
+        : scopedFiles;
       setFilesState(nextFiles);
-      if (viewPaths) {
+      if (viewPaths || sourcePaths?.length) {
         const available = new Set(nextFiles.map((file) => pathKey(file.path)));
-        setSelectedPathsState((current) => current.filter((path) => available.has(pathKey(path))));
+        setSelectedPathsState(scan.selectedPaths.filter((path) => available.has(pathKey(path))));
       } else {
         setSelectedPathsState(scan.selectedPaths);
       }
