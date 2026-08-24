@@ -1,10 +1,31 @@
 # MKV Orchestrator
 
-MKV Orchestrator, or MKVO, is a desktop media operations console for scanning media folders, reviewing track metadata, matching rename metadata from TVDB or TMDB, previewing safe file renames, planning mux/remux work, and editing MKV track properties.
+<p align="center">
+  <strong>A focused media operations console for organizing, inspecting, and preparing MKV and MP4 libraries.</strong>
+</p>
 
-The app is built with Tauri and Rust. One React interface serves both the desktop app and the container, so a feature lands once and appears in both.
+<p align="center">
+  <a href="#about">About</a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#first-run-setup">Get started</a> ·
+  <a href="https://github.com/bamcel/mkv-orchestrator/issues">Issues</a>
+</p>
 
-A Docker build is available for server or NAS-style access. Desktop and container run the same Rust core; they differ only in how they are reached and in how far they may browse -- the desktop browses the whole machine, the container stays inside the roots it was given.
+## About
+
+MKV Orchestrator (MKVO) brings everyday media-library maintenance into one desktop and container-ready interface. Scan folders, inspect tracks, preview safe renames, plan mux/remux operations, and edit MKV properties without jumping between disconnected tools.
+
+The application combines a Rust core with a React interface hosted by Tauri for desktop use and by Docker for server or NAS-style access. Both modes share the same workflows and processing logic; only their access boundaries differ.
+
+<p>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/docker-0d1117?style=for-the-badge&logo=docker&logoColor=2496ED" alt="docker"></a>
+  <a href="https://emby.media/"><img src="https://img.shields.io/badge/emby-0d1117?style=for-the-badge&logoColor=52B54B" alt="emby"></a>
+  <a href="https://emby.media/emby-server.html"><img src="https://img.shields.io/badge/emby--server-0d1117?style=for-the-badge&logoColor=52B54B" alt="emby-server"></a>
+  <br>
+  <a href="https://jellyfin.org/"><img src="https://img.shields.io/badge/jellyfin-0d1117?style=for-the-badge&logo=jellyfin&logoColor=AA5CC3" alt="jellyfin"></a>
+  <a href="https://www.plex.tv/"><img src="https://img.shields.io/badge/plex-0d1117?style=for-the-badge&logo=plex&logoColor=E5A00D" alt="plex"></a>
+  <a href="https://www.plex.tv/your-media/"><img src="https://img.shields.io/badge/plex--media--server-0d1117?style=for-the-badge&logo=plex&logoColor=E5A00D" alt="plex-media-server"></a>
+</p>
 
 ## What MKVO Does
 
