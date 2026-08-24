@@ -435,7 +435,7 @@ describe("Settings defaults", () => {
 });
 
 describe("Settings appearance", () => {
-  it("lets users preview and save the shared app-title and logo color", async () => {
+  it("lets users select and preview any theme color label", async () => {
     const user = userEvent.setup();
     renderWithBackend(<SettingsPage />, {
       getStatus: () => Promise.resolve(status),
@@ -443,11 +443,12 @@ describe("Settings appearance", () => {
     });
 
     await user.click(await screen.findByRole("button", { name: /^appearance$/i }));
-    const colorInput = await screen.findByLabelText(/app title and logo color/i);
+    await user.selectOptions(await screen.findByLabelText(/theme color label/i), "Border");
+    const colorInput = await screen.findByLabelText(/^border color$/i);
     fireEvent.change(colorInput, { target: { value: "#12ab34" } });
 
-    expect(document.documentElement.style.getPropertyValue("--color-app-title")).toBe("#12AB34");
-    expect((screen.getByLabelText(/theme json/i) as HTMLTextAreaElement).value).toContain('"AppTitle": "#12AB34"');
+    expect(document.documentElement.style.getPropertyValue("--color-border")).toBe("#12AB34");
+    expect((screen.getByLabelText(/theme json/i) as HTMLTextAreaElement).value).toContain('"Border": "#12AB34"');
   });
 });
 

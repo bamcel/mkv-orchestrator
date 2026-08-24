@@ -92,6 +92,33 @@ type EditableMediaServer = WebMediaServer & {
   apiKey?: string;
 };
 
+const themeColorOptions = [
+  { name: "Accent", label: "Accent", cssVariable: "--color-accent" },
+  { name: "AccentHover", label: "Accent hover", cssVariable: "--color-accent-hover" },
+  { name: "AppTitle", label: "App title and logo", cssVariable: "--color-app-title" },
+  { name: "Border", label: "Border", cssVariable: "--color-border" },
+  { name: "BorderStrong", label: "Strong border", cssVariable: "--color-border-strong" },
+  { name: "Brand", label: "Brand", cssVariable: "--color-brand" },
+  { name: "Button", label: "Button", cssVariable: "--color-button" },
+  { name: "ButtonHover", label: "Button hover", cssVariable: "--color-button-hover" },
+  { name: "Card", label: "Card", cssVariable: "--color-card" },
+  { name: "Disabled", label: "Disabled", cssVariable: "--color-disabled" },
+  { name: "Input", label: "Input", cssVariable: "--color-input" },
+  { name: "InputHover", label: "Input hover", cssVariable: "--color-input-hover" },
+  { name: "Muted", label: "Muted text", cssVariable: "--color-muted" },
+  { name: "Panel", label: "Panel", cssVariable: "--color-panel" },
+  { name: "Selected", label: "Selected", cssVariable: "--color-selected" },
+  { name: "Sidebar", label: "Sidebar", cssVariable: "--color-sidebar" },
+  { name: "Subtle", label: "Subtle text", cssVariable: "--color-subtle" },
+  { name: "Success", label: "Success", cssVariable: "--color-success" },
+  { name: "TemplateHighlight", label: "Template highlight", cssVariable: "--color-template" },
+  { name: "Text", label: "Primary text", cssVariable: "--color-text" },
+  { name: "Warning", label: "Warning", cssVariable: "--color-warning" },
+  { name: "Window", label: "Window background", cssVariable: "--color-window" }
+] as const;
+
+type ThemeColorName = typeof themeColorOptions[number]["name"];
+
 export function SettingsPage() {
   const backendTransport = getBackendTransport();
   const isDesktop = backendTransport === "tauri";
@@ -132,6 +159,7 @@ export function SettingsPage() {
   const [availableThemes, setAvailableThemes] = useState(() => getAllWebThemes());
   const [themeName, setThemeName] = useState(() => getStoredWebThemeName());
   const [themeJson, setThemeJson] = useState(() => JSON.stringify(getWebTheme(getStoredWebThemeName()), null, 2));
+  const [selectedThemeColor, setSelectedThemeColor] = useState<ThemeColorName>("AppTitle");
   const [customThemeName, setCustomThemeName] = useState("My Theme");
   const [settingsStatus, setSettingsStatus] = useState("");
   const lastSavedFingerprint = useRef("");
@@ -369,13 +397,19 @@ export function SettingsPage() {
     setSettingsStatus(`Theme reloaded: ${theme.name}`);
   }
 
-  function updateThemeColor(colorName: "AppTitle" | "TemplateHighlight", cssVariable: string, color: string) {
+  function updateThemeColor(colorName: ThemeColorName, cssVariable: string, color: string) {
     try {
       const parsed = JSON.parse(themeJson);
       parsed.colors = { ...(parsed.colors ?? parsed.Colors ?? {}), [colorName]: color };
       delete parsed.Colors;
       setThemeJson(JSON.stringify(parsed, null, 2));
       document.documentElement.style.setProperty(cssVariable, color);
+      if (colorName === "Window") {
+        document.documentElement.style.backgroundColor = color;
+        document.body.style.backgroundColor = color;
+      } else if (colorName === "Text") {
+        document.body.style.color = color;
+      }
     } catch {
       setSettingsStatus("Theme JSON must be valid before editing theme colors.");
     }
@@ -1042,19 +1076,34 @@ export function SettingsPage() {
                     Reload Theme
                   </button>
                 </div>
-                <div className="mt-4 grid max-w-xl grid-cols-2 gap-3">
+                <div className="mt-4 grid max-w-xl gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-xs font-semibold text-muted">Color label</span>
+                    <select
+                      aria-label="Theme color label"
+                      value={selectedThemeColor}
+                      onChange={(event) => setSelectedThemeColor(event.target.value as ThemeColorName)}
+                      className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
+                    >
+                      {themeColorOptions.map((option) => (
+                        <option key={option.name} value={option.name}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
                   <ThemeColorField
-                    label="App title and logo"
-                    value={themeColorValue(themeJson, "AppTitle", "#BD93F9")}
-                    onChange={(color) => updateThemeColor("AppTitle", "--color-app-title", color)}
-                  />
-                  <ThemeColorField
-                    label="Template highlight"
-                    value={themeColorValue(themeJson, "TemplateHighlight", "#BD93F9")}
-                    onChange={(color) => updateThemeColor("TemplateHighlight", "--color-template", color)}
+                    label={themeColorOptions.find((option) => option.name === selectedThemeColor)?.label ?? selectedThemeColor}
+                    value={themeColorValue(
+                      themeJson,
+                      selectedThemeColor,
+                      getWebTheme(themeName).colors[selectedThemeColor] ?? "#000000"
+                    )}
+                    onChange={(color) => {
+                      const option = themeColorOptions.find((candidate) => candidate.name === selectedThemeColor);
+                      if (option) updateThemeColor(option.name, option.cssVariable, color);
+                    }}
                   />
                 </div>
-                <p className="mt-2 text-xs text-subtle">Color edits preview immediately. Save them as a custom theme below to keep them.</p>
+                <p className="mt-2 text-xs text-subtle">Choose a label, then use the color picker to preview that theme color immediately. Save the edited theme below to keep it.</p>
                 <label className="mt-4 block">
                   <span className="text-xs font-semibold text-muted">Theme JSON</span>
                   <textarea
