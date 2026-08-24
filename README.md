@@ -26,31 +26,23 @@ A Docker build is available for server or NAS-style access. Desktop and containe
 
 ### Dashboard
 
-![Dashboard](docs/screenshots/mkvo-dashboard.png)
+![Dashboard](docs/screenshots/Dashboard.png)
 
 ### Rename Files
 
-![Rename Files](docs/screenshots/mkvo-rename.png)
-
-### Mux / Remux
-
-![Mux / Remux](docs/screenshots/mkvo-mux_remux.png)
+![Rename Files](docs/screenshots/RenameFiles.png)
 
 ### Track Properties
 
-![Track Properties](docs/screenshots/mkvo-track_properties.png)
+![Track Properties](docs/screenshots/TrackProperties.png)
 
 ### Library
 
-![Library](docs/screenshots/mkvo-library.png)
+![Library](docs/screenshots/Library.png)
 
 ### Settings
 
-![Settings](docs/screenshots/mkvo-settings.png)
-
-### Logs
-
-![Logs](docs/screenshots/mkvo-logs.png)
+![Settings](docs/screenshots/Settings.png)
 
 Screenshots live in [`docs/screenshots/`](docs/screenshots/); see that folder's README for naming conventions when adding new captures.
 
