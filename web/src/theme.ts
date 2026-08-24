@@ -253,7 +253,7 @@ export const webThemes: WebTheme[] = [
     subtle: "#747E89", accent: "#006FE6", accentHover: "#005FC7", success: "#348A42",
     warning: "#A86400", disabled: "#99A1AA"
   })
-].sort((left, right) => left.name.localeCompare(right.name));
+].map(normalizeWebTheme).sort((left, right) => left.name.localeCompare(right.name));
 
 const cssVariableMap: Record<string, string> = {
   Window: "--color-window",
@@ -280,13 +280,18 @@ const cssVariableMap: Record<string, string> = {
   Brand: "--color-brand"
 };
 
-function withThemeDefaults(theme: WebTheme): WebTheme {
+export function normalizeWebTheme(theme: WebTheme): WebTheme {
+  const colors = {
+    ...theme.colors,
+    AppTitle: theme.colors.AppTitle || theme.colors.Brand || theme.colors.Accent || "#BD93F9",
+    TemplateHighlight: theme.colors.TemplateHighlight || theme.colors.Accent || "#BD93F9"
+  };
+
   return {
     name: theme.name.trim(),
-    colors: {
-      ...theme.colors,
-      TemplateHighlight: theme.colors.TemplateHighlight || theme.colors.Accent || "#BD93F9"
-    }
+    colors: Object.fromEntries(
+      Object.entries(colors).sort(([left], [right]) => left.localeCompare(right))
+    )
   };
 }
 
@@ -305,7 +310,7 @@ export function loadCustomWebThemes(): WebTheme[] {
         && theme.name.trim().length > 0
         && theme.colors
         && typeof theme.colors === "object")
-      .map(withThemeDefaults);
+      .map(normalizeWebTheme);
   } catch {
     return [];
   }
@@ -316,7 +321,7 @@ export function replaceCustomWebThemes(themes: WebTheme[]): WebTheme[] {
   legacyBuiltInThemeNames.forEach((name) => defaultNames.add(name.toLowerCase()));
   const normalized = themes
     .filter((theme) => theme.name.trim() && theme.colors && typeof theme.colors === "object")
-    .map(withThemeDefaults)
+    .map(normalizeWebTheme)
     .filter((theme) => !defaultNames.has(theme.name.toLowerCase()))
     .filter((theme, index, all) =>
       all.findIndex((candidate) => candidate.name.toLowerCase() === theme.name.toLowerCase()) === index)
@@ -333,7 +338,7 @@ export function getAllWebThemes(): WebTheme[] {
 }
 
 export function saveCustomWebTheme(theme: WebTheme) {
-  const cleanTheme = withThemeDefaults(theme);
+  const cleanTheme = normalizeWebTheme(theme);
   if (!cleanTheme.name) return getAllWebThemes();
 
   const defaultNames = new Set(webThemes.map((item) => item.name.toLowerCase()));
@@ -371,7 +376,7 @@ export function getStoredWebThemeName(): string {
 
 export function getWebTheme(name: string | null | undefined): WebTheme {
   const normalized = normalizeThemeName(name);
-  return withThemeDefaults(getAllWebThemes().find((theme) => theme.name === normalized) ?? webThemes[0]);
+  return normalizeWebTheme(getAllWebThemes().find((theme) => theme.name === normalized) ?? webThemes[0]);
 }
 
 function normalizeThemeName(name: string | null | undefined) {

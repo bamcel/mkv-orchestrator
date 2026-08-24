@@ -33,7 +33,7 @@ import ffmpegLogo from "../assets/logos/ffmpeg.png";
 import mkvtoolnixLogo from "../assets/logos/mkvtoolnix.png";
 import tmdbLogo from "../assets/logos/tmdb.png";
 import tvdbLogo from "../assets/logos/tvdb.png";
-import { applyWebTheme, getAllWebThemes, getStoredWebThemeName, getWebTheme, loadCustomWebThemes, removeCustomWebTheme, replaceCustomWebThemes, saveCustomWebTheme, webThemes } from "../theme";
+import { applyWebTheme, getAllWebThemes, getStoredWebThemeName, getWebTheme, loadCustomWebThemes, normalizeWebTheme, removeCustomWebTheme, replaceCustomWebThemes, saveCustomWebTheme, webThemes } from "../theme";
 
 const settingsTabStorageKey = "mkvo.web.settingsTab";
 const defaultRenameTemplate = "{series} - S{season:00}E{episode:00} - {episodeTitle}";
@@ -402,7 +402,7 @@ export function SettingsPage() {
       const parsed = JSON.parse(themeJson);
       parsed.colors = { ...(parsed.colors ?? parsed.Colors ?? {}), [colorName]: color };
       delete parsed.Colors;
-      setThemeJson(JSON.stringify(parsed, null, 2));
+      setThemeJson(JSON.stringify(normalizeWebTheme(parsed), null, 2));
       document.documentElement.style.setProperty(cssVariable, color);
       if (colorName === "Window") {
         document.documentElement.style.backgroundColor = color;

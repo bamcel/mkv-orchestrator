@@ -59,12 +59,23 @@ describe("built-in themes", () => {
     }
   });
 
-  it("migrates custom themes to use their accent as the template highlight", () => {
+  it("alphabetizes every theme color and includes the app-title color", () => {
+    for (const theme of webThemes) {
+      const colorNames = Object.keys(theme.colors);
+      expect(colorNames).toEqual([...colorNames].sort((left, right) => left.localeCompare(right)));
+      expect(theme.colors.AppTitle).toBeTruthy();
+    }
+  });
+
+  it("migrates custom themes to use their accent for missing highlight colors", () => {
     window.localStorage.setItem("mkvo.web.customThemes", JSON.stringify([{
       name: "Legacy Custom",
       colors: { Accent: "#123456" }
     }]));
 
-    expect(loadCustomWebThemes()[0].colors.TemplateHighlight).toBe("#123456");
+    const colors = loadCustomWebThemes()[0].colors;
+    expect(colors.AppTitle).toBe("#123456");
+    expect(colors.TemplateHighlight).toBe("#123456");
+    expect(Object.keys(colors)).toEqual(["Accent", "AppTitle", "TemplateHighlight"]);
   });
 });
