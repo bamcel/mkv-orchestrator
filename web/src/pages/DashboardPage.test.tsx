@@ -215,6 +215,36 @@ describe("Dashboard file sorting", () => {
   });
 });
 
+describe("Dashboard UI cache reset", () => {
+  it("clears scan state and workflow caches while keeping the chosen sources", async () => {
+    const user = userEvent.setup();
+    const scannedFile = mediaFile("Episode 01.mkv");
+    const files = [scannedFile];
+    window.sessionStorage.setItem("mkvo.web.scanSources", JSON.stringify(["/media/Show"]));
+    window.sessionStorage.setItem("mkvo.web.renameState", "stale rename state");
+    window.sessionStorage.setItem("mkvo.web.trackPropertiesConfiguration", "stale track state");
+    const clearCurrentScanFiles = vi.fn().mockResolvedValue(emptyScan);
+
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve({ ...emptyScan, files }),
+      getWebSettings: () => Promise.resolve(settings()),
+      clearCurrentScanFiles
+    });
+
+    expect(await screen.findByRole("row", { name: /Episode 01\.mkv/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /clear ui cache/i }));
+
+    await waitFor(() => expect(clearCurrentScanFiles).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole("row", { name: /Episode 01\.mkv/i })).not.toBeInTheDocument());
+    expect(screen.getByText("Show")).toBeInTheDocument();
+    expect(window.sessionStorage.getItem("mkvo.web.scanSources")).toBe(JSON.stringify(["/media/Show"]));
+    expect(window.sessionStorage.getItem("mkvo.web.renameState")).toBeNull();
+    expect(window.sessionStorage.getItem("mkvo.web.trackPropertiesConfiguration")).toBeNull();
+    expect(screen.getByText(/ui cache cleared/i)).toBeInTheDocument();
+  });
+});
+
 describe("Dashboard ignored folders", () => {
   /// The ignored list is sent with every scan request, so seeding it from a
   /// local constant silently overrode whatever the user configured in Settings.

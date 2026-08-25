@@ -32,6 +32,8 @@ type MediaLibraryContextValue = {
   syncFromBackend: (scan: CurrentScanResponse, sourcePaths?: string[]) => void;
   templateFilePath: string;
   setTemplateFilePath: (path: string) => void;
+  /** Clear scan-derived UI state without removing settings or source folders. */
+  clearLibraryCache: () => void;
   updateFilesAfterRename: (renames: Array<{ oldPath: string; newPath: string; newFileName: string; status?: string }>) => void;
 };
 
@@ -207,6 +209,22 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
     },
     templateFilePath,
     setTemplateFilePath,
+    clearLibraryCache: () => {
+      workingViewPaths.current = null;
+      setIsWorkingView(false);
+      setAdoptedUpdatedUtc(null);
+      setFilesState([]);
+      setSelectedPathsState([]);
+      setTemplateFilePath("");
+      setSelectionError(null);
+      try {
+        sessionStorage.removeItem(storageKey);
+        sessionStorage.removeItem(templateStorageKey);
+        localStorage.removeItem(selectionStorageKey);
+      } catch {
+        // State is already cleared; storage is only a persistence cache.
+      }
+    },
     updateFilesAfterRename: (renames) => {
       if (workingViewPaths.current) {
         workingViewPaths.current = new Set([...workingViewPaths.current].map((path) => {

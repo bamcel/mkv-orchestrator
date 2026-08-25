@@ -1,7 +1,7 @@
 import { Fragment, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronUp, Copy, FileCheck, FileVideo, Folder, FolderOpen, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
-import { authorizeBrowsedRoot, cancelScan, FileSystemEntry, getBackendTransport, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, saveWebSettings, startScan } from "../api";
+import { authorizeBrowsedRoot, cancelScan, clearCurrentScanFiles, FileSystemEntry, getBackendTransport, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, saveWebSettings, startScan } from "../api";
 import { SectionHeader } from "../components/SectionHeader";
 import { FileBrowser } from "../components/FileBrowser";
 import { SortableColumnHeader, type SortDirection } from "../components/SortableColumnHeader";
@@ -12,6 +12,7 @@ const scanSourcesStorageKey = "mkvo.web.scanSources";
 type DashboardSortKey = "file" | "reader" | "codec" | "resolution" | "audio" | "subtitles" | "status";
 
 export function DashboardPage() {
+  const queryClient = useQueryClient();
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const {
     files,
@@ -21,6 +22,7 @@ export function DashboardPage() {
     toggleSelectedPath,
     templateFilePath,
     setTemplateFilePath,
+    clearLibraryCache,
     syncFromBackend
   } = useMediaLibrary();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
@@ -91,6 +93,32 @@ export function DashboardPage() {
     }
   });
   const scanCancel = useMutation({ mutationFn: cancelScan });
+  const cacheClear = useMutation({
+    mutationFn: clearCurrentScanFiles,
+    onSuccess: (emptyScan) => {
+      clearLibraryCache();
+      setScanJobId(null);
+      setSkipped([]);
+      setSelectedFilePath("");
+      setSelectionAnchorPath("");
+      setContextMenu(null);
+      try {
+        window.sessionStorage.removeItem("mkvo.web.renameState");
+        window.sessionStorage.removeItem("mkvo.web.trackPropertiesConfiguration");
+      } catch {
+        // In-memory and backend state are already cleared.
+      }
+      queryClient.removeQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === "string" && ["scan-job", "operation-job", "propedit-template", "library-cache-job", "library-artwork", "library-catalog"].includes(key);
+        }
+      });
+      queryClient.setQueryData(["current-scan-files"], emptyScan);
+      setActionStatus("UI cache cleared. Your scan sources and settings were kept.");
+    },
+    onError: (error) => setActionStatus(error instanceof Error ? error.message : "UI cache could not be cleared.")
+  });
   const scanJob = useQuery({
     queryKey: ["scan-job", scanJobId],
     queryFn: () => getScanJob(scanJobId!),
@@ -546,6 +574,15 @@ export function DashboardPage() {
               Scan
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => cacheClear.mutate()}
+            disabled={isScanning || cacheClear.isPending}
+            className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+          >
+            {cacheClear.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Trash2 size={15} />}
+            {cacheClear.isPending ? "Clearing UI Cache" : "Clear UI Cache"}
+          </button>
 
           {isScanning ? (
             <button
