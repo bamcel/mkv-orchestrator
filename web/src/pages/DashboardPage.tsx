@@ -9,6 +9,7 @@ import { useMediaLibrary } from "../state/MediaLibraryContext";
 
 const lastBrowsePathStorageKey = "mkvo.web.lastBrowsePath";
 const scanSourcesStorageKey = "mkvo.web.scanSources";
+const ignoredFoldersDraftStorageKey = "mkvo.web.ignoredFoldersDraft";
 type DashboardSortKey = "file" | "reader" | "codec" | "resolution" | "audio" | "subtitles" | "status";
 
 export function DashboardPage() {
@@ -48,8 +49,9 @@ export function DashboardPage() {
   // The scan request carries this list, so seeding it from a local constant
   // would silently override the folders configured in Settings on every scan.
   const settings = useQuery({ queryKey: ["settings"], queryFn: getWebSettings });
-  const [ignoredFolders, setIgnoredFolders] = useState("");
-  const [ignoredFoldersEdited, setIgnoredFoldersEdited] = useState(false);
+  const ignoredFoldersDraft = useRef(readSessionValue(ignoredFoldersDraftStorageKey));
+  const [ignoredFolders, setIgnoredFolders] = useState(ignoredFoldersDraft.current ?? "");
+  const [ignoredFoldersEdited, setIgnoredFoldersEdited] = useState(ignoredFoldersDraft.current !== null);
   const [skipped, setSkipped] = useState<string[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState<string>("");
   const [selectionAnchorPath, setSelectionAnchorPath] = useState("");
@@ -136,6 +138,26 @@ export function DashboardPage() {
     if (ignoredFoldersEdited || !configuredIgnoredFolders) return;
     setIgnoredFolders(configuredIgnoredFolders.join(", "));
   }, [configuredIgnoredFolders, ignoredFoldersEdited]);
+
+  // Keep an immediate tab-local draft so a refresh cannot discard typing, then
+  // persist the normalized list to settings after the user pauses.
+  useEffect(() => {
+    if (!ignoredFoldersEdited) return;
+    const timeout = window.setTimeout(async () => {
+      const values = parseIgnoredFolders(ignoredFolders);
+      try {
+        const saved = await saveWebSettings({ ignoredScanFolderNames: values });
+        window.sessionStorage.removeItem(ignoredFoldersDraftStorageKey);
+        ignoredFoldersDraft.current = null;
+        setIgnoredFoldersEdited(false);
+        queryClient.setQueryData(["settings"], saved);
+        queryClient.setQueryData(["web-settings"], saved);
+      } catch (error) {
+        setActionStatus(error instanceof Error ? error.message : "Ignored subfolders could not be saved.");
+      }
+    }, 500);
+    return () => window.clearTimeout(timeout);
+  }, [ignoredFolders, ignoredFoldersEdited, queryClient]);
 
   // A container has a mount to point at; a desktop has the whole machine, so
   // guidance that names /media is wrong there.
@@ -318,7 +340,7 @@ export function DashboardPage() {
     setScanJobId(null);
     scanStart.mutate({
       sources: activeSources,
-      ignoredFolderNames: ignoredFolders.split(/[\n,]/).map((item) => item.trim()).filter(Boolean),
+      ignoredFolderNames: parseIgnoredFolders(ignoredFolders),
       forceRefresh
     });
   }
@@ -578,12 +600,19 @@ export function DashboardPage() {
               Browse
             </button>
             <button
-              onClick={() => runScan(false)}
-              disabled={isScanning || !hasSources}
-              className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-2 text-sm font-semibold text-window transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled"
+              type="button"
+              onClick={() => isScanning ? cancelCurrentScan() : runScan(false)}
+              disabled={!hasSources || (isScanning && (!scanJobId || scanCancel.isPending || currentScanJob?.status === "Canceling"))}
+              className={["inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled", isScanning ? "border border-warning bg-button text-warning hover:bg-button-hover" : "bg-accent text-window hover:bg-accent-hover"].join(" ")}
             >
-              {isScanning ? <RefreshCw size={15} className="animate-spin" /> : <Search size={15} />}
-              Scan
+              {scanStart.isPending || scanCancel.isPending || currentScanJob?.status === "Canceling"
+                ? <RefreshCw size={15} className="animate-spin" />
+                : isScanning ? <X size={15} /> : <Search size={15} />}
+              {scanStart.isPending
+                ? "Starting Scan"
+                : scanCancel.isPending || currentScanJob?.status === "Canceling"
+                  ? "Canceling Scan"
+                  : isScanning ? "Cancel Scan" : "Scan"}
             </button>
           </div>
           <button
@@ -596,17 +625,6 @@ export function DashboardPage() {
             {cacheClear.isPending ? "Clearing UI Cache" : "Clear UI Cache"}
           </button>
 
-          {isScanning ? (
-            <button
-              type="button"
-              onClick={cancelCurrentScan}
-              disabled={scanCancel.isPending || currentScanJob?.status === "Canceling"}
-              className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
-            >
-              {currentScanJob?.status === "Canceling" ? "Canceling scan" : "Cancel Scan"}
-            </button>
-          ) : null}
-
           <label className="mt-4 block text-xs font-semibold text-muted" htmlFor="ignored-folders">Ignored Subfolders</label>
           <textarea
             id="ignored-folders"
@@ -614,6 +632,11 @@ export function DashboardPage() {
             onChange={(event) => {
               setIgnoredFoldersEdited(true);
               setIgnoredFolders(event.target.value);
+              try {
+                window.sessionStorage.setItem(ignoredFoldersDraftStorageKey, event.target.value);
+              } catch {
+                // The in-memory edit remains usable when storage is unavailable.
+              }
             }}
             rows={4}
             className="mt-2 w-full resize-none rounded-md border border-border bg-input px-3 py-2 text-sm text-text outline-none placeholder:text-subtle transition focus:border-accent"
@@ -924,6 +947,18 @@ function sourceDisplayName(path: string) {
 function normalizeCompareValue(value: string | null | undefined) {
   const clean = (value ?? "").trim();
   return clean.length === 0 ? "none" : clean.toLowerCase();
+}
+
+function readSessionValue(key: string) {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function parseIgnoredFolders(value: string) {
+  return value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
 }
 
 function audioChannelSummary(file: MediaFileRow) {

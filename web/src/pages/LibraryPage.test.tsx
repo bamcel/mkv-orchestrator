@@ -234,10 +234,16 @@ describe("Library poster workflow", () => {
     await user.click(screen.getByRole("button", { name: "Beta", exact: true }));
     expect(await screen.findByRole("button", { name: /open beta show library details/i })).toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: /rebuild selected library/i }));
+    await waitFor(() => expect(startScan).toHaveBeenCalledTimes(2));
+    expect(startScan).toHaveBeenLastCalledWith(expect.objectContaining({
+      sources: ["/media/beta"],
+      forceRefresh: false
+    }));
+
     await user.click(screen.getByRole("button", { name: "Alpha", exact: true }));
     expect(screen.getByRole("button", { name: /open alpha show library details/i })).toBeInTheDocument();
-    expect(startScan).toHaveBeenCalledTimes(1);
-    expect(startScan).toHaveBeenCalledWith(expect.objectContaining({
+    expect(startScan).toHaveBeenNthCalledWith(1, expect.objectContaining({
       sources: expect.arrayContaining(["/media/alpha", "/media/beta"]),
       forceRefresh: false
     }));

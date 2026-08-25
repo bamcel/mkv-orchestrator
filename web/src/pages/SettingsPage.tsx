@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown,
   ArrowUp,
@@ -45,8 +45,9 @@ const defaultRenameTemplates = [
   "{series} - {absolute:000} - {episodeTitle}"
 ];
 const defaultAudioNamePresets = ["English", "Japanese", "Commentary"];
-const defaultSubtitleNamePresets = ["English", "English Forced", "English SDH", "Dialogue", "Signs & Songs", "Commentary"];
-const defaultLanguagePresets = ["eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de"];
+const defaultSubtitleNamePresets = ["Dialogue", "English", "English Forced", "English SDH", "Signs & Songs", "Fansub"];
+const defaultLanguagePresets = ["eng", "jpn", "kor", "und"];
+const defaultIgnoredSubfolders = ["Backdrops", "Extras", "Featurettes", "OVAs", "Sample", "Samples", "Specials", "Trailer", "Trailers"];
 const autoSaveDelayMillis = 900;
 const savedSecretPlaceholder = "••••••••••••";
 
@@ -120,6 +121,7 @@ const themeColorOptions = [
 type ThemeColorName = typeof themeColorOptions[number]["name"];
 
 export function SettingsPage() {
+  const queryClient = useQueryClient();
   const backendTransport = getBackendTransport();
   const isDesktop = backendTransport === "tauri";
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
@@ -141,6 +143,7 @@ export function SettingsPage() {
   const [audioNamePresetsText, setAudioNamePresetsText] = useState("");
   const [subtitleNamePresetsText, setSubtitleNamePresetsText] = useState("");
   const [languagePresetsText, setLanguagePresetsText] = useState("");
+  const [ignoredSubfoldersText, setIgnoredSubfoldersText] = useState("");
   const [muxAudioDefaults, setMuxAudioDefaults] = useState("eng,jpn");
   const [muxSubtitleDefaults, setMuxSubtitleDefaults] = useState("eng");
   const [libraryRoots, setLibraryRoots] = useState<SourceRoot[]>([]);
@@ -179,6 +182,7 @@ export function SettingsPage() {
     setAudioNamePresetsText((webSettings.data.audioNamePresets ?? []).join("\n"));
     setSubtitleNamePresetsText((webSettings.data.subtitleNamePresets ?? []).join("\n"));
     setLanguagePresetsText((webSettings.data.languagePresets ?? []).join("\n"));
+    setIgnoredSubfoldersText((webSettings.data.ignoredScanFolderNames ?? []).join("\n"));
     setMuxAudioDefaults(webSettings.data.mkvMergeDefaultAudioLanguages || "eng,jpn");
     setMuxSubtitleDefaults(webSettings.data.mkvMergeDefaultSubtitleLanguages || "eng");
     const loadedRoots = webSettings.data.libraryRoots ?? [];
@@ -215,6 +219,7 @@ export function SettingsPage() {
     audioNamePresets: normalizeLineList(audioNamePresetsText),
     subtitleNamePresets: normalizeLineList(subtitleNamePresetsText),
     languagePresets: normalizeLineList(languagePresetsText),
+    ignoredScanFolderNames: normalizeLineList(ignoredSubfoldersText),
     mkvMergeDefaultAudioLanguages: muxAudioDefaults,
     mkvMergeDefaultSubtitleLanguages: muxSubtitleDefaults,
     defaultRoot: defaultDirectory.trim() || null,
@@ -246,6 +251,8 @@ export function SettingsPage() {
       if (automatic) setSettingsStatus("Saving changes...");
       const saved = await saveWebSettings(request);
       lastSavedFingerprint.current = settingsFingerprint(request);
+      queryClient.setQueryData(["web-settings"], saved);
+      queryClient.setQueryData(["settings"], saved);
 
       if (automatic) {
         setSettingsStatus("Settings saved automatically.");
@@ -270,6 +277,7 @@ export function SettingsPage() {
       setAudioNamePresetsText(saved.audioNamePresets.join("\n"));
       setSubtitleNamePresetsText(saved.subtitleNamePresets.join("\n"));
       setLanguagePresetsText(saved.languagePresets.join("\n"));
+      setIgnoredSubfoldersText(saved.ignoredScanFolderNames.join("\n"));
       setMuxAudioDefaults(saved.mkvMergeDefaultAudioLanguages);
       setMuxSubtitleDefaults(saved.mkvMergeDefaultSubtitleLanguages);
       setDefaultDirectory(saved.defaultRoot ?? "");
@@ -811,6 +819,7 @@ export function SettingsPage() {
                       setAudioNamePresetsText(defaultAudioNamePresets.join("\n"));
                       setSubtitleNamePresetsText(defaultSubtitleNamePresets.join("\n"));
                       setLanguagePresetsText(defaultLanguagePresets.join("\n"));
+                      setIgnoredSubfoldersText(defaultIgnoredSubfolders.join("\n"));
                       setMuxAudioDefaults("eng,jpn");
                       setMuxSubtitleDefaults("eng");
                     }}
@@ -824,6 +833,7 @@ export function SettingsPage() {
                   <PresetEditor label="Audio Name Presets" value={audioNamePresetsText} onChange={setAudioNamePresetsText} />
                   <PresetEditor label="Subtitle Name Presets" value={subtitleNamePresetsText} onChange={setSubtitleNamePresetsText} />
                   <PresetEditor label="Language Presets" value={languagePresetsText} onChange={setLanguagePresetsText} />
+                  <PresetEditor label="Ignored Subfolders" value={ignoredSubfoldersText} onChange={setIgnoredSubfoldersText} />
                 </div>
               </SettingsCard>
 
@@ -1308,6 +1318,7 @@ function settingsRequestFromSaved(settings: WebSettings): WebSettingsRequest {
     audioNamePresets: settings.audioNamePresets,
     subtitleNamePresets: settings.subtitleNamePresets,
     languagePresets: settings.languagePresets,
+    ignoredScanFolderNames: settings.ignoredScanFolderNames,
     mkvMergeDefaultAudioLanguages: settings.mkvMergeDefaultAudioLanguages,
     mkvMergeDefaultSubtitleLanguages: settings.mkvMergeDefaultSubtitleLanguages,
     defaultRoot: settings.defaultRoot,

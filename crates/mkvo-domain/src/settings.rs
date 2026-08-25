@@ -156,12 +156,12 @@ fn default_audio_name_presets() -> Vec<String> {
 
 fn default_subtitle_name_presets() -> Vec<String> {
     [
+        "Dialogue",
         "English",
         "English Forced",
         "English SDH",
-        "Dialogue",
         "Signs & Songs",
-        "Commentary",
+        "Fansub",
     ]
     .into_iter()
     .map(str::to_owned)
@@ -169,9 +169,7 @@ fn default_subtitle_name_presets() -> Vec<String> {
 }
 
 fn default_language_presets() -> Vec<String> {
-    [
-        "eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de",
-    ]
+    ["eng", "jpn", "kor", "und"]
     .into_iter()
     .map(str::to_owned)
     .collect()
@@ -565,14 +563,15 @@ mod tests {
         assert_eq!(
             presets.subtitle_name_presets,
             [
+                "Dialogue",
                 "English",
                 "English Forced",
                 "English SDH",
-                "Dialogue",
                 "Signs & Songs",
-                "Commentary"
+                "Fansub",
             ]
         );
+        assert_eq!(presets.language_presets, ["eng", "jpn", "kor", "und"]);
     }
 
     #[test]

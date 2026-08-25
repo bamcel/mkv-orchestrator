@@ -29,16 +29,20 @@ type LibraryViewSnapshot = {
   artworkGeneration: number;
 };
 
+type PersistedLibraryViewSnapshot = {
+  signature: string;
+  snapshot: LibraryViewSnapshot;
+};
+
 type PendingTitleRebuild = {
   jobId: string;
   sourceId: string;
   title: LibraryTitle;
 };
 
-// Library audits can contain hundreds of detailed file rows, so keeping them
-// in memory avoids browser-storage size limits. The module lives for the full
-// UI session, including route changes, and a server/page restart naturally
-// starts clean.
+// Library audits can contain hundreds of detailed file rows. Keep the hot copy
+// in memory and mirror completed snapshots to IndexedDB, which avoids the small
+// synchronous Web Storage quota while surviving navigation and browser reloads.
 const libraryViewCache = new Map<string, LibraryViewSnapshot>();
 
 export function LibraryPage() {
@@ -160,6 +164,8 @@ export function LibraryPage() {
       void buildLibraryAudit(currentScanJob.files).then((response) => {
         const snapshot = mergeTitleSnapshot(pending.sourceId, pending.title, currentScanJob.files, response);
         libraryViewCache.set(pending.sourceId, snapshot);
+        const source = sourceOptions.find((candidate) => candidate.id === pending.sourceId);
+        if (source) void persistLibrarySnapshot(source.id, librarySnapshotSignature(source, webSettings.data), snapshot);
         if (mounted.current && selectedSourceRef.current === pending.sourceId) {
           setAuditResult(snapshot.auditResult);
           setLibraryFiles(snapshot.libraryFiles);
@@ -180,6 +186,7 @@ export function LibraryPage() {
         const response = await buildLibraryAudit(files);
         const snapshot = librarySnapshot(source.id, files, response);
         libraryViewCache.set(source.id, snapshot);
+        void persistLibrarySnapshot(source.id, librarySnapshotSignature(source, webSettings.data), snapshot);
         if (mounted.current && selectedSourceRef.current === source.id) {
           setAuditResult(snapshot.auditResult);
           setLibraryFiles(snapshot.libraryFiles);
@@ -230,7 +237,7 @@ export function LibraryPage() {
   }, [contextMenu]);
 
   useEffect(() => {
-    if (sourceOptions.length === 0) return;
+    if (sourceOptions.length === 0 || !webSettings.data) return;
     for (const source of sourceOptions) {
       if (!source.serverId || !source.libraryName) continue;
       void queryClient.prefetchQuery({
@@ -243,13 +250,31 @@ export function LibraryPage() {
         gcTime: Number.POSITIVE_INFINITY
       });
     }
-    const key = sourceOptions
-      .map((source) => `${source.id}:${source.paths.map(normalizePath).join("|")}`)
-      .join(";");
-    if (automaticBuildKey.current === key) return;
-    automaticBuildKey.current = key;
-    if (sourceOptions.every((source) => libraryViewCache.has(source.id))) return;
-    startLibraryBuild(false);
+    let canceled = false;
+    void (async () => {
+      for (const source of sourceOptions) {
+        if (libraryViewCache.has(source.id)) continue;
+        const stored = await loadLibrarySnapshot(source.id);
+        if (!canceled && stored?.signature === librarySnapshotSignature(source, webSettings.data)) {
+          libraryViewCache.set(source.id, stored.snapshot);
+        }
+      }
+      if (canceled) return;
+      const restored = libraryViewCache.get(selectedSourceRef.current);
+      if (restored) {
+        setAuditResult(restored.auditResult);
+        setLibraryFiles(restored.libraryFiles);
+        setArtworkGeneration(restored.artworkGeneration);
+        setStatusText(restored.statusText);
+      }
+      const missing = sourceOptions.filter((source) => !libraryViewCache.has(source.id));
+      if (missing.length === 0) return;
+      const key = missing.map((source) => librarySnapshotSignature(source, webSettings.data)).join(";");
+      if (automaticBuildKey.current === key) return;
+      automaticBuildKey.current = key;
+      startLibraryBuild(false, missing);
+    })();
+    return () => { canceled = true; };
   }, [sourceOptions, webSettings.data?.ignoredScanFolderNames, queryClient]);
 
   const titles = useMemo(
@@ -296,11 +321,20 @@ export function LibraryPage() {
     startLibraryBuild(forceRefresh);
   }
 
-  function startLibraryBuild(forceRefresh: boolean) {
-    buildSourcesRef.current = sourceOptions;
-    setStatusText("Loading all configured libraries...");
+  function runSelectedLibraryBuild(forceRefresh: boolean) {
+    if (!selectedSourceOption) {
+      setStatusText("Choose a library first.");
+      return;
+    }
+    setSelectedTitleId("");
+    startLibraryBuild(forceRefresh, [selectedSourceOption]);
+  }
+
+  function startLibraryBuild(forceRefresh: boolean, sources = sourceOptions) {
+    buildSourcesRef.current = sources;
+    setStatusText(sources.length === 1 ? `Loading ${sources[0].name}...` : "Loading all configured libraries...");
     scanStart.mutate({
-      sources: uniquePaths(sourceOptions.flatMap((source) => source.paths)),
+      sources: uniquePaths(sources.flatMap((source) => source.paths)),
       ignoredFolderNames: webSettings.data?.ignoredScanFolderNames ?? [],
       forceRefresh
     });
@@ -362,8 +396,9 @@ export function LibraryPage() {
                 <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-subtle" />
                 <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Filter titles..." aria-label="Filter library titles" className="h-9 w-56 rounded-md border border-border bg-input pl-9 pr-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent" />
               </label>
-              <button type="button" onClick={() => runBuildOverview(false)} disabled={isBusy || !selectedSourceOption} className="h-9 rounded-md bg-accent px-4 text-sm font-semibold text-window disabled:bg-button disabled:text-disabled">Rebuild Libraries</button>
-              <button type="button" onClick={() => runBuildOverview(true)} disabled={isBusy || !selectedSourceOption} className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled"><RefreshCw size={14} className={isBusy ? "animate-spin" : ""} /> Refresh</button>
+              <button type="button" onClick={() => runSelectedLibraryBuild(false)} disabled={isBusy || !selectedSourceOption} className="h-9 rounded-md bg-accent px-4 text-sm font-semibold text-window disabled:bg-button disabled:text-disabled">Rebuild Selected Library</button>
+              <button type="button" onClick={() => runBuildOverview(false)} disabled={isBusy || !selectedSourceOption} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">Rebuild All</button>
+              <button type="button" onClick={() => runSelectedLibraryBuild(true)} disabled={isBusy || !selectedSourceOption} className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled"><RefreshCw size={14} className={isBusy ? "animate-spin" : ""} /> Force Refresh Selected</button>
               {isBusy ? <button type="button" onClick={() => scanJobId && scanCancel.mutate(scanJobId)} disabled={scanCancel.isPending} className="h-9 rounded-md border border-warning px-3 text-sm font-semibold text-warning">Cancel</button> : null}
             </div>
           </div>
@@ -645,4 +680,62 @@ function parentPath(path: string) {
   const clean = path.replace(/[\\/]+$/, "");
   const index = Math.max(clean.lastIndexOf("/"), clean.lastIndexOf("\\"));
   return index > 0 ? clean.slice(0, index) : "";
+}
+
+const librarySnapshotDatabaseName = "mkvo-library-cache";
+const librarySnapshotStoreName = "snapshots";
+
+function librarySnapshotSignature(source: LibrarySourceOption, settings: WebSettings | undefined) {
+  const paths = source.paths.map(normalizePath).sort();
+  const ignored = [...(settings?.ignoredScanFolderNames ?? [])].map((value) => value.trim().toLocaleLowerCase()).filter(Boolean).sort();
+  return JSON.stringify({ id: source.id, paths, ignored });
+}
+
+function openLibrarySnapshotDatabase(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === "undefined") return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const request = indexedDB.open(librarySnapshotDatabaseName, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(librarySnapshotStoreName)) {
+        request.result.createObjectStore(librarySnapshotStoreName);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => resolve(null);
+    request.onblocked = () => resolve(null);
+  });
+}
+
+async function loadLibrarySnapshot(sourceId: string): Promise<PersistedLibraryViewSnapshot | null> {
+  const database = await openLibrarySnapshotDatabase();
+  if (!database) return null;
+  return new Promise((resolve) => {
+    const transaction = database.transaction(librarySnapshotStoreName, "readonly");
+    const request = transaction.objectStore(librarySnapshotStoreName).get(sourceId);
+    request.onsuccess = () => resolve((request.result as PersistedLibraryViewSnapshot | undefined) ?? null);
+    request.onerror = () => resolve(null);
+    transaction.oncomplete = () => database.close();
+    transaction.onabort = () => database.close();
+  });
+}
+
+async function persistLibrarySnapshot(sourceId: string, signature: string, snapshot: LibraryViewSnapshot): Promise<void> {
+  const database = await openLibrarySnapshotDatabase();
+  if (!database) return;
+  await new Promise<void>((resolve) => {
+    const transaction = database.transaction(librarySnapshotStoreName, "readwrite");
+    transaction.objectStore(librarySnapshotStoreName).put({ signature, snapshot } satisfies PersistedLibraryViewSnapshot, sourceId);
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onabort = () => {
+      database.close();
+      resolve();
+    };
+  });
 }

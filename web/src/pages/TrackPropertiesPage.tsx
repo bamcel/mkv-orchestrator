@@ -22,10 +22,10 @@ type TitleMode = "keep" | "remove" | "file" | "custom";
 type TrackType = "audio" | "subtitle";
 
 const audioNamePresets = ["English", "Japanese", "Commentary"];
-const subtitleNamePresets = ["English", "English Forced", "English SDH", "Dialogue", "Signs & Songs", "Commentary"];
-const languagePresets = ["eng", "jpn", "spa", "fre", "ger", "und", "en", "ja", "es", "fr", "de"];
+const subtitleNamePresets = ["Dialogue", "English", "English Forced", "English SDH", "Signs & Songs", "Fansub"];
+const languagePresets = ["eng", "jpn", "kor", "und"];
 const configurationStorageKey = "mkvo.web.trackPropertiesConfiguration";
-const configurationVersion = 4;
+const configurationVersion = 5;
 const metadataTrackNameValue = "__mkvo_metadata_track_name__";
 
 type StoredTrackPropertiesConfiguration = {
@@ -72,9 +72,9 @@ export function TrackPropertiesPage() {
   const [audioTracks, setAudioTracks] = useState<PropEditTrackConfigRow[]>([]);
   const [subtitleTracks, setSubtitleTracks] = useState<PropEditTrackConfigRow[]>([]);
   const [defaultAudio, setDefaultAudio] = useState("Keep existing");
-  const [forcedAudio, setForcedAudio] = useState("Keep existing");
+  const [forcedAudio, setForcedAudio] = useState("None");
   const [defaultSubtitle, setDefaultSubtitle] = useState("Keep existing");
-  const [forcedSubtitle, setForcedSubtitle] = useState("Keep existing");
+  const [forcedSubtitle, setForcedSubtitle] = useState("None");
   const [customTrackKeys, setCustomTrackKeys] = useState<Set<string>>(new Set());
   const [previewResult, setPreviewResult] = useState<PropEditPreviewResponse | null>(null);
   const [statusText, setStatusText] = useState("Load scanned files from Dashboard, then select a template.");
@@ -125,9 +125,9 @@ export function TrackPropertiesPage() {
     setAudioTracks(canRestore ? stored!.audioTracks : loadedTemplate.audioTracks);
     setSubtitleTracks(canRestore ? stored!.subtitleTracks : loadedTemplate.subtitleTracks);
     setDefaultAudio(canRestore ? stored!.defaultAudio : loadedTemplate.defaultAudio || "Keep existing");
-    setForcedAudio(canRestore ? stored!.forcedAudio : loadedTemplate.forcedAudio || "Keep existing");
+    setForcedAudio(canRestore ? stored!.forcedAudio : loadedTemplate.forcedAudio || "None");
     setDefaultSubtitle(canRestore ? stored!.defaultSubtitle : loadedTemplate.defaultSubtitle || "Keep existing");
-    setForcedSubtitle(canRestore ? stored!.forcedSubtitle : loadedTemplate.forcedSubtitle || "Keep existing");
+    setForcedSubtitle(canRestore ? stored!.forcedSubtitle : loadedTemplate.forcedSubtitle || "None");
     setCustomTrackKeys(new Set(canRestore ? stored!.customTrackKeys : []));
     setContainerMode(canRestore ? stored!.containerMode : "keep");
     setVideoMode(canRestore ? stored!.videoMode : "keep");

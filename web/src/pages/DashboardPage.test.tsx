@@ -330,6 +330,48 @@ describe("Dashboard ignored folders", () => {
     await waitFor(() => expect(field).toHaveValue("MyOwnFolder"));
   });
 
+  it("restores an ignored-folder edit when the page reloads before saving finishes", async () => {
+    const firstRender = renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve(emptyScan),
+      getWebSettings: () => Promise.resolve(settings({ ignoredScanFolderNames: ["Extras"] })),
+      saveWebSettings: () => new Promise(() => undefined)
+    });
+
+    const field = await screen.findByLabelText(/ignored subfolders/i);
+    fireEvent.change(field, { target: { value: "Backdrops, OVAs, Specials" } });
+    firstRender.unmount();
+
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve(emptyScan),
+      getWebSettings: () => Promise.resolve(settings({ ignoredScanFolderNames: ["Extras"] })),
+      saveWebSettings: () => new Promise(() => undefined)
+    });
+
+    expect(await screen.findByLabelText(/ignored subfolders/i)).toHaveValue("Backdrops, OVAs, Specials");
+  });
+
+  it("persists ignored-folder edits to the shared settings", async () => {
+    const saveWebSettings = vi.fn().mockImplementation((request) =>
+      Promise.resolve(settings({ ignoredScanFolderNames: request.ignoredScanFolderNames ?? [] }))
+    );
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve(emptyScan),
+      getWebSettings: () => Promise.resolve(settings({ ignoredScanFolderNames: ["Extras"] })),
+      saveWebSettings
+    });
+
+    fireEvent.change(await screen.findByLabelText(/ignored subfolders/i), {
+      target: { value: "Backdrops, OVAs, Specials" }
+    });
+
+    await waitFor(() => expect(saveWebSettings).toHaveBeenCalledWith({
+      ignoredScanFolderNames: ["Backdrops", "OVAs", "Specials"]
+    }), { timeout: 2000 });
+  });
+
   it("sends the configured folders with the scan request", async () => {
     const user = userEvent.setup();
     const startScan = vi.fn().mockResolvedValue({
@@ -385,6 +427,67 @@ describe("Dashboard ignored folders", () => {
     await waitFor(() => expect(startScan).toHaveBeenCalled());
     expect(startScan.mock.calls[0][0].ignoredFolderNames).toEqual(["Extras", "Samples"]);
     expect(startScan.mock.calls[0][0].forceRefresh).toBe(false);
+  });
+
+  it("turns the Scan button into the cancel control while scanning", async () => {
+    const user = userEvent.setup();
+    window.sessionStorage.setItem("mkvo.web.scanSources", JSON.stringify(["/media/Show"]));
+    const now = new Date().toISOString();
+    const cancelScan = vi.fn().mockResolvedValue({
+      id: "job-1",
+      status: "Canceled" as const,
+      createdUtc: now,
+      startedUtc: now,
+      completedUtc: now,
+      currentSource: "/media/Show",
+      completed: 0,
+      total: 1,
+      files: [],
+      skipped: [],
+      summary: { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 },
+      error: ""
+    });
+
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve(emptyScan),
+      getWebSettings: () => Promise.resolve(settings()),
+      startScan: () => Promise.resolve({
+        id: "job-1",
+        status: "Queued" as const,
+        createdUtc: now,
+        startedUtc: null,
+        completedUtc: null,
+        currentSource: "",
+        completed: 0,
+        total: 1,
+        files: [],
+        skipped: [],
+        summary: { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 },
+        error: ""
+      }),
+      getScanJob: () => Promise.resolve({
+        id: "job-1",
+        status: "Running" as const,
+        createdUtc: now,
+        startedUtc: now,
+        completedUtc: null,
+        currentSource: "/media/Show",
+        completed: 0,
+        total: 1,
+        files: [],
+        skipped: [],
+        summary: { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 },
+        error: ""
+      }),
+      cancelScan
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^scan$/i }));
+    const cancelButton = await screen.findByRole("button", { name: /cancel scan/i });
+    expect(screen.getAllByRole("button", { name: /cancel scan/i })).toHaveLength(1);
+    await user.click(cancelButton);
+    await waitFor(() => expect(cancelScan).toHaveBeenCalledWith("job-1"));
   });
 
   it("can force a rescan of sources that were already scanned", async () => {

@@ -50,6 +50,29 @@ beforeEach(() => {
 });
 
 describe("Track Properties template synchronization", () => {
+  it("defaults audio and subtitle forced-track selections to None", async () => {
+    const scannedFile = file("Episode 01.mkv");
+    const loadedTemplate = template(scannedFile.path);
+    loadedTemplate.forcedAudio = "";
+    loadedTemplate.forcedSubtitle = "";
+
+    renderWithBackend(
+      <MediaLibraryProvider>
+        <TrackPropertiesPage />
+      </MediaLibraryProvider>,
+      {
+        getCurrentScanFiles: () => Promise.resolve({ updatedUtc: "2026-08-25T20:00:00Z", files: [scannedFile], selectedPaths: [scannedFile.path], summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 0 } }),
+        getWebSettings: () => Promise.resolve({ audioNamePresets: [], subtitleNamePresets: [], languagePresets: [] } as unknown as WebSettings),
+        loadPropEditTemplate: () => Promise.resolve(loadedTemplate)
+      }
+    );
+
+    await screen.findByText(`Template loaded: ${scannedFile.fileName}`);
+    const forcedTrackSelections = screen.getAllByRole("combobox", { name: "Set forced track" });
+    expect(forcedTrackSelections).toHaveLength(2);
+    forcedTrackSelections.forEach((selection) => expect(selection).toHaveValue("None"));
+  });
+
   it("reloads its track template when Dashboard changes the shared template file", async () => {
     const user = userEvent.setup();
     const first = file("Episode 01.mkv");

@@ -421,14 +421,17 @@ describe("Settings defaults", () => {
     const request = saveWebSettings.mock.calls.at(-1)?.[0];
     expect(request.audioNamePresets).toEqual(["English", "Japanese", "Commentary"]);
     expect(request.subtitleNamePresets).toEqual([
+      "Dialogue",
       "English",
       "English Forced",
       "English SDH",
-      "Dialogue",
       "Signs & Songs",
-      "Commentary"
+      "Fansub",
     ]);
-    expect(request.languagePresets).toContain("eng");
+    expect(request.languagePresets).toEqual(["eng", "jpn", "kor", "und"]);
+    expect(request.ignoredScanFolderNames).toEqual([
+      "Backdrops", "Extras", "Featurettes", "OVAs", "Sample", "Samples", "Specials", "Trailer", "Trailers"
+    ]);
     expect(request.mkvMergeDefaultAudioLanguages).toBe("eng,jpn");
     expect(request.mkvMergeDefaultSubtitleLanguages).toBe("eng");
   });
