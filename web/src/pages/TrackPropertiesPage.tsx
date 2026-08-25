@@ -5,7 +5,6 @@ import {
   buildPropEditPreview,
   cancelOperationJob,
   getCurrentScanFiles,
-  getOperationJob,
   getWebSettings,
   PropEditPreviewRequest,
   PropEditPreviewResponse,
@@ -17,6 +16,7 @@ import { SectionHeader } from "../components/SectionHeader";
 import { PreviewSummaryModal } from "../components/PreviewSummaryModal";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 import { useInvalidatePropEditTemplate, usePropEditTemplate } from "../state/propEditTemplate";
+import { useOperationJob } from "../state/OperationJobContext";
 
 type TitleMode = "keep" | "remove" | "file" | "custom";
 type TrackType = "audio" | "subtitle";
@@ -58,6 +58,7 @@ function readStoredConfiguration(): StoredTrackPropertiesConfiguration | null {
 
 export function TrackPropertiesPage() {
   const { files, templateFilePath, setTemplateFilePath, syncFromBackend } = useMediaLibrary();
+  const operation = useOperationJob();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const storedConfiguration = useRef(readStoredConfiguration());
@@ -79,7 +80,6 @@ export function TrackPropertiesPage() {
   const [previewResult, setPreviewResult] = useState<PropEditPreviewResponse | null>(null);
   const [statusText, setStatusText] = useState("Load scanned files from Dashboard, then select a template.");
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
-  const [applyJobId, setApplyJobId] = useState<string | null>(null);
   const [configurationReady, setConfigurationReady] = useState(false);
 
   useEffect(() => {
@@ -203,26 +203,15 @@ export function TrackPropertiesPage() {
   const apply = useMutation({
     mutationFn: startPropEditApply,
     onSuccess: (job) => {
-      setApplyJobId(job.id);
+      operation.trackJob(job.id, "Track Properties");
       setStatusText(`Applying ${job.total} track property edit(s)...`);
     },
     onError: (error) => setStatusText(error instanceof Error ? error.message : "Apply failed.")
   });
 
-  const applyJob = useQuery({
-    queryKey: ["operation-job", applyJobId],
-    queryFn: () => getOperationJob(applyJobId!),
-    enabled: applyJobId !== null,
-    refetchInterval: (query) => {
-      const job = query.state.data;
-      return job && ["Completed", "Failed", "Skipped", "Canceled"].includes(job.status) ? false : 1000;
-    }
-  });
-
   const cancelApply = useMutation({ mutationFn: cancelOperationJob });
-  const runningJob = applyJob.data;
-  const isApplying = apply.isPending
-    || (applyJobId !== null && runningJob !== undefined && !["Completed", "Failed", "Skipped", "Canceled"].includes(runningJob.status));
+  const runningJob = operation.activeOperation?.label === "Track Properties" ? operation.job : undefined;
+  const isApplying = apply.isPending || (operation.activeOperation?.label === "Track Properties" && operation.isRunning);
 
   useEffect(() => {
     if (!runningJob) return;
@@ -244,7 +233,6 @@ export function TrackPropertiesPage() {
       setStatusText(runningJob.error || "Apply failed.");
     }
 
-    setApplyJobId(null);
     currentScan.refetch().then((result) => {
       if (result.data) syncFromBackend(result.data);
     });
@@ -299,8 +287,8 @@ export function TrackPropertiesPage() {
   }
 
   function cancelRunningApply() {
-    if (!applyJobId) return;
-    cancelApply.mutate(applyJobId);
+    if (!operation.activeOperation || operation.activeOperation.label !== "Track Properties") return;
+    cancelApply.mutate(operation.activeOperation.id);
     setStatusText("Canceling property edit job...");
   }
 

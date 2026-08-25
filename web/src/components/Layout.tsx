@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getStatus } from "../api";
 import mkvoIcon from "../assets/mkvo-icon-purple.png";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
+import { useOperationJob } from "../state/OperationJobContext";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: Activity },
@@ -19,6 +20,7 @@ export function Layout() {
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const missingTools = status.data?.tools.filter((tool) => !tool.available).length ?? 0;
   const { selectionError } = useMediaLibrary();
+  const operation = useOperationJob();
 
   return (
     <div className="h-screen overflow-hidden bg-window text-text">
@@ -74,8 +76,8 @@ export function Layout() {
 
           <div className="mt-auto rounded-lg border border-border bg-panel p-3">
             <div className="text-[0.6875rem] font-semibold uppercase tracking-wide text-subtle">Status</div>
-            <div className="mt-2 text-sm font-medium text-success">
-              {status.isLoading ? "checking tools" : missingTools === 0 ? "ready" : `${missingTools} tool issue(s)`}
+            <div className={["mt-2 text-sm font-medium", operation.isRunning ? "text-accent" : "text-success"].join(" ")} title={operation.statusText ?? undefined}>
+              {operation.statusText ?? (status.isLoading ? "checking tools" : missingTools === 0 ? "ready" : `${missingTools} tool issue(s)`)}
             </div>
             <div className="mt-3 flex items-center gap-2 truncate text-xs text-muted">
               <FolderOpen size={14} />

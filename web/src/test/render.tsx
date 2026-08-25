@@ -6,6 +6,7 @@ import { render } from "@testing-library/react";
 import type { BackendClient } from "../backend/client";
 import { createMockBackendClient } from "../backend/mockClient";
 import { setBackendClient } from "../backend/runtime";
+import { OperationJobProvider } from "../state/OperationJobContext";
 
 /**
  * Render a page against a mock backend.
@@ -27,7 +28,7 @@ export function renderWithBackend(ui: ReactElement, overrides: Partial<BackendCl
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>{children}</MemoryRouter>
+        <MemoryRouter><OperationJobProvider>{children}</OperationJobProvider></MemoryRouter>
       </QueryClientProvider>
     );
   }

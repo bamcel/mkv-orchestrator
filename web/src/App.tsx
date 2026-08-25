@@ -9,10 +9,12 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { TrackPropertiesPage } from "./pages/TrackPropertiesPage";
 import { MediaLibraryProvider } from "./state/MediaLibraryContext";
 import { PropEditTemplateWarmer } from "./state/propEditTemplate";
+import { OperationJobProvider } from "./state/OperationJobContext";
 
 export default function App() {
   return (
     <MediaLibraryProvider>
+      <OperationJobProvider>
       {/* Reads the track layout as soon as a scan lands, so Track Properties
           opens with it rather than starting the read on arrival. */}
       <PropEditTemplateWarmer />
@@ -28,6 +30,7 @@ export default function App() {
           <Route path="/logs" element={<LogsPage />} />
         </Route>
       </Routes>
+      </OperationJobProvider>
     </MediaLibraryProvider>
   );
 }

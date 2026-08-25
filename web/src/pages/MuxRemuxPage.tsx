@@ -5,7 +5,6 @@ import {
   buildMuxPreview,
   cancelOperationJob,
   getCurrentScanFiles,
-  getOperationJob,
   getWebSettings,
   MuxPreviewRequest,
   MuxPreviewResponse,
@@ -15,11 +14,13 @@ import { PreviewSummaryModal } from "../components/PreviewSummaryModal";
 import { SectionHeader } from "../components/SectionHeader";
 import { SortableColumnHeader, type SortDirection } from "../components/SortableColumnHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
+import { useOperationJob } from "../state/OperationJobContext";
 
 type FileSortKey = "file" | "audio" | "subtitles";
 
 export function MuxRemuxPage() {
   const { files, selectedPaths, setSelectedPaths, toggleSelectedPath, syncFromBackend, isWorkingView } = useMediaLibrary();
+  const operation = useOperationJob();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
   const [activeTab, setActiveTab] = useState<"remux" | "subtitles">("remux");
@@ -48,7 +49,6 @@ export function MuxRemuxPage() {
   const [statusText, setStatusText] = useState("Load scanned files from Dashboard, then build a preview.");
   const [settingsDefaultsApplied, setSettingsDefaultsApplied] = useState(false);
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
-  const [applyJobId, setApplyJobId] = useState<string | null>(null);
   const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number } | null>(null);
   const [highlightedPaths, setHighlightedPaths] = useState<string[]>([]);
   const [selectionAnchorPath, setSelectionAnchorPath] = useState("");
@@ -123,26 +123,15 @@ export function MuxRemuxPage() {
   const apply = useMutation({
     mutationFn: startMuxApply,
     onSuccess: (job) => {
-      setApplyJobId(job.id);
+      operation.trackJob(job.id, "MKV Operations");
       setStatusText(`Applying ${job.total} MKV operation(s)...`);
     },
     onError: (error) => setStatusText(error instanceof Error ? error.message : "Apply failed.")
   });
 
-  const applyJob = useQuery({
-    queryKey: ["operation-job", applyJobId],
-    queryFn: () => getOperationJob(applyJobId!),
-    enabled: applyJobId !== null,
-    refetchInterval: (query) => {
-      const job = query.state.data;
-      return job && ["Completed", "Failed", "Skipped", "Canceled"].includes(job.status) ? false : 1000;
-    }
-  });
-
   const cancelApply = useMutation({ mutationFn: cancelOperationJob });
-  const runningJob = applyJob.data;
-  const isApplying = apply.isPending
-    || (applyJobId !== null && runningJob !== undefined && !["Completed", "Failed", "Skipped", "Canceled"].includes(runningJob.status));
+  const runningJob = operation.activeOperation?.label === "MKV Operations" ? operation.job : undefined;
+  const isApplying = apply.isPending || (operation.activeOperation?.label === "MKV Operations" && operation.isRunning);
 
   useEffect(() => {
     if (!runningJob) return;
@@ -160,7 +149,6 @@ export function MuxRemuxPage() {
       setStatusText(runningJob.error || "Apply failed.");
     }
 
-    setApplyJobId(null);
     currentScan.refetch().then((result) => {
       if (result.data) syncFromBackend(result.data);
     });
@@ -268,8 +256,8 @@ export function MuxRemuxPage() {
   }
 
   function cancelRunningApply() {
-    if (!applyJobId) return;
-    cancelApply.mutate(applyJobId);
+    if (!operation.activeOperation || operation.activeOperation.label !== "MKV Operations") return;
+    cancelApply.mutate(operation.activeOperation.id);
     setStatusText("Canceling MKV operation job...");
   }
 

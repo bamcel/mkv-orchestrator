@@ -33,6 +33,44 @@ beforeEach(() => {
 });
 
 describe("MKV Operations file selection", () => {
+  it("restores a running operation after navigating away and back", async () => {
+    const files = [mediaFile("Episode 01.mkv")];
+    window.sessionStorage.setItem("mkvo.web.activeOperationJob", JSON.stringify({ id: "mux-job", label: "MKV Operations" }));
+
+    renderWithBackend(
+      <MediaLibraryProvider><MuxRemuxPage /></MediaLibraryProvider>,
+      {
+        getCurrentScanFiles: () => Promise.resolve({
+          updatedUtc: "2026-08-25T20:00:00Z",
+          files,
+          selectedPaths: files.map((file) => file.path),
+          summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 0 }
+        }),
+        getWebSettings: () => Promise.resolve({ mkvMergeDefaultAudioLanguages: "eng", mkvMergeDefaultSubtitleLanguages: "eng" } as WebSettings),
+        getOperationJob: () => Promise.resolve({
+          id: "mux-job",
+          kind: "Remux",
+          status: "Running",
+          createdUtc: "2026-08-25T20:00:00Z",
+          startedUtc: "2026-08-25T20:00:01Z",
+          completedUtc: null,
+          completed: 10,
+          failed: 0,
+          skipped: 0,
+          total: 283,
+          currentFile: "Episode 11.mkv",
+          currentFilePercent: 50,
+          lines: [],
+          muxResult: null,
+          propEditResult: null,
+          error: ""
+        })
+      }
+    );
+
+    expect(await screen.findByText(/Applying 10\/283.*Episode 11\.mkv 50%/i)).toBeInTheDocument();
+  });
+
   it("selects every current file by default and offers select-all controls on right click", async () => {
     const user = userEvent.setup();
     const files = [mediaFile("Episode 01.mkv"), mediaFile("Episode 02.mkv")];
