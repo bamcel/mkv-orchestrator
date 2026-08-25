@@ -88,6 +88,31 @@ describe("MKV Operations file selection", () => {
     await user.click(screen.getByRole("menuitem", { name: "Select highlighted rows" }));
     await waitFor(() => expect(checkboxes[0]).toBeChecked());
   });
+
+  it("sorts the visible file rows while preserving path-based selection", async () => {
+    const user = userEvent.setup();
+    const files = [mediaFile("Episode 10.mkv"), mediaFile("Episode 2.mkv")];
+    renderWithBackend(
+      <MediaLibraryProvider><MuxRemuxPage /></MediaLibraryProvider>,
+      {
+        getCurrentScanFiles: () => Promise.resolve({
+          updatedUtc: "2026-08-25T20:00:00Z",
+          files,
+          selectedPaths: files.map((file) => file.path),
+          summary: { total: 2, mkv: 2, mp4: 0, failed: 0, cached: 0 }
+        }),
+        getWebSettings: () => Promise.resolve({ mkvMergeDefaultAudioLanguages: "eng", mkvMergeDefaultSubtitleLanguages: "eng" } as WebSettings),
+        setFileSelection: (selectedPaths) => Promise.resolve({ updatedUtc: "2026-08-25T20:00:00Z", files, selectedPaths, summary: { total: 2, mkv: 2, mp4: 0, failed: 0, cached: 0 } })
+      }
+    );
+
+    const table = await screen.findByLabelText("MKV Operations file selection");
+    const rows = () => within(table).getAllByRole("row").slice(1);
+    await waitFor(() => expect(rows()[0]).toHaveTextContent("Episode 2.mkv"));
+    await user.click(within(table).getByRole("button", { name: "Sort by File" }));
+    expect(rows()[0]).toHaveTextContent("Episode 10.mkv");
+    within(table).getAllByRole("checkbox").forEach((checkbox) => expect(checkbox).toBeChecked());
+  });
 });
 
 describe("MKV Operations removed-track preview", () => {

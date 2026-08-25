@@ -1,11 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { DashboardPage } from "./DashboardPage";
 import { MediaLibraryProvider } from "../state/MediaLibraryContext";
 import { renderWithBackend } from "../test/render";
-import type { WebSettings } from "../generated/contracts";
+import type { MediaFileRow, WebSettings } from "../generated/contracts";
+
+function mediaFile(name: string, audioSummary = "eng x1"): MediaFileRow {
+  return {
+    path: `/media/Show/${name}`,
+    fileName: name,
+    extension: ".mkv",
+    status: "Scanned",
+    reader: "mkvmerge",
+    codec: "HEVC/H.265",
+    resolution: "1920x1080",
+    bitDepth: "10",
+    hdr: "None",
+    videoSummary: "HEVC/H.265",
+    audioSummary,
+    subtitleSummary: "eng x1",
+    attachmentSummary: "None",
+    tracks: [],
+    attachments: []
+  };
+}
 
 function settings(overrides: Partial<WebSettings> = {}): WebSettings {
   return {
@@ -174,6 +194,24 @@ describe("Dashboard scan source labels", () => {
       expect(screen.queryByRole("row", { name: /Episode 01\.mkv/i })).not.toBeInTheDocument();
       expect(screen.queryByRole("row", { name: /Episode 02\.mkv/i })).not.toBeInTheDocument();
     });
+  });
+});
+
+describe("Dashboard file sorting", () => {
+  it("sorts File Info rows in both directions without changing their identity", async () => {
+    const user = userEvent.setup();
+    const files = [mediaFile("Episode 10.mkv"), mediaFile("Episode 2.mkv")];
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve({ ...emptyScan, files }),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    const table = await screen.findByLabelText("Scanned files");
+    const rowNames = () => within(table).getAllByRole("row").slice(1).map((row) => row.textContent);
+    await waitFor(() => expect(rowNames()[0]).toContain("Episode 2.mkv"));
+    await user.click(within(table).getByRole("button", { name: "Sort by File" }));
+    expect(rowNames()[0]).toContain("Episode 10.mkv");
   });
 });
 

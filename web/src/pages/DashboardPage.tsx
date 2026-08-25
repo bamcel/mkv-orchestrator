@@ -4,10 +4,12 @@ import { ChevronUp, Copy, FileCheck, FileVideo, Folder, FolderOpen, Plus, Refres
 import { authorizeBrowsedRoot, cancelScan, FileSystemEntry, getBackendTransport, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, saveWebSettings, startScan } from "../api";
 import { SectionHeader } from "../components/SectionHeader";
 import { FileBrowser } from "../components/FileBrowser";
+import { SortableColumnHeader, type SortDirection } from "../components/SortableColumnHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 
 const lastBrowsePathStorageKey = "mkvo.web.lastBrowsePath";
 const scanSourcesStorageKey = "mkvo.web.scanSources";
+type DashboardSortKey = "file" | "reader" | "codec" | "resolution" | "audio" | "subtitles" | "status";
 
 export function DashboardPage() {
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
@@ -48,6 +50,7 @@ export function DashboardPage() {
   const [skipped, setSkipped] = useState<string[]>([]);
   const [selectedFilePath, setSelectedFilePath] = useState<string>("");
   const [selectionAnchorPath, setSelectionAnchorPath] = useState("");
+  const [fileSort, setFileSort] = useState<{ key: DashboardSortKey; direction: SortDirection }>({ key: "file", direction: "asc" });
   const [actionStatus, setActionStatus] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; path: string } | null>(null);
   useEffect(() => {
@@ -151,6 +154,10 @@ export function DashboardPage() {
     if (files.length === 0) return null;
     return files.find((file) => file.path === templateFilePath) ?? files[0];
   }, [files, templateFilePath]);
+  const displayedFiles = useMemo(
+    () => sortMediaFiles(files, fileSort.key, fileSort.direction, templateFile),
+    [files, fileSort, templateFile]
+  );
   const selectedMismatchMessages = useMemo(
     () => selectedFile ? getTemplateMismatchMessages(selectedFile, templateFile) : [],
     [selectedFile, templateFile]
@@ -429,14 +436,14 @@ export function DashboardPage() {
   function selectScannedFile(file: MediaFileRow, toggle: boolean, range: boolean) {
     setSelectedFilePath(file.path);
     if (range && selectionAnchorPath) {
-      const anchorIndex = files.findIndex(
+      const anchorIndex = displayedFiles.findIndex(
         (item) => normalizeCompareValue(item.path) === normalizeCompareValue(selectionAnchorPath)
       );
-      const fileIndex = files.findIndex((item) => item.path === file.path);
+      const fileIndex = displayedFiles.findIndex((item) => item.path === file.path);
       if (anchorIndex >= 0 && fileIndex >= 0) {
         const start = Math.min(anchorIndex, fileIndex);
         const end = Math.max(anchorIndex, fileIndex);
-        setSelectedPaths(files.slice(start, end + 1).map((item) => item.path));
+        setSelectedPaths(displayedFiles.slice(start, end + 1).map((item) => item.path));
         return;
       }
     }
@@ -640,17 +647,13 @@ export function DashboardPage() {
                 <table className="w-full min-w-[68.75rem] border-collapse text-left text-sm">
                   <thead className="sticky top-0 bg-panel text-xs uppercase tracking-wide text-subtle">
                     <tr>
-                      <th className="border-b border-border px-3 py-2 font-semibold">File</th>
-                      <th className="border-b border-border px-3 py-2 font-semibold">Reader</th>
-                      <th className="border-b border-border px-3 py-2 font-semibold">Codec</th>
-                      <th className="border-b border-border px-3 py-2 font-semibold">Resolution</th>
-                      <th className="border-b border-border px-3 py-2 font-semibold">Audio</th>
-                      <th className="border-b border-border px-3 py-2 font-semibold">Subtitles</th>
-                      <th className="border-b border-border px-3 py-2 font-semibold">Status</th>
+                      {(["file", "reader", "codec", "resolution", "audio", "subtitles", "status"] as DashboardSortKey[]).map((key) => (
+                        <SortableColumnHeader key={key} active={fileSort.key === key} direction={fileSort.direction} label={{ file: "File", reader: "Reader", codec: "Codec", resolution: "Resolution", audio: "Audio", subtitles: "Subtitles", status: "Status" }[key]} onSort={() => setFileSort((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }))} />
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {files.map((file) => {
+                    {displayedFiles.map((file) => {
                       const templateRow = isTemplate(file);
                       const mismatchRow = !templateRow && hasTemplateMismatch(file, templateFile);
                       const rowSelected = selectedPaths.some(
@@ -872,6 +875,25 @@ function sourceDisplayName(path: string) {
 function normalizeCompareValue(value: string | null | undefined) {
   const clean = (value ?? "").trim();
   return clean.length === 0 ? "none" : clean.toLowerCase();
+}
+
+function sortMediaFiles(files: MediaFileRow[], key: DashboardSortKey, direction: SortDirection, templateFile: MediaFileRow | null) {
+  const multiplier = direction === "asc" ? 1 : -1;
+  return files.map((file, index) => ({ file, index })).sort((left, right) => {
+    const compared = dashboardSortValue(left.file, key, templateFile).localeCompare(dashboardSortValue(right.file, key, templateFile), undefined, { numeric: true, sensitivity: "base" });
+    return compared === 0 ? left.index - right.index : compared * multiplier;
+  }).map(({ file }) => file);
+}
+
+function dashboardSortValue(file: MediaFileRow, key: DashboardSortKey, templateFile: MediaFileRow | null) {
+  if (key === "file") return file.fileName;
+  if (key === "reader") return file.reader;
+  if (key === "codec") return file.codec || "Unknown";
+  if (key === "resolution") return file.resolution || "Unknown";
+  if (key === "audio") return file.audioSummary || "None";
+  if (key === "subtitles") return file.subtitleSummary || "None";
+  if (templateFile?.path === file.path) return "Template";
+  return hasTemplateMismatch(file, templateFile) ? "Warning" : file.status;
 }
 
 function isPathWithinSource(filePath: string, sourcePath: string) {

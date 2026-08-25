@@ -13,7 +13,10 @@ import {
 } from "../api";
 import { PreviewSummaryModal } from "../components/PreviewSummaryModal";
 import { SectionHeader } from "../components/SectionHeader";
+import { SortableColumnHeader, type SortDirection } from "../components/SortableColumnHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
+
+type FileSortKey = "file" | "audio" | "subtitles";
 
 export function MuxRemuxPage() {
   const { files, selectedPaths, setSelectedPaths, toggleSelectedPath, syncFromBackend, isWorkingView } = useMediaLibrary();
@@ -49,6 +52,7 @@ export function MuxRemuxPage() {
   const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number } | null>(null);
   const [highlightedPaths, setHighlightedPaths] = useState<string[]>([]);
   const [selectionAnchorPath, setSelectionAnchorPath] = useState("");
+  const [fileSort, setFileSort] = useState<{ key: FileSortKey; direction: SortDirection }>({ key: "file", direction: "asc" });
   const initializedSelectionScope = useRef("");
 
   useEffect(() => {
@@ -103,6 +107,7 @@ export function MuxRemuxPage() {
     () => files.find((file) => file.path === selectedDetailPath) ?? files[0] ?? null,
     [files, selectedDetailPath]
   );
+  const displayedFiles = useMemo(() => sortOperationFiles(files, fileSort.key, fileSort.direction), [files, fileSort]);
   const selectedCount = selectedPaths.length;
 
   const preview = useMutation({
@@ -204,11 +209,11 @@ export function MuxRemuxPage() {
   function highlightFile(path: string, index: number, modifiers: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) {
     setSelectedDetailPath(path);
     if (modifiers.shiftKey && selectionAnchorPath) {
-      const anchorIndex = files.findIndex((file) => normalizePath(file.path) === normalizePath(selectionAnchorPath));
+      const anchorIndex = displayedFiles.findIndex((file) => normalizePath(file.path) === normalizePath(selectionAnchorPath));
       if (anchorIndex >= 0) {
         const start = Math.min(anchorIndex, index);
         const end = Math.max(anchorIndex, index);
-        setHighlightedPaths(files.slice(start, end + 1).map((file) => file.path));
+        setHighlightedPaths(displayedFiles.slice(start, end + 1).map((file) => file.path));
         return;
       }
     }
@@ -384,13 +389,13 @@ export function MuxRemuxPage() {
               <table className="w-full min-w-[56.25rem] border-collapse text-left text-sm">
                 <thead className="sticky top-0 bg-card text-xs text-text">
                   <tr>
-                    <th className="border-b border-border px-3 py-2">File</th>
-                    <th className="w-36 border-b border-border px-3 py-2">Audio</th>
-                    <th className="w-36 border-b border-border px-3 py-2">Subtitles</th>
+                    {(["file", "audio", "subtitles"] as FileSortKey[]).map((key) => (
+                      <SortableColumnHeader key={key} active={fileSort.key === key} direction={fileSort.direction} label={{ file: "File", audio: "Audio", subtitles: "Subtitles" }[key]} className={key === "file" ? "" : "w-36"} onSort={() => setFileSort((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }))} />
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {files.map((file, index) => (
+                  {displayedFiles.map((file, index) => (
                     <tr
                       key={file.path}
                       onClick={(event) => highlightFile(file.path, index, event)}
@@ -588,6 +593,15 @@ export function MuxRemuxPage() {
 
 function normalizePath(path: string) {
   return path.replace(/\\/g, "/").toLowerCase();
+}
+
+function sortOperationFiles(files: ReturnType<typeof useMediaLibrary>["files"], key: FileSortKey, direction: SortDirection) {
+  const multiplier = direction === "asc" ? 1 : -1;
+  return files.map((file, index) => ({ file, index })).sort((left, right) => {
+    const value = (file: typeof left.file) => key === "file" ? file.fileName : key === "audio" ? file.audioSummary || "None" : file.subtitleSummary || "None";
+    const compared = value(left.file).localeCompare(value(right.file), undefined, { numeric: true, sensitivity: "base" });
+    return compared === 0 ? left.index - right.index : compared * multiplier;
+  }).map(({ file }) => file);
 }
 
 type RemovalPreviewInput = Pick<MuxPreviewRequest,
