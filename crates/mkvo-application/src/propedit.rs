@@ -307,16 +307,15 @@ fn metadata_track_name(track: &mkvo_domain::MediaTrack, edited_language: Option<
             .unwrap_or("und"),
     );
     let codec = codec_display_name(&track.codec);
-    let mut details = Vec::new();
-    if let Some(channels) = track.channels {
-        details.push(channel_display_name(channels));
-    }
+    let mut parts = Vec::new();
     if !codec.is_empty() {
-        details.push(codec);
+        parts.push(codec);
     }
-    details
-        .into_iter()
-        .fold(language, |name, detail| format!("{name} [{detail}]"))
+    parts.push(language);
+    if let Some(channels) = track.channels {
+        parts.push(channel_display_name(channels));
+    }
+    parts.join(" ")
 }
 
 fn channel_display_name(channels: u16) -> String {
@@ -497,14 +496,14 @@ mod tests {
     }
 
     #[test]
-    fn metadata_audio_name_uses_language_channels_and_codec() {
+    fn metadata_audio_name_uses_codec_language_and_channels_without_brackets() {
         let mut audio = track(1, TrackKind::Audio, None);
         audio.codec = "aac".to_owned();
         audio.channels = Some(6);
 
         assert_eq!(
             metadata_track_name(&audio, Some("eng")),
-            "English [5.1] [AAC]"
+            "AAC English 5.1"
         );
     }
 
@@ -513,6 +512,6 @@ mod tests {
         let mut audio = track(1, TrackKind::Audio, None);
         audio.codec = "opus".to_owned();
 
-        assert_eq!(metadata_track_name(&audio, Some("jpn")), "Japanese [Opus]");
+        assert_eq!(metadata_track_name(&audio, Some("jpn")), "Opus Japanese");
     }
 }

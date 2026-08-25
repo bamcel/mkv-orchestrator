@@ -673,11 +673,11 @@ function buildCurrentTrackSummary(track: PropEditTrackConfigRow) {
 function buildMetadataTrackName(track: PropEditTrackConfigRow) {
   const language = languageDisplayName(track.editedLanguage || track.currentLanguage || "und");
   const codec = codecDisplayName(track.currentCodec);
-  const details = [
-    track.currentChannels == null ? "" : channelDisplayName(track.currentChannels),
-    codec
-  ].filter(Boolean);
-  return details.reduce((name, detail) => `${name} [${detail}]`, language);
+  return [
+    codec,
+    language,
+    track.currentChannels == null ? "" : channelDisplayName(track.currentChannels)
+  ].filter(Boolean).join(" ");
 }
 
 function channelDisplayName(channels: number) {
