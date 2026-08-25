@@ -88,10 +88,11 @@ export function TrackPropertiesPage() {
   }, [currentScan.data]);
 
   useEffect(() => {
-    if (!templatePath || !files.some((file) => file.path === templatePath)) {
-      const nextTemplate = templateFilePath || files.find((file) => file.extension.toLowerCase() === ".mkv")?.path || "";
-      setTemplatePath(nextTemplate);
-    }
+    const sharedTemplate = files.some((file) => file.path === templateFilePath) ? templateFilePath : "";
+    const currentTemplate = files.some((file) => file.path === templatePath) ? templatePath : "";
+    const nextTemplate = sharedTemplate || currentTemplate || files.find((file) => file.extension.toLowerCase() === ".mkv")?.path || "";
+    if (nextTemplate !== templatePath) setTemplatePath(nextTemplate);
+    if (nextTemplate && nextTemplate !== templateFilePath) setTemplateFilePath(nextTemplate);
   }, [files, templateFilePath, templatePath]);
 
   const mkvFiles = useMemo(() => files.filter((file) => file.extension.toLowerCase() === ".mkv"), [files]);
@@ -104,12 +105,6 @@ export function TrackPropertiesPage() {
   // the tracks already read rather than starting the read.
   const templateLoad = usePropEditTemplate(templatePath, files);
   const invalidateTemplate = useInvalidatePropEditTemplate();
-
-  useEffect(() => {
-    if (!templatePath) return;
-    setTemplateFilePath(templatePath);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templatePath]);
 
   // Seeds the editable copies from whatever the cache holds. The query returns
   // the same object until the template genuinely changes, so this does not
@@ -352,8 +347,12 @@ export function TrackPropertiesPage() {
             </div>
             <p className="mt-3 text-xs leading-5 text-muted">Configure container title, video track name, and property edit behavior.</p>
 
-            <label className="mt-3 block text-xs font-semibold text-muted">Template File</label>
-            <select value={templatePath} onChange={(event) => setTemplatePath(event.target.value)} className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent">
+            <label htmlFor="track-properties-template" className="mt-3 block text-xs font-semibold text-muted">Template File</label>
+            <select id="track-properties-template" value={templatePath} onChange={(event) => {
+              const nextTemplate = event.target.value;
+              setTemplatePath(nextTemplate);
+              setTemplateFilePath(nextTemplate);
+            }} className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent">
               {mkvFiles.length === 0 ? <option value="">No MKV files scanned</option> : mkvFiles.map((file) => <option key={file.path} value={file.path}>{file.fileName}</option>)}
             </select>
             <div className="mt-1 text-[0.6875rem] text-muted">Uses template track order; validates before editing.</div>
