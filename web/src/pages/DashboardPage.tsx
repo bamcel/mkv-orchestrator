@@ -35,6 +35,7 @@ export function DashboardPage() {
     }
   });
   const previousSources = useRef<string[] | null>(null);
+  const sourcesExplicitlyCleared = useRef(false);
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
   const [lastBrowsePath, setLastBrowsePath] = useState(() => {
     try {
@@ -72,6 +73,7 @@ export function DashboardPage() {
       previousSources.current = sources;
       return;
     }
+    sourcesExplicitlyCleared.current = previousSources.current.length > 0 && sources.length === 0;
     previousSources.current = sources;
 
     const remaining = files.filter((file) =>
@@ -199,7 +201,7 @@ export function DashboardPage() {
    */
   const mediaInfoRows = useMemo(() => {
     if (!selectedFile) {
-      return ["File", "Codec", "Resolution", "Bit Depth", "HDR", "Audio", "Subtitles", "Status"].map(
+      return ["File", "Codec", "Resolution", "Bit Depth", "HDR", "Audio", "Channel", "Subtitles", "Status"].map(
         (label) => ({ label, value: "—", className: "text-subtle", title: undefined as string | undefined })
       );
     }
@@ -234,6 +236,12 @@ export function DashboardPage() {
         value: selectedFile.audioSummary || "None",
         className: ["truncate", compareTextClass(selectedFile, (row) => row.audioSummary)].join(" "),
         title: selectedFile.audioSummary
+      },
+      {
+        label: "Channel",
+        value: audioChannelSummary(selectedFile),
+        className: ["truncate", compareTextClass(selectedFile, audioChannelSummary)].join(" "),
+        title: audioChannelSummary(selectedFile)
       },
       {
         label: "Subtitles",
@@ -281,6 +289,10 @@ export function DashboardPage() {
   // so this adopts anything newer rather than only filling an empty page.
   useEffect(() => {
     if (!currentScan.data) return;
+    // An empty source list on first load may still hydrate a backend working
+    // set. An empty list produced by the user's Clear Sources action must not
+    // immediately restore those same rows from the cached query response.
+    if (sourcesExplicitlyCleared.current) return;
     // The Library page uses the same backend working set while it builds its
     // overview. Keep that shared result scoped to the folders selected here,
     // otherwise a Library scan can replace Dashboard rows with another
@@ -912,6 +924,24 @@ function sourceDisplayName(path: string) {
 function normalizeCompareValue(value: string | null | undefined) {
   const clean = (value ?? "").trim();
   return clean.length === 0 ? "none" : clean.toLowerCase();
+}
+
+function audioChannelSummary(file: MediaFileRow) {
+  const audioTracks = file.tracks.filter((track) => normalizeCompareValue(track.type) === "audio");
+  if (audioTracks.length === 0) return "None";
+
+  return audioTracks.map((track) => {
+    const language = track.language.trim() || "und";
+    return `${language} (${track.channels == null ? "Unknown" : channelDisplayName(track.channels)})`;
+  }).join(", ");
+}
+
+function channelDisplayName(channels: number) {
+  if (channels === 1) return "1.0";
+  if (channels === 2) return "2.0";
+  if (channels === 6) return "5.1";
+  if (channels === 8) return "7.1";
+  return `${channels}.0`;
 }
 
 function sortMediaFiles(files: MediaFileRow[], key: DashboardSortKey, direction: SortDirection, templateFile: MediaFileRow | null) {

@@ -87,7 +87,11 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
   );
   // What the adopted set was stamped with, so a repeat of the same answer does
   // not keep replacing local state on every refetch.
-  const [adoptedUpdatedUtc, setAdoptedUpdatedUtc] = useState<string | null>(null);
+  // This is synchronization bookkeeping, not render state. Keeping it in a
+  // ref also lets syncFromBackend remain stable: Dashboard depends on that
+  // callback, and recreating it whenever files changed caused the cached empty
+  // scan response to overwrite a newly completed scan after Clear UI Cache.
+  const adoptedUpdatedUtc = useRef<string | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const selectionPush = useRef<Promise<void>>(Promise.resolve());
   const workingViewPaths = useRef<Set<string> | null>(null);
@@ -130,6 +134,49 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
           }
         }
       });
+  }, []);
+
+  const syncFromBackend = useCallback((scan: CurrentScanResponse, sourcePaths?: string[]) => {
+    if (scan.updatedUtc && adoptedUpdatedUtc.current && scan.updatedUtc <= adoptedUpdatedUtc.current) {
+      return;
+    }
+
+    adoptedUpdatedUtc.current = scan.updatedUtc ?? null;
+    const viewPaths = workingViewPaths.current;
+    const scopedFiles = sourcePaths?.length
+      ? scan.files.filter((file) => sourcePaths.some((source) => isPathWithinSource(file.path, source)))
+      : scan.files;
+    const nextFiles = viewPaths
+      ? scopedFiles.filter((file) => viewPaths.has(pathKey(file.path)))
+      : scopedFiles;
+    setFilesState(nextFiles);
+    if (viewPaths || sourcePaths?.length) {
+      const available = new Set(nextFiles.map((file) => pathKey(file.path)));
+      setSelectedPathsState(scan.selectedPaths.filter((path) => available.has(pathKey(path))));
+    } else {
+      setSelectedPathsState(scan.selectedPaths);
+    }
+    setTemplateFilePath((current) => {
+      if (nextFiles.length === 0) return "";
+      return current && nextFiles.some((file) => pathKey(file.path) === pathKey(current)) ? current : nextFiles[0].path;
+    });
+  }, []);
+
+  const clearLibraryCache = useCallback(() => {
+    workingViewPaths.current = null;
+    setIsWorkingView(false);
+    adoptedUpdatedUtc.current = null;
+    setFilesState([]);
+    setSelectedPathsState([]);
+    setTemplateFilePath("");
+    setSelectionError(null);
+    try {
+      sessionStorage.removeItem(storageKey);
+      sessionStorage.removeItem(templateStorageKey);
+      localStorage.removeItem(selectionStorageKey);
+    } catch {
+      // State is already cleared; storage is only a persistence cache.
+    }
   }, []);
 
   const value = useMemo<MediaLibraryContextValue>(() => ({
@@ -182,49 +229,10 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
       });
     },
     hydrateSelection: (paths) => setSelectedPathsState(paths),
-    syncFromBackend: (scan, sourcePaths) => {
-      if (scan.updatedUtc && adoptedUpdatedUtc && scan.updatedUtc <= adoptedUpdatedUtc) {
-        return;
-      }
-
-      setAdoptedUpdatedUtc(scan.updatedUtc ?? null);
-      const viewPaths = workingViewPaths.current;
-      const scopedFiles = sourcePaths?.length
-        ? scan.files.filter((file) => sourcePaths.some((source) => isPathWithinSource(file.path, source)))
-        : scan.files;
-      const nextFiles = viewPaths
-        ? scopedFiles.filter((file) => viewPaths.has(pathKey(file.path)))
-        : scopedFiles;
-      setFilesState(nextFiles);
-      if (viewPaths || sourcePaths?.length) {
-        const available = new Set(nextFiles.map((file) => pathKey(file.path)));
-        setSelectedPathsState(scan.selectedPaths.filter((path) => available.has(pathKey(path))));
-      } else {
-        setSelectedPathsState(scan.selectedPaths);
-      }
-      setTemplateFilePath((current) => {
-        if (nextFiles.length === 0) return "";
-        return current && nextFiles.some((file) => pathKey(file.path) === pathKey(current)) ? current : nextFiles[0].path;
-      });
-    },
+    syncFromBackend,
     templateFilePath,
     setTemplateFilePath,
-    clearLibraryCache: () => {
-      workingViewPaths.current = null;
-      setIsWorkingView(false);
-      setAdoptedUpdatedUtc(null);
-      setFilesState([]);
-      setSelectedPathsState([]);
-      setTemplateFilePath("");
-      setSelectionError(null);
-      try {
-        sessionStorage.removeItem(storageKey);
-        sessionStorage.removeItem(templateStorageKey);
-        localStorage.removeItem(selectionStorageKey);
-      } catch {
-        // State is already cleared; storage is only a persistence cache.
-      }
-    },
+    clearLibraryCache,
     updateFilesAfterRename: (renames) => {
       if (workingViewPaths.current) {
         workingViewPaths.current = new Set([...workingViewPaths.current].map((path) => {
@@ -254,7 +262,7 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
         return rename ? rename.newPath : current;
       });
     }
-  }), [files, selectedPaths, selectionError, templateFilePath, adoptedUpdatedUtc, isWorkingView, pushSelection]);
+  }), [files, selectedPaths, selectionError, templateFilePath, isWorkingView, pushSelection, syncFromBackend, clearLibraryCache]);
 
   return (
     <MediaLibraryContext.Provider value={value}>

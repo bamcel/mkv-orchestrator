@@ -243,6 +243,55 @@ describe("Dashboard UI cache reset", () => {
     expect(window.sessionStorage.getItem("mkvo.web.trackPropertiesConfiguration")).toBeNull();
     expect(screen.getByText(/ui cache cleared/i)).toBeInTheDocument();
   });
+
+  it("shows files from a scan started after the UI cache is cleared", async () => {
+    const user = userEvent.setup();
+    const scannedFile = mediaFile("Episode 01.mkv");
+    window.sessionStorage.setItem("mkvo.web.scanSources", JSON.stringify(["/media/Show"]));
+
+    renderDashboard({
+      getStatus: () => Promise.resolve(emptyStatus),
+      getCurrentScanFiles: () => Promise.resolve({ ...emptyScan, files: [scannedFile] }),
+      getWebSettings: () => Promise.resolve(settings()),
+      clearCurrentScanFiles: () => Promise.resolve(emptyScan),
+      startScan: () => Promise.resolve({
+        id: "rescan-job",
+        status: "Queued" as const,
+        createdUtc: new Date().toISOString(),
+        startedUtc: null,
+        completedUtc: null,
+        currentSource: "",
+        completed: 0,
+        total: 1,
+        files: [],
+        skipped: [],
+        summary: { total: 0, mkv: 0, mp4: 0, failed: 0, cached: 0 },
+        error: ""
+      }),
+      getScanJob: () => Promise.resolve({
+        id: "rescan-job",
+        status: "Completed" as const,
+        createdUtc: new Date().toISOString(),
+        startedUtc: new Date().toISOString(),
+        completedUtc: new Date().toISOString(),
+        currentSource: "/media/Show",
+        completed: 1,
+        total: 1,
+        files: [scannedFile],
+        skipped: [],
+        summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 1 },
+        error: ""
+      })
+    });
+
+    expect(await screen.findByRole("row", { name: /Episode 01\.mkv/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /clear ui cache/i }));
+    await waitFor(() => expect(screen.queryByRole("row", { name: /Episode 01\.mkv/i })).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: /^scan$/i }));
+
+    expect(await screen.findByRole("row", { name: /Episode 01\.mkv/i }, { timeout: 3000 })).toBeInTheDocument();
+  });
 });
 
 describe("Dashboard ignored folders", () => {
@@ -427,6 +476,28 @@ describe("Dashboard detail panels", () => {
           channels: null,
           default: true,
           forced: false
+        },
+        {
+          id: 1,
+          trackNumber: 2,
+          type: "audio",
+          codec: "AC-3",
+          language: "eng",
+          name: "",
+          channels: 6,
+          default: true,
+          forced: false
+        },
+        {
+          id: 2,
+          trackNumber: 3,
+          type: "audio",
+          codec: "AAC",
+          language: "jpn",
+          name: "",
+          channels: 2,
+          default: false,
+          forced: false
         }
       ],
       attachments: []
@@ -440,6 +511,8 @@ describe("Dashboard detail panels", () => {
     });
 
     await waitFor(() => expect(screen.getAllByText("HEVC/H.265").length).toBeGreaterThan(0));
+    expect(screen.getByText("Channel")).toBeInTheDocument();
+    expect(screen.getByText("eng (5.1), jpn (2.0)")).toBeInTheDocument();
     expect(screen.queryByText(/scan a folder, then select a file/i)).not.toBeInTheDocument();
   });
 
