@@ -127,8 +127,9 @@ The lowercase `my-mkv-orchestrator.xml` filename follows the Unraid template
 naming convention. The display name remains `MKV Orchestrator`, while the image
 and repository slug remain `mkv-orchestrator`. Environment variables use the
 existing `MKVO_` prefix. `ca_profile.xml` in the repository root supplies the
-required Community Applications repository profile. The legacy
-`unraid/my-MKV-Orchestrator.xml` path remains as a compatibility copy.
+required Community Applications repository profile. Keep this as the single
+canonical template so Community Apps does not discover duplicate entries for
+the same application.
 
 The template uses generic defaults:
 
@@ -142,8 +143,9 @@ Adjust those host paths in Unraid before starting the container. Existing users
 can keep an earlier `/mnt/user/appdata/mkvo` mapping to retain their data. The
 template does not include API keys, SMB credentials, or server-specific paths.
 TVDB/TMDB keys can be entered in Settings after first launch, or through the
-masked optional environment variables. Choose `disabled` for no login on a
-trusted LAN, or `basic` and fill in both credential fields.
+masked optional environment variables. Set Authentication Mode to `disabled`
+for no login on a trusted LAN, `basic` with both credential fields filled in,
+or `auto` to enforce credentials whenever the server accepts remote connections.
 
 Before submitting or updating the template, run the Community Applications
 **Validate** and **Scan** checks after every meaningful XML change.
