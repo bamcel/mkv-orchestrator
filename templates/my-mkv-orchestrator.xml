@@ -22,8 +22,8 @@
   <DonateLink/>
   <Requires/>
   <Config Name="Web UI Port" Target="8080" Default="8886" Mode="tcp" Description="Web interface port." Type="Port" Display="always" Required="true" Mask="false">8886</Config>
-  <Config Name="Media Path" Target="/media" Default="/mnt/user/media" Mode="rw" Description="Primary media library path mounted into the container." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media</Config>
-  <Config Name="Downloads Path" Target="/downloads" Default="/mnt/user/downloads/media" Mode="rw" Description="Optional downloads or staging path mounted into the container." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/downloads/media</Config>
+  <Config Name="Media Path" Target="/media" Default="/mnt/user/" Mode="rw" Description="Primary media library path mounted into the container." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/</Config>
+  <Config Name="Downloads Path" Target="/downloads" Default="/mnt/user/" Mode="rw" Description="Optional downloads or staging path mounted into the container." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/</Config>
   <Config Name="Config Path" Target="/config" Default="/mnt/user/appdata/mkv-orchestrator" Mode="rw" Description="Persistent MKV Orchestrator settings, logs, and cache data." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/mkv-orchestrator</Config>
   <Config Name="Authentication Mode" Target="MKVO_AUTH_MODE" Default="disabled" Mode="" Description="Use disabled only on a trusted LAN. Choose basic and configure both credentials to require a login. auto enforces credentials whenever the server accepts remote connections." Type="Variable" Display="always" Required="true" Mask="false">disabled</Config>
   <Config Name="Media Root" Target="MKVO_MEDIA_ROOT" Default="/media" Mode="" Description="Default root used by the Dashboard browser." Type="Variable" Display="advanced" Required="true" Mask="false">/media</Config>

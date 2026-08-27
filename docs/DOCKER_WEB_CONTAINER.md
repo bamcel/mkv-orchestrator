@@ -133,8 +133,8 @@ required Community Applications repository profile. The legacy
 The template uses generic defaults:
 
 ```text
-/mnt/user/media           -> /media
-/mnt/user/downloads/media -> /downloads
+/mnt/user/ -> /media
+/mnt/user/ -> /downloads
 /mnt/user/appdata/mkv-orchestrator -> /config
 ```
 
