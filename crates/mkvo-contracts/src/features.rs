@@ -319,6 +319,10 @@ fn default_selected_theme_name() -> String {
     "Gotham".to_owned()
 }
 
+fn default_rename_template() -> String {
+    mkvo_domain::DEFAULT_RENAME_TEMPLATE.to_owned()
+}
+
 /// Compatibility view matching the existing React settings page.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -332,6 +336,7 @@ pub struct WebSettings {
     pub has_anidb_client: bool,
     pub tvdb_language: String,
     pub rename_lookup_provider: String,
+    #[serde(default = "default_rename_template")]
     pub rename_template: String,
     #[serde(default)]
     pub rename_templates: Vec<String>,
@@ -395,7 +400,7 @@ impl Default for WebSettings {
             has_anidb_client: false,
             tvdb_language: String::new(),
             rename_lookup_provider: String::new(),
-            rename_template: String::new(),
+            rename_template: default_rename_template(),
             rename_templates: Vec::new(),
             audio_name_presets: Vec::new(),
             subtitle_name_presets: Vec::new(),
@@ -1093,6 +1098,14 @@ mod tests {
         let json = serde_json::to_string(&view).unwrap();
         assert!(json.contains("hasTvdbApiKey"));
         assert!(!json.contains("tvdbApiKey"));
+    }
+
+    #[test]
+    fn web_settings_use_the_shared_rename_template_default() {
+        assert_eq!(
+            WebSettings::default().rename_template,
+            mkvo_domain::DEFAULT_RENAME_TEMPLATE
+        );
     }
 
     #[test]

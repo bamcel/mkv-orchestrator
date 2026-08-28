@@ -146,11 +146,13 @@ export function SettingsPage() {
   const [ignoredSubfoldersText, setIgnoredSubfoldersText] = useState("");
   const [muxAudioDefaults, setMuxAudioDefaults] = useState("eng,jpn");
   const [muxSubtitleDefaults, setMuxSubtitleDefaults] = useState("eng");
+  const [mkvToolNixDirectory, setMkvToolNixDirectory] = useState("");
+  const [ffmpegDirectory, setFfmpegDirectory] = useState("");
   const [libraryRoots, setLibraryRoots] = useState<SourceRoot[]>([]);
   const [defaultDirectory, setDefaultDirectory] = useState("");
   const [defaultDirectoryName, setDefaultDirectoryName] = useState("Home");
   // Which row the browser is filling in, so one dialog serves every row.
-  const [browsingRow, setBrowsingRow] = useState<number | "home" | null>(null);
+  const [browsingRow, setBrowsingRow] = useState<number | "home" | "mkvtoolnix" | "ffmpeg" | null>(null);
   const [watchFoldersText, setWatchFoldersText] = useState("");
   const [liveWatcherEnabled, setLiveWatcherEnabled] = useState(false);
   const [mediaServers, setMediaServers] = useState<EditableMediaServer[]>([]);
@@ -185,6 +187,8 @@ export function SettingsPage() {
     setIgnoredSubfoldersText((webSettings.data.ignoredScanFolderNames ?? []).join("\n"));
     setMuxAudioDefaults(webSettings.data.mkvMergeDefaultAudioLanguages || "eng,jpn");
     setMuxSubtitleDefaults(webSettings.data.mkvMergeDefaultSubtitleLanguages || "eng");
+    setMkvToolNixDirectory(webSettings.data.mkvToolNixDirectory ?? "");
+    setFfmpegDirectory(webSettings.data.ffmpegDirectory ?? "");
     const loadedRoots = webSettings.data.libraryRoots ?? [];
     const loadedHome = webSettings.data.defaultRoot
       ?? loadedRoots[0]?.path
@@ -222,6 +226,8 @@ export function SettingsPage() {
     ignoredScanFolderNames: normalizeLineList(ignoredSubfoldersText),
     mkvMergeDefaultAudioLanguages: muxAudioDefaults,
     mkvMergeDefaultSubtitleLanguages: muxSubtitleDefaults,
+    mkvToolNixDirectory: mkvToolNixDirectory.trim() || null,
+    ffmpegDirectory: ffmpegDirectory.trim() || null,
     defaultRoot: defaultDirectory.trim() || null,
     defaultRootName: defaultDirectoryName.trim() || "Home",
     libraryRoots: libraryRoots
@@ -280,6 +286,8 @@ export function SettingsPage() {
       setIgnoredSubfoldersText(saved.ignoredScanFolderNames.join("\n"));
       setMuxAudioDefaults(saved.mkvMergeDefaultAudioLanguages);
       setMuxSubtitleDefaults(saved.mkvMergeDefaultSubtitleLanguages);
+      setMkvToolNixDirectory(saved.mkvToolNixDirectory ?? "");
+      setFfmpegDirectory(saved.ffmpegDirectory ?? "");
       setDefaultDirectory(saved.defaultRoot ?? "");
       setDefaultDirectoryName(saved.defaultRootName || "Home");
       setLibraryRoots(saved.libraryRoots.filter((root) => !sameFolderPath(root.path, saved.defaultRoot ?? "")));
@@ -622,6 +630,27 @@ export function SettingsPage() {
                   ? "MKVO resolves installed MKVToolNix and FFmpeg commands for scan, remux, extraction, and property workflows."
                   : "The server image provides MKVToolNix and FFmpeg for scan, remux, extraction, and property workflows."}
               >
+                {isDesktop ? (
+                  <div className="mb-4 grid gap-3">
+                    <ToolDirectoryField
+                      label="MKVToolNix directory"
+                      value={mkvToolNixDirectory}
+                      placeholder="C:\\Program Files\\MKVToolNix"
+                      onChange={setMkvToolNixDirectory}
+                      onBrowse={() => setBrowsingRow("mkvtoolnix")}
+                    />
+                    <ToolDirectoryField
+                      label="FFmpeg directory"
+                      value={ffmpegDirectory}
+                      placeholder="C:\\ffmpeg\\bin"
+                      onChange={setFfmpegDirectory}
+                      onBrowse={() => setBrowsingRow("ffmpeg")}
+                    />
+                    <p className="text-xs leading-5 text-subtle">
+                      Choose the folders containing the tool executables. FFmpeg requires both <span className="font-mono text-muted">ffmpeg.exe</span> and <span className="font-mono text-muted">ffprobe.exe</span>. Leave a field blank to search MKVO's tools folder and the system PATH.
+                    </p>
+                  </div>
+                ) : null}
                 <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-panel">
                   <table className="w-full table-fixed border-collapse text-left text-sm">
                     <colgroup>
@@ -1215,7 +1244,11 @@ export function SettingsPage() {
         <FileBrowser
           initialPath={browsingRow === "home"
             ? defaultDirectory
-            : libraryRoots[browsingRow]?.path || defaultDirectory || status.data?.mediaRoot || ""}
+            : browsingRow === "mkvtoolnix"
+              ? mkvToolNixDirectory
+              : browsingRow === "ffmpeg"
+                ? ffmpegDirectory
+                : libraryRoots[browsingRow]?.path || defaultDirectory || status.data?.mediaRoot || ""}
           homeRoot={{ name: defaultDirectoryName || "Home", path: defaultDirectory }}
           roots={libraryRoots}
           onCancel={() => setBrowsingRow(null)}
@@ -1231,11 +1264,15 @@ export function SettingsPage() {
             );
           }}
           onSelect={(path, kind) => {
-            // Picking a file means the folder holding it, since a library
-            // folder is always a directory.
+            // These settings all need a directory. Accepting an executable is
+            // convenient and resolves it to the folder that contains it.
             const folder = kind === "file" ? parentFolder(path) : path;
             if (browsingRow === "home") {
               setDefaultDirectory(folder);
+            } else if (browsingRow === "mkvtoolnix") {
+              setMkvToolNixDirectory(folder);
+            } else if (browsingRow === "ffmpeg") {
+              setFfmpegDirectory(folder);
             } else {
               setLibraryRoots((current) =>
                 current.map((item, position) =>
@@ -1250,6 +1287,43 @@ export function SettingsPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+function ToolDirectoryField({
+  label,
+  value,
+  placeholder,
+  onChange,
+  onBrowse
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+  onBrowse: () => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold text-muted">{label}</span>
+      <div className="mt-2 flex min-w-0 items-center gap-2">
+        <input
+          aria-label={label}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="h-9 min-w-[11.25rem] flex-1 rounded-md border border-border bg-input px-2 font-mono text-xs text-text outline-none placeholder:text-subtle focus:border-accent"
+        />
+        <button
+          type="button"
+          aria-label={`Browse for ${label}`}
+          onClick={onBrowse}
+          className="h-9 shrink-0 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+        >
+          Browse
+        </button>
+      </div>
+    </label>
   );
 }
 

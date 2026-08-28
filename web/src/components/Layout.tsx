@@ -74,9 +74,9 @@ export function Layout() {
             })}
           </nav>
 
-          <div className="mt-auto rounded-lg border border-border bg-panel p-3">
+          <div className="mt-auto min-w-0 overflow-hidden rounded-lg border border-border bg-panel p-3">
             <div className="text-[0.6875rem] font-semibold uppercase tracking-wide text-subtle">Status</div>
-            <div className={["mt-2 text-sm font-medium", operation.isRunning ? "text-accent" : "text-success"].join(" ")} title={operation.statusText ?? undefined}>
+            <div className={["mt-2 min-w-0 break-words text-sm font-medium [overflow-wrap:anywhere]", operation.isRunning ? "text-accent" : "text-success"].join(" ")} title={operation.statusText ?? undefined}>
               {operation.statusText ?? (status.isLoading ? "checking tools" : missingTools === 0 ? "ready" : `${missingTools} tool issue(s)`)}
             </div>
             <div className="mt-3 flex items-center gap-2 truncate text-xs text-muted">

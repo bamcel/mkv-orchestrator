@@ -31,7 +31,9 @@ describe("global operation status", () => {
       }
     );
 
-    expect(await screen.findByText(/MKV Operations: 43\/283.*Episode 44\.mkv 75%/i)).toBeInTheDocument();
+    const operationStatus = await screen.findByText(/MKV Operations: 43\/283.*Episode 44\.mkv 75%/i);
+    expect(operationStatus).toBeInTheDocument();
+    expect(operationStatus).toHaveClass("break-words", "[overflow-wrap:anywhere]");
     expect(screen.getByText("Track Properties route")).toBeInTheDocument();
   });
 });

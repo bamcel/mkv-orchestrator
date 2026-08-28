@@ -142,6 +142,16 @@ impl ProcessRunner {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        // A release desktop host uses the Windows GUI subsystem, but console
+        // executables such as ffmpeg and mkvmerge otherwise create a transient
+        // console window every time MKVO probes or runs them. Keep child tools
+        // fully headless; their output is already captured through pipes.
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            command.as_std_mut().creation_flags(CREATE_NO_WINDOW);
+        }
         if let Some(current_dir) = &spec.current_dir {
             command.current_dir(current_dir);
         }

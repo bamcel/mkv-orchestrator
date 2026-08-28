@@ -437,6 +437,37 @@ describe("Settings defaults", () => {
   });
 });
 
+describe("Settings media tools", () => {
+  it("loads and saves desktop tool directories", async () => {
+    const user = userEvent.setup();
+    const saveWebSettings = vi.fn().mockImplementation((request) => Promise.resolve(settings({
+      mkvToolNixDirectory: request.mkvToolNixDirectory ?? null,
+      ffmpegDirectory: request.ffmpegDirectory ?? null
+    })));
+
+    renderWithBackend(<SettingsPage />, {
+      transport: "tauri",
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings({
+        mkvToolNixDirectory: "C:\\Tools\\MKVToolNix",
+        ffmpegDirectory: "C:\\Tools\\FFmpeg\\bin"
+      })),
+      saveWebSettings
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^general$/i }));
+    const ffmpeg = await screen.findByLabelText(/^ffmpeg directory$/i);
+    expect(ffmpeg).toHaveValue("C:\\Tools\\FFmpeg\\bin");
+    await user.clear(ffmpeg);
+    await user.type(ffmpeg, "D:\\Portable\\ffmpeg\\bin");
+
+    await waitFor(() => expect(saveWebSettings).toHaveBeenCalled(), { timeout: 2500 });
+    const request = saveWebSettings.mock.calls.at(-1)?.[0];
+    expect(request.mkvToolNixDirectory).toBe("C:\\Tools\\MKVToolNix");
+    expect(request.ffmpegDirectory).toBe("D:\\Portable\\ffmpeg\\bin");
+  });
+});
+
 describe("Settings appearance", () => {
   it("lets users select and preview any theme color label", async () => {
     const user = userEvent.setup();

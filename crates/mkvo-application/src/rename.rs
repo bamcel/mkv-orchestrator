@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ApplicationError, ApplicationResult, FileAccessState};
 
-pub const DEFAULT_SERIES_TEMPLATE: &str = "{series} - S{season:00}E{episode:00} - {episodeTitle}";
+pub const DEFAULT_SERIES_TEMPLATE: &str = mkvo_domain::DEFAULT_RENAME_TEMPLATE;
 pub const DEFAULT_MOVIE_TEMPLATE: &str = "{title} ({year})";
 /// Used when the provider knows the film but not its year.
 pub const DEFAULT_MOVIE_TITLE_ONLY_TEMPLATE: &str = "{title}";

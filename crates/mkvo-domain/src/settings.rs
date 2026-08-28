@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{MediaServerId, MetadataProvider};
 
+pub const DEFAULT_RENAME_TEMPLATE: &str = "{series} - S{season:00}E{episode:00} - {episodeTitle}";
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
@@ -75,6 +77,10 @@ impl AppSettings {
             .filter(|value| !value.is_empty())
             .filter(|value| seen_templates.insert(value.clone()))
             .collect();
+        self.rename.template = self.rename.template.trim().to_owned();
+        if self.rename.template.is_empty() {
+            self.rename.template = DEFAULT_RENAME_TEMPLATE.to_owned();
+        }
         self.presets = self.presets.normalized();
         self.watch.roots.sort();
         self.watch.roots.dedup();
@@ -170,9 +176,9 @@ fn default_subtitle_name_presets() -> Vec<String> {
 
 fn default_language_presets() -> Vec<String> {
     ["eng", "jpn", "kor", "und"]
-    .into_iter()
-    .map(str::to_owned)
-    .collect()
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
 }
 
 fn default_mux_audio_languages() -> String {
@@ -300,6 +306,7 @@ impl Default for ScanSettings {
 pub struct RenameSettings {
     pub provider: MetadataProvider,
     pub language: String,
+    #[serde(default = "default_rename_template")]
     pub template: String,
     #[serde(default)]
     pub templates: Vec<String>,
@@ -313,16 +320,20 @@ const fn default_history_days() -> u32 {
     90
 }
 
+fn default_rename_template() -> String {
+    DEFAULT_RENAME_TEMPLATE.to_owned()
+}
+
 impl Default for RenameSettings {
     fn default() -> Self {
         Self {
             provider: MetadataProvider::Tvdb,
             language: "eng".to_owned(),
-            template: "{series} - S{season:00}E{episode:00} - {episodeTitle}".to_owned(),
+            template: default_rename_template(),
             templates: vec![
                 "{title}".to_owned(),
                 "{title} ({year})".to_owned(),
-                "{series} - S{season:00}E{episode:00} - {episodeTitle}".to_owned(),
+                default_rename_template(),
                 "S{season:00}E{episode:00} - {episodeTitle}".to_owned(),
                 "{series} - {absolute:000} - {episodeTitle}".to_owned(),
             ],
@@ -536,6 +547,24 @@ mod tests {
         assert_eq!(normalized.max_scan_workers, 1);
         assert_eq!(normalized.max_edit_workers, 6);
         assert_eq!(normalized.max_remux_workers, 2);
+    }
+
+    #[test]
+    fn missing_or_blank_rename_template_uses_the_product_default() {
+        let mut serialized = serde_json::to_value(RenameSettings::default()).unwrap();
+        serialized.as_object_mut().unwrap().remove("template");
+        let deserialized: RenameSettings = serde_json::from_value(serialized).unwrap();
+        assert_eq!(deserialized.template, DEFAULT_RENAME_TEMPLATE);
+
+        let normalized = AppSettings {
+            rename: RenameSettings {
+                template: "   ".to_owned(),
+                ..RenameSettings::default()
+            },
+            ..AppSettings::default()
+        }
+        .normalized();
+        assert_eq!(normalized.rename.template, DEFAULT_RENAME_TEMPLATE);
     }
 
     #[test]
