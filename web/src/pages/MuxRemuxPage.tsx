@@ -284,6 +284,17 @@ export function MuxRemuxPage() {
 
           {activeTab === "remux" ? (
             <div className="mt-4 space-y-3">
+              {mp4Files.length > 0 ? (
+                <div className="space-y-3 rounded-md border border-accent bg-panel p-3">
+                  <h2 className="text-sm font-semibold text-accent">MP4 Conversion</h2>
+                  <p className="text-xs text-muted">{mp4Files.length === 1 ? "1 MP4 file detected" : `${mp4Files.length} MP4 files detected`}</p>
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={convertMp4} onChange={(event) => setConvertMp4(event.target.checked)} /> Convert selected MP4 files to MKV</label>
+                  <label className={["flex items-center gap-2 pl-5 text-sm", convertMp4 ? "" : "text-disabled"].join(" ")}>
+                    <input type="checkbox" checked={deleteMp4AfterConvert} disabled={!convertMp4} onChange={(event) => setDeleteMp4AfterConvert(event.target.checked)} /> Delete original MP4 after success
+                  </label>
+                  <p className="text-xs leading-5 text-muted">Lossless container copy via mkvmerge - no re-encoding. The new .mkv is created next to the source file; files whose .mkv already exists are skipped.</p>
+                </div>
+              ) : null}
               <h2 className="text-sm font-semibold">Track Removal</h2>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={removeAudio} onChange={(event) => setRemoveAudio(event.target.checked)} /> Remove unwanted audio languages</label>
               <Field label="Audio languages to keep" value={audioLanguages} onChange={setAudioLanguages} placeholder="eng,jpn" />
@@ -295,17 +306,6 @@ export function MuxRemuxPage() {
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={preserveChapters} onChange={(event) => setPreserveChapters(event.target.checked)} /> Preserve chapters</label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={preserveAttachments} onChange={(event) => setPreserveAttachments(event.target.checked)} /> Preserve attachments/fonts</label>
               <p className="text-xs leading-5 text-muted">Originals are always replaced through a safe temp file with automatic backup.</p>
-              {mp4Files.length > 0 ? (
-                <>
-                  <h2 className="pt-1 text-sm font-semibold">MP4 Conversion</h2>
-                  <p className="text-xs text-muted">{mp4Files.length === 1 ? "1 MP4 file detected" : `${mp4Files.length} MP4 files detected`}</p>
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={convertMp4} onChange={(event) => setConvertMp4(event.target.checked)} /> Convert selected MP4 files to MKV</label>
-                  <label className={["flex items-center gap-2 pl-5 text-sm", convertMp4 ? "" : "text-disabled"].join(" ")}>
-                    <input type="checkbox" checked={deleteMp4AfterConvert} disabled={!convertMp4} onChange={(event) => setDeleteMp4AfterConvert(event.target.checked)} /> Delete original MP4 after success
-                  </label>
-                  <p className="text-xs leading-5 text-muted">Lossless container copy via mkvmerge - no re-encoding. The new .mkv is created next to the source file; files whose .mkv already exists are skipped.</p>
-                </>
-              ) : null}
             </div>
           ) : null}
 

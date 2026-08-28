@@ -33,6 +33,32 @@ beforeEach(() => {
 });
 
 describe("MKV Operations file selection", () => {
+  it("shows MP4 conversion above track removal when MP4 files are present", async () => {
+    const mp4 = { ...mediaFile("Movie.mp4"), extension: ".mp4", reader: "ffprobe" };
+    renderWithBackend(
+      <MediaLibraryProvider><MuxRemuxPage /></MediaLibraryProvider>,
+      {
+        getCurrentScanFiles: () => Promise.resolve({
+          updatedUtc: "2026-08-28T20:00:00Z",
+          files: [mp4],
+          selectedPaths: [mp4.path],
+          summary: { total: 1, mkv: 0, mp4: 1, failed: 0, cached: 0 }
+        }),
+        getWebSettings: () => Promise.resolve({ mkvMergeDefaultAudioLanguages: "eng", mkvMergeDefaultSubtitleLanguages: "eng" } as WebSettings),
+        setFileSelection: (selectedPaths) => Promise.resolve({
+          updatedUtc: "2026-08-28T20:00:00Z",
+          files: [mp4],
+          selectedPaths,
+          summary: { total: 1, mkv: 0, mp4: 1, failed: 0, cached: 0 }
+        })
+      }
+    );
+
+    const conversion = await screen.findByRole("heading", { name: "MP4 Conversion" });
+    const trackRemoval = screen.getByRole("heading", { name: "Track Removal" });
+    expect(conversion.compareDocumentPosition(trackRemoval) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("restores a running operation after navigating away and back", async () => {
     const files = [mediaFile("Episode 01.mkv")];
     window.sessionStorage.setItem("mkvo.web.activeOperationJob", JSON.stringify({ id: "mux-job", label: "MKV Operations" }));
