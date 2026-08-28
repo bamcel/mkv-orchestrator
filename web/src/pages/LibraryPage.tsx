@@ -45,6 +45,10 @@ type PendingTitleRebuild = {
 // synchronous Web Storage quota while surviving navigation and browser reloads.
 const libraryViewCache = new Map<string, LibraryViewSnapshot>();
 
+export function resetLibraryViewCacheForTests() {
+  libraryViewCache.clear();
+}
+
 export function LibraryPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -371,7 +375,29 @@ export function LibraryPage() {
       if (normalizePath(right.path) === normalizePath(templatePath)) return 1;
       return left.path.localeCompare(right.path);
     });
-    setWorkingView(selectedFiles, selectedFiles.map((file) => file.path), templatePath);
+    // Replace Dashboard's previous scan cache before navigation. Otherwise an
+    // already cached or in-flight response can restore the old file list until
+    // the whole browser is refreshed.
+    void queryClient.cancelQueries({ queryKey: ["current-scan-files"] });
+    const selectedPaths = selectedFiles.map((file) => file.path);
+    queryClient.setQueryData(["current-scan-files"], {
+      updatedUtc: new Date().toISOString(),
+      files: selectedFiles,
+      selectedPaths,
+      summary: {
+        total: selectedFiles.length,
+        mkv: selectedFiles.filter((file) => file.extension.toLowerCase() === ".mkv").length,
+        mp4: selectedFiles.filter((file) => file.extension.toLowerCase() === ".mp4").length,
+        failed: selectedFiles.filter((file) => file.status.toLowerCase().includes("failed")).length,
+        cached: selectedFiles.filter((file) => file.status.toLowerCase().includes("cached")).length
+      }
+    });
+    try {
+      window.sessionStorage.setItem("mkvo.web.scanSources", JSON.stringify(titleSourcePaths(title)));
+    } catch {
+      // The in-memory working view remains authoritative for this tab.
+    }
+    setWorkingView(selectedFiles, selectedPaths, templatePath);
     navigate("/dashboard");
   }
 

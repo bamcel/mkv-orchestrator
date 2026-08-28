@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Route, Routes } from "react-router-dom";
 
-import { buildLibraryTitles, LibraryPage } from "./LibraryPage";
+import { buildLibraryTitles, LibraryPage, resetLibraryViewCacheForTests } from "./LibraryPage";
+import { DashboardPage } from "./DashboardPage";
 import { MediaLibraryProvider } from "../state/MediaLibraryContext";
 import { renderWithBackend } from "../test/render";
 import type { LibraryAuditRow, MediaFileRow, ScanJobResponse, WebSettings } from "../api";
@@ -64,6 +66,7 @@ function settings(): WebSettings {
 }
 
 beforeEach(() => {
+  resetLibraryViewCacheForTests();
   window.localStorage.clear();
   window.sessionStorage.clear();
 });
@@ -102,6 +105,70 @@ describe("Library title aggregation", () => {
 });
 
 describe("Library poster workflow", () => {
+  it("replaces the previous Dashboard scan during a mismatch handoff", async () => {
+    const user = userEvent.setup();
+    const row = auditRow(1, true);
+    const handoffRoot = "/media/handoff/Example Show/Season 1";
+    const rows = [{
+      ...row,
+      folderPath: handoffRoot,
+      templateFilePath: `${handoffRoot}/Episode 01.mkv`,
+      issueFilePaths: [`${handoffRoot}/Episode 02.mkv`],
+      allFilePaths: [`${handoffRoot}/Episode 01.mkv`, `${handoffRoot}/Episode 02.mkv`]
+    }];
+    const files = rows.flatMap((row) => row.allFilePaths.map(media));
+    const previous = media("/media/old/Previous Scan.mkv");
+    const handoffSettings = settings();
+    handoffSettings.mediaServers[0].libraries[0].containerPath = "/media/handoff";
+    const completedJob = {
+      id: "library-scan",
+      status: "Completed",
+      completed: files.length,
+      total: files.length,
+      files,
+      summary: { total: files.length, mkv: files.length, mp4: 0, failed: 0, cached: 0 },
+      skipped: [],
+      error: ""
+    } as ScanJobResponse;
+
+    renderWithBackend(
+      <MediaLibraryProvider>
+        <Routes>
+          <Route path="/" element={<LibraryPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+        </Routes>
+      </MediaLibraryProvider>,
+      {
+        getStatus: () => Promise.resolve({ name: "MKVO", version: "0.1.0", mediaRoot: "/media", configRoot: "/config", sourceRoots: [], tools: [], contractVersion: 1 }),
+        getWebSettings: () => Promise.resolve(handoffSettings),
+        getLibraryCatalog: () => Promise.resolve({ items: [] }),
+        getLibraryLocalArtwork: () => Promise.reject(new Error("No local poster")),
+        startScan: () => Promise.resolve({ ...completedJob, status: "Queued", files: [] }),
+        getScanJob: () => Promise.resolve(completedJob),
+        buildLibraryAudit: () => Promise.resolve({ summary: { groups: 1, files: files.length, issueGroups: 1, standardGroups: 0 }, items: rows }),
+        setFileSelection: (selectedPaths) => Promise.resolve({
+          updatedUtc: "2026-08-28T20:00:01Z",
+          files,
+          selectedPaths,
+          summary: completedJob.summary
+        }),
+        getCurrentScanFiles: () => Promise.resolve({
+          updatedUtc: "2026-08-20T20:00:00Z",
+          files: [previous],
+          selectedPaths: [previous.path],
+          summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 0 }
+        })
+      }
+    );
+
+    await user.click(await screen.findByRole("button", { name: /open example show library details/i }));
+    await user.click(screen.getByRole("button", { name: /send mismatches \+ template to dashboard/i }));
+
+    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("row", { name: /Episode 01\.mkv/i })).toBeInTheDocument();
+    expect(screen.queryByText("Previous Scan.mkv")).not.toBeInTheDocument();
+  });
+
   it("shows a slate placeholder and offers both Dashboard handoff scopes", async () => {
     const user = userEvent.setup();
     const rows = [auditRow(1, true), auditRow(2, false)];

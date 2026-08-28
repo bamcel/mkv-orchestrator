@@ -24,9 +24,17 @@ export function DashboardPage() {
     templateFilePath,
     setTemplateFilePath,
     clearLibraryCache,
-    syncFromBackend
+    syncFromBackend,
+    isWorkingView
   } = useMediaLibrary();
-  const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
+  const currentScan = useQuery({
+    queryKey: ["current-scan-files"],
+    queryFn: getCurrentScanFiles,
+    // A Library handoff has already installed an exact scoped response. The
+    // short normal grace period also covers the first render while the working
+    // view state and route change are being committed together.
+    staleTime: isWorkingView ? Number.POSITIVE_INFINITY : 1_000
+  });
   const [sources, setSources] = useState<string[]>(() => {
     try {
       const stored = window.sessionStorage.getItem(scanSourcesStorageKey);
