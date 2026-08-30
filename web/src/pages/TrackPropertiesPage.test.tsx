@@ -50,6 +50,55 @@ beforeEach(() => {
 });
 
 describe("Track Properties template synchronization", () => {
+  it("offers descriptive channel names separately from metadata-generated audio names", async () => {
+    const scannedFile = file("Episode 01.mkv");
+    const loadedTemplate = template(scannedFile.path);
+    loadedTemplate.audioTracks = [
+      {
+        trackNumber: 1,
+        trackLabel: "Audio 1",
+        type: "audio",
+        currentName: "",
+        currentLanguage: "eng",
+        currentCodec: "AAC",
+        currentChannels: 6,
+        currentDefault: true,
+        editedName: "",
+        nameFromMetadata: true,
+        editedLanguage: "eng"
+      },
+      {
+        trackNumber: 2,
+        trackLabel: "Audio 2",
+        type: "audio",
+        currentName: "",
+        currentLanguage: "eng",
+        currentCodec: "AC-3",
+        currentChannels: 2,
+        currentDefault: false,
+        editedName: "",
+        nameFromMetadata: true,
+        editedLanguage: "eng"
+      }
+    ];
+
+    renderWithBackend(
+      <MediaLibraryProvider>
+        <TrackPropertiesPage />
+      </MediaLibraryProvider>,
+      {
+        getCurrentScanFiles: () => Promise.resolve({ updatedUtc: "2026-08-30T20:00:00Z", files: [scannedFile], selectedPaths: [scannedFile.path], summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 0 } }),
+        getWebSettings: () => Promise.resolve({ audioNamePresets: [], subtitleNamePresets: [], languagePresets: [] } as unknown as WebSettings),
+        loadPropEditTemplate: () => Promise.resolve(loadedTemplate)
+      }
+    );
+
+    expect(await screen.findByRole("option", { name: "AAC English 5.1" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "5.1 Surround" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "AC-3 English 2.0" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "2.0 Stereo" })).toBeInTheDocument();
+  });
+
   it("defaults audio and subtitle forced-track selections to None", async () => {
     const scannedFile = file("Episode 01.mkv");
     const loadedTemplate = template(scannedFile.path);

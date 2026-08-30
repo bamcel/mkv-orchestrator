@@ -572,7 +572,10 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
             <tbody>
               {rows.map((track) => {
                 const isCustom = customTrackKeys.has(getTrackKey(type, track.trackNumber));
-                const nameOptions = buildTrackOptions(namePresets, track.editedName, track.currentName);
+                const channelNameOption = type === "audio" && track.currentChannels != null
+                  ? descriptiveChannelName(track.currentChannels)
+                  : "";
+                const nameOptions = buildTrackOptions(namePresets, track.editedName, track.currentName, channelNameOption);
                 const languageOptions = buildTrackOptions(languagePresets, track.editedLanguage, track.currentLanguage);
                 const metadataName = buildMetadataTrackName(track);
                 const selectedName = track.nameFromMetadata ? metadataTrackNameValue : track.editedName;
@@ -673,6 +676,14 @@ function channelDisplayName(channels: number) {
   if (channels === 6) return "5.1";
   if (channels === 8) return "7.1";
   return `${channels}.0`;
+}
+
+function descriptiveChannelName(channels: number) {
+  if (channels === 1) return "1.0 Mono";
+  if (channels === 2) return "2.0 Stereo";
+  if (channels === 6) return "5.1 Surround";
+  if (channels === 8) return "7.1 Surround";
+  return channelDisplayName(channels);
 }
 
 function codecDisplayName(codec: string) {
