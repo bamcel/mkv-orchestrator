@@ -43,6 +43,7 @@ pub enum TextEdit {
     #[default]
     Keep,
     FromFileName,
+    FromEpisodeTitle,
     FromTrackMetadata,
     Set(String),
     Delete,
@@ -173,10 +174,12 @@ fn build_item(
         .path
         .file_stem()
         .map_or_else(String::new, |value| value.to_string_lossy().into_owned());
+    let episode_title = episode_title_for_file(file, &file_stem);
     add_container_edit(
         &request.container_title,
         file.container.title.as_deref(),
         &file_stem,
+        &episode_title,
         &mut mutations,
     );
 
@@ -192,6 +195,7 @@ fn build_item(
                 &request.video_track_name,
                 video.name.as_deref(),
                 &file_stem,
+                &episode_title,
                 selector,
                 &mut mutations,
             );
@@ -230,6 +234,7 @@ fn build_item(
             &resolved_name,
             track.name.as_deref(),
             &file_stem,
+            &episode_title,
             selector,
             &mut mutations,
         );
@@ -273,10 +278,51 @@ fn build_item(
     })
 }
 
+fn episode_title_for_file(file: &MediaFile, file_stem: &str) -> String {
+    let metadata_title = crate::rename::rename_tokens(file).episode_title;
+    if !metadata_title.trim().is_empty() {
+        return metadata_title;
+    }
+
+    // Scans performed after a rename do not retain provider metadata, but the
+    // default rename template places the title immediately after SxxExx. Read
+    // that suffix so "Use episode title" also works after an app restart.
+    let bytes = file_stem.as_bytes();
+    for start in 0..bytes.len() {
+        if !matches!(bytes[start], b's' | b'S') {
+            continue;
+        }
+        let mut cursor = start + 1;
+        let season_start = cursor;
+        while cursor < bytes.len() && bytes[cursor].is_ascii_digit() {
+            cursor += 1;
+        }
+        if cursor == season_start || cursor >= bytes.len() || !matches!(bytes[cursor], b'e' | b'E') {
+            continue;
+        }
+        cursor += 1;
+        let episode_start = cursor;
+        while cursor < bytes.len() && bytes[cursor].is_ascii_digit() {
+            cursor += 1;
+        }
+        if cursor == episode_start {
+            continue;
+        }
+        let title = file_stem[cursor..].trim_matches(|character: char| {
+            character.is_whitespace() || matches!(character, '-' | '_' | '.')
+        });
+        if !title.is_empty() {
+            return title.to_owned();
+        }
+    }
+    String::new()
+}
+
 fn add_container_edit(
     edit: &TextEdit,
     current: Option<&str>,
     file_stem: &str,
+    episode_title: &str,
     mutations: &mut Vec<PropertyMutation>,
 ) {
     match edit {
@@ -289,7 +335,12 @@ fn add_container_edit(
                 value: file_stem.to_owned(),
             });
         }
-        TextEdit::FromTrackMetadata => {}
+        TextEdit::FromEpisodeTitle if !episode_title.is_empty() && current != Some(episode_title) => {
+            mutations.push(PropertyMutation::SetContainerTitle {
+                value: episode_title.to_owned(),
+            });
+        }
+        TextEdit::FromTrackMetadata | TextEdit::FromEpisodeTitle => {}
         TextEdit::Set(value) if current != Some(value.as_str()) => {
             mutations.push(PropertyMutation::SetContainerTitle {
                 value: value.clone(),
@@ -368,6 +419,7 @@ fn add_track_name_edit(
     edit: &TextEdit,
     current: Option<&str>,
     file_stem: &str,
+    episode_title: &str,
     selector: TrackSelector,
     mutations: &mut Vec<PropertyMutation>,
 ) {
@@ -382,7 +434,13 @@ fn add_track_name_edit(
                 value: file_stem.to_owned(),
             });
         }
-        TextEdit::FromTrackMetadata => {}
+        TextEdit::FromEpisodeTitle if !episode_title.is_empty() && current != Some(episode_title) => {
+            mutations.push(PropertyMutation::SetTrackName {
+                selector,
+                value: episode_title.to_owned(),
+            });
+        }
+        TextEdit::FromTrackMetadata | TextEdit::FromEpisodeTitle => {}
         TextEdit::Set(value) if current != Some(value.as_str()) => {
             if value.is_empty() {
                 mutations.push(PropertyMutation::DeleteTrackName { selector });
@@ -408,7 +466,7 @@ fn valid_language(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
-    use mkvo_domain::{ContainerMetadata, FileFingerprint, MediaStatus, MediaTrack};
+    use mkvo_domain::{ContainerMetadata, EpisodeIdentity, FileFingerprint, MediaStatus, MediaTrack};
 
     use super::*;
 
@@ -505,6 +563,46 @@ mod tests {
             metadata_track_name(&audio, Some("eng")),
             "AAC English 5.1"
         );
+    }
+
+    #[test]
+    fn resolves_episode_title_for_each_container_and_video_track() {
+        let mut first = media();
+        first.episode = Some(EpisodeIdentity {
+            series_title: None,
+            season: Some(1),
+            episode: Some(1),
+            absolute_episode: None,
+            episode_title: Some("Winter Is Coming".to_owned()),
+            year: None,
+            is_movie: false,
+        });
+        let mut second = media();
+        second.path = PathBuf::from("Kingdom (2019) - S01E02 - The Kingsroad.mkv");
+        second.fingerprint.path = second.path.clone();
+        let request = PropertyEditPlanRequest {
+            source_access: BTreeMap::new(),
+            files: vec![first, second],
+            container_title: TextEdit::FromEpisodeTitle,
+            video_track_name: TextEdit::FromEpisodeTitle,
+            track_edits: Vec::new(),
+            authorized_roots: Vec::new(),
+            settings_fingerprint: "settings".to_owned(),
+            tool_fingerprints: BTreeMap::new(),
+            expires_in_seconds: 60,
+            idempotency_key: IdempotencyKey::generate(),
+        };
+
+        let plan = PropertyEditPlanner.build_plan(request).unwrap();
+        let values = plan.payload.items.iter().map(|item| {
+            item.mutations.iter().filter_map(|mutation| match mutation {
+                PropertyMutation::SetContainerTitle { value }
+                | PropertyMutation::SetTrackName { value, .. } => Some(value.as_str()),
+                _ => None,
+            }).collect::<Vec<_>>()
+        }).collect::<Vec<_>>();
+
+        assert_eq!(values, [["Winter Is Coming", "Winter Is Coming"], ["The Kingsroad", "The Kingsroad"]]);
     }
 
     #[test]

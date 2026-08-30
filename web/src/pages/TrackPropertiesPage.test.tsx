@@ -97,6 +97,8 @@ describe("Track Properties template synchronization", () => {
     expect(screen.getByRole("option", { name: "5.1 Surround" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "AC-3 English 2.0" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "2.0 Stereo" })).toBeInTheDocument();
+    expect(screen.getAllByRole("radio", { name: "Use episode title" })).toHaveLength(2);
+    expect(screen.queryByRole("radio", { name: /custom/i })).not.toBeInTheDocument();
   });
 
   it("defaults audio and subtitle forced-track selections to None", async () => {

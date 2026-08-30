@@ -351,6 +351,7 @@ fn title_edit(mode: TitleEditMode, custom: &str) -> TextEdit {
     match mode {
         TitleEditMode::Keep => TextEdit::Keep,
         TitleEditMode::File => TextEdit::FromFileName,
+        TitleEditMode::EpisodeTitle => TextEdit::FromEpisodeTitle,
         TitleEditMode::Custom => TextEdit::Set(custom.trim().to_owned()),
         TitleEditMode::Remove => TextEdit::Delete,
     }

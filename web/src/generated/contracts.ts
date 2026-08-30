@@ -697,7 +697,7 @@ export interface ThemeDefinition {
   "colors": Record<string, string>;
 }
 
-export type TitleEditMode = "keep" | "file" | "custom" | "remove";
+export type TitleEditMode = "keep" | "file" | "episode_title" | "custom" | "remove";
 
 export interface ToolStatus {
   "name": string;
@@ -1045,7 +1045,7 @@ export const contractSchemas: Record<ContractName, ContractSchema> = {
   SecretUpdate: { kind: "object", fields: { "key": { optional: false, schema: { kind: "string" } }, "value": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } }, "clear": { optional: false, schema: { kind: "boolean" } } }, flatten: [] },
   SourceRoot: { kind: "object", fields: { "name": { optional: false, schema: { kind: "string" } }, "path": { optional: false, schema: { kind: "string" } } }, flatten: [] },
   ThemeDefinition: { kind: "object", fields: { "name": { optional: false, schema: { kind: "string" } }, "colors": { optional: false, schema: { kind: "record", value: { kind: "string" } } } }, flatten: [] },
-  TitleEditMode: { kind: "union", variants: [{ kind: "literal", value: "keep" }, { kind: "literal", value: "file" }, { kind: "literal", value: "custom" }, { kind: "literal", value: "remove" }] },
+  TitleEditMode: { kind: "union", variants: [{ kind: "literal", value: "keep" }, { kind: "literal", value: "file" }, { kind: "literal", value: "episode_title" }, { kind: "literal", value: "custom" }, { kind: "literal", value: "remove" }] },
   ToolStatus: { kind: "object", fields: { "name": { optional: false, schema: { kind: "string" } }, "command": { optional: false, schema: { kind: "string" } }, "resolvedPath": { optional: false, schema: { kind: "string" } }, "available": { optional: false, schema: { kind: "boolean" } }, "version": { optional: false, schema: { kind: "string" } }, "error": { optional: true, schema: { kind: "union", variants: [{ kind: "string" }, { kind: "null" }] } } }, flatten: [] },
   TrackKind: { kind: "union", variants: [{ kind: "literal", value: "video" }, { kind: "literal", value: "audio" }, { kind: "literal", value: "subtitle" }, { kind: "literal", value: "buttons" }, { kind: "literal", value: "other" }] },
   TrackRow: { kind: "object", fields: { "id": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "trackNumber": { optional: false, schema: { kind: "number", integer: true, unsigned: true } }, "type": { optional: false, schema: { kind: "string" } }, "codec": { optional: false, schema: { kind: "string" } }, "language": { optional: false, schema: { kind: "string" } }, "name": { optional: false, schema: { kind: "string" } }, "channels": { optional: false, schema: { kind: "union", variants: [{ kind: "number", integer: true, unsigned: true }, { kind: "null" }] } }, "default": { optional: false, schema: { kind: "boolean" } }, "forced": { optional: false, schema: { kind: "boolean" } } }, flatten: [] },

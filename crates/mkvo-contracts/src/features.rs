@@ -857,6 +857,7 @@ pub struct PropEditTemplateResponse {
 pub enum TitleEditMode {
     Keep,
     File,
+    EpisodeTitle,
     Custom,
     Remove,
 }

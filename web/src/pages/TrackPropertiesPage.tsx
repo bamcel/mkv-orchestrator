@@ -18,14 +18,14 @@ import { useMediaLibrary } from "../state/MediaLibraryContext";
 import { useInvalidatePropEditTemplate, usePropEditTemplate } from "../state/propEditTemplate";
 import { useOperationJob } from "../state/OperationJobContext";
 
-type TitleMode = "keep" | "remove" | "file" | "custom";
+type TitleMode = "keep" | "remove" | "file" | "episode_title";
 type TrackType = "audio" | "subtitle";
 
 const audioNamePresets = ["English", "Japanese", "Commentary"];
 const subtitleNamePresets = ["Dialogue", "English", "English Forced", "English SDH", "Signs & Songs", "Fansub"];
 const languagePresets = ["eng", "jpn", "kor", "und"];
 const configurationStorageKey = "mkvo.web.trackPropertiesConfiguration";
-const configurationVersion = 5;
+const configurationVersion = 6;
 const metadataTrackNameValue = "__mkvo_metadata_track_name__";
 
 type StoredTrackPropertiesConfiguration = {
@@ -34,8 +34,6 @@ type StoredTrackPropertiesConfiguration = {
   templatePath: string;
   containerMode: TitleMode;
   videoMode: TitleMode;
-  customContainerTitle: string;
-  customVideoTitle: string;
   videoLanguageEnabled: boolean;
   videoLanguage: string;
   audioTracks: PropEditTrackConfigRow[];
@@ -65,8 +63,6 @@ export function TrackPropertiesPage() {
   const [templatePath, setTemplatePath] = useState(storedConfiguration.current?.templatePath ?? "");
   const [containerMode, setContainerMode] = useState<TitleMode>(storedConfiguration.current?.containerMode ?? "keep");
   const [videoMode, setVideoMode] = useState<TitleMode>(storedConfiguration.current?.videoMode ?? "keep");
-  const [customContainerTitle, setCustomContainerTitle] = useState(storedConfiguration.current?.customContainerTitle ?? "");
-  const [customVideoTitle, setCustomVideoTitle] = useState(storedConfiguration.current?.customVideoTitle ?? "");
   const [videoLanguageEnabled, setVideoLanguageEnabled] = useState(storedConfiguration.current?.videoLanguageEnabled ?? false);
   const [videoLanguage, setVideoLanguage] = useState(storedConfiguration.current?.videoLanguage ?? "und");
   const [template, setTemplate] = useState<PropEditTemplateResponse | null>(null);
@@ -131,8 +127,6 @@ export function TrackPropertiesPage() {
     setCustomTrackKeys(new Set(canRestore ? stored!.customTrackKeys : []));
     setContainerMode(canRestore ? stored!.containerMode : "keep");
     setVideoMode(canRestore ? stored!.videoMode : "keep");
-    setCustomContainerTitle(canRestore ? stored!.customContainerTitle : loadedTemplate.templateFileName.replace(/\.[^.]+$/, ""));
-    setCustomVideoTitle(canRestore ? stored!.customVideoTitle : loadedTemplate.templateFileName.replace(/\.[^.]+$/, ""));
     setVideoLanguageEnabled(canRestore ? stored!.videoLanguageEnabled ?? false : false);
     setVideoLanguage(canRestore ? stored!.videoLanguage || "und" : "und");
     storedConfiguration.current = canRestore ? stored : null;
@@ -161,8 +155,6 @@ export function TrackPropertiesPage() {
       templatePath,
       containerMode,
       videoMode,
-      customContainerTitle,
-      customVideoTitle,
       videoLanguageEnabled,
       videoLanguage,
       audioTracks,
@@ -180,7 +172,7 @@ export function TrackPropertiesPage() {
     }
   }, [
     currentScan.data, configurationReady, template, templatePath, containerMode, videoMode,
-    customContainerTitle, customVideoTitle, videoLanguageEnabled, videoLanguage, audioTracks, subtitleTracks, defaultAudio,
+    videoLanguageEnabled, videoLanguage, audioTracks, subtitleTracks, defaultAudio,
     forcedAudio, defaultSubtitle, forcedSubtitle, customTrackKeys
   ]);
 
@@ -245,9 +237,9 @@ export function TrackPropertiesPage() {
       selectedPaths: selectedMkvPaths,
       templatePath,
       containerTitleMode: containerMode,
-      customContainerTitle,
+      customContainerTitle: "",
       videoTitleMode: videoMode,
-      customVideoTitle,
+      customVideoTitle: "",
       videoTrackLanguage: videoLanguageEnabled ? videoLanguage.trim() || "und" : null,
       audioTracks,
       subtitleTracks,
@@ -354,17 +346,13 @@ export function TrackPropertiesPage() {
               title="Container Title"
               value={containerMode}
               onChange={setContainerMode}
-              customValue={customContainerTitle}
-              onCustomChange={setCustomContainerTitle}
-              labels={{ remove: "Remove title", keep: "Keep existing title", file: "Use file name", custom: "Custom title" }}
+              labels={{ remove: "Remove title", keep: "Keep existing title", file: "Use file name", episode_title: "Use episode title" }}
             />
             <TitleModeGroup
               title="Video Track Name"
               value={videoMode}
               onChange={setVideoMode}
-              customValue={customVideoTitle}
-              onCustomChange={setCustomVideoTitle}
-              labels={{ remove: "Remove video name", keep: "Keep existing name", file: "Use file name", custom: "Custom video name" }}
+              labels={{ remove: "Remove video name", keep: "Keep existing name", file: "Use file name", episode_title: "Use episode title" }}
             />
 
             <div className="mt-3 text-xs font-semibold text-muted">Video Track Language</div>
@@ -491,30 +479,23 @@ export function TrackPropertiesPage() {
   );
 }
 
-function TitleModeGroup({ title, value, onChange, customValue, onCustomChange, labels }: {
+function TitleModeGroup({ title, value, onChange, labels }: {
   title: string;
   value: TitleMode;
   onChange: (value: TitleMode) => void;
-  customValue: string;
-  onCustomChange: (value: string) => void;
   labels: Record<TitleMode, string>;
 }) {
   return (
     <div className="mt-3">
       <div className="text-sm font-semibold">{title}</div>
       <div className="mt-2 space-y-1.5 text-sm">
-        {(["remove", "keep", "file", "custom"] as TitleMode[]).map((mode) => (
+        {(["remove", "keep", "file", "episode_title"] as TitleMode[]).map((mode) => (
           <label key={mode} className="flex h-7 items-center gap-2 px-2">
             <input type="radio" checked={value === mode} onChange={() => onChange(mode)} />
             {labels[mode]}
           </label>
         ))}
       </div>
-      <input
-        value={customValue}
-        onChange={(event) => onCustomChange(event.target.value)}
-        className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
-      />
     </div>
   );
 }
