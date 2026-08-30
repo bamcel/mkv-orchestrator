@@ -3,7 +3,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 
-import { RenamePage } from "./RenamePage";
+import { countCompletedRenameRows, RenamePage } from "./RenamePage";
 import { MediaLibraryProvider, useMediaLibrary } from "../state/MediaLibraryContext";
 import { renderWithBackend } from "../test/render";
 import type { MediaFileRow } from "../api";
@@ -83,6 +83,27 @@ const searchResult = (format: "movie" | "series") => ({
   databaseUrl: "",
   displayName: "Obsession (2026)",
   providerDisplay: "TMDB"
+});
+
+describe("rename apply progress", () => {
+  it("counts source paths that have left the live scan as completed", () => {
+    const first = mediaFile("Episode 01.mkv");
+    const second = mediaFile("Episode 02.mkv");
+    const rows = [first, second].map((file) => ({
+      selected: true,
+      sourcePath: file.path,
+      currentFileName: file.fileName,
+      detected: "",
+      episodeName: "",
+      newFileName: `Renamed ${file.fileName}`,
+      confidence: "High",
+      status: "Ready",
+      canApply: true
+    }));
+
+    expect(countCompletedRenameRows(rows, [second])).toBe(1);
+    expect(countCompletedRenameRows(rows, [])).toBe(2);
+  });
 });
 
 /** Renders the page and runs a search that returns one result of this kind. */

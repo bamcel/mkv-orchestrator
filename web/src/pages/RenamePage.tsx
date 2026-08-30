@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, ExternalLink, RefreshCw, RotateCcw, Search, Trash2, Wand2, X } from "lucide-react";
 import {
@@ -82,8 +82,8 @@ export function RenamePage() {
    * exist. Rust moves its own set with the files; this makes the rest of the
    * app re-read it.
    */
-  const refreshAfterRename = () => {
-    void queryClient.invalidateQueries({ queryKey: ["current-scan-files"] });
+  const refreshAfterRename = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["current-scan-files"] });
     void queryClient.invalidateQueries({ queryKey: ["propedit-template"] });
   };
   const [storedRenameState] = useState<StoredRenameState>(() => loadRenameState());
@@ -120,6 +120,7 @@ export function RenamePage() {
   const [batchPlans, setBatchPlans] = useState<BatchMoviePlan[]>([]);
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchApplying, setBatchApplying] = useState(false);
+  const initialScanStatusApplied = useRef(false);
   const [compactPreview, setCompactPreview] = useState(() => {
     try {
       return window.localStorage.getItem(renamePreviewCompactStorageKey) === "true";
@@ -195,7 +196,8 @@ export function RenamePage() {
   useEffect(() => {
     if (!currentScan.data) return;
     syncFromBackend(currentScan.data);
-    if (currentScan.data.files.length > 0 && storedRenameState.statusText === undefined) {
+    if (currentScan.data.files.length > 0 && storedRenameState.statusText === undefined && !initialScanStatusApplied.current) {
+      initialScanStatusApplied.current = true;
       setStatusText(`Loaded ${currentScan.data.files.length} scanned file(s) from Dashboard.`);
     }
   }, [currentScan.data, storedRenameState.statusText]);
@@ -315,7 +317,11 @@ export function RenamePage() {
 
   const apply = useMutation({
     mutationFn: applyRenamePreview,
-    onSuccess: (response) => {
+    onMutate: (request) => {
+      const total = request.items.filter((row) => row.selected && row.canApply).length;
+      setStatusText(`0 of ${total} complete`);
+    },
+    onSuccess: async (response) => {
       const renames = response.items.flatMap((result, index) => {
         const original = previewRows[index];
         return result.status === "Renamed" && original
@@ -324,13 +330,44 @@ export function RenamePage() {
       });
 
       updateFilesAfterRename(renames);
-      refreshAfterRename();
+      await refreshAfterRename();
       setPreviewRows(response.items);
       setPreviewSummary(response.summary);
       setStatusText(response.status);
     },
     onError: (error) => setStatusText(error instanceof Error ? error.message : "Rename apply failed.")
   });
+
+  useEffect(() => {
+    if (!apply.isPending || !apply.variables) return;
+    const pendingRows = apply.variables.items.filter((row) => row.selected && row.canApply);
+    let stopped = false;
+    let polling = false;
+
+    const updateRenameProgress = async () => {
+      if (polling) return;
+      polling = true;
+      try {
+        const result = await currentScan.refetch();
+        if (stopped || !result.data) return;
+        syncFromBackend(result.data);
+        const completed = countCompletedRenameRows(pendingRows, result.data.files);
+        setStatusText(`${completed} of ${pendingRows.length} complete`);
+      } finally {
+        polling = false;
+      }
+    };
+
+    void updateRenameProgress();
+    const interval = window.setInterval(() => void updateRenameProgress(), 750);
+    return () => {
+      stopped = true;
+      window.clearInterval(interval);
+    };
+    // Polling is tied to this one mutation. Library synchronization causes
+    // renders but must not restart the timer or issue overlapping requests.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apply.isPending]);
 
   const undoBatch = useMutation({
     mutationFn: undoRenameBatch,
@@ -343,7 +380,7 @@ export function RenamePage() {
       }));
 
       updateFilesAfterRename(restoreMoves);
-      refreshAfterRename();
+      void refreshAfterRename();
       setPreviewRows((current) => current.map((row) => {
         const move = restoreMoves.find((item) => item.oldPath.toLowerCase() === row.sourcePath.toLowerCase());
         return move
@@ -528,7 +565,7 @@ export function RenamePage() {
       }
     }
     updateFilesAfterRename(moves);
-    refreshAfterRename();
+    void refreshAfterRename();
     setBatchApplying(false);
     setStatusText(`Batch Movies complete: ${renamed} renamed, ${skipped} skipped.`);
     setPreviewRows([]);
@@ -1531,6 +1568,11 @@ function makeUnavailableRenameRow(file: MediaFileRow, status: string): RenamePre
 
 function normalizeRenamePath(path: string) {
   return path.replace(/\\/g, "/").toLowerCase();
+}
+
+export function countCompletedRenameRows(rows: RenamePreviewRow[], files: MediaFileRow[]) {
+  const currentPaths = new Set(files.map((file) => normalizeRenamePath(file.path)));
+  return rows.filter((row) => !currentPaths.has(normalizeRenamePath(row.sourcePath))).length;
 }
 
 function buildOptionList(values: string[], current: string) {
