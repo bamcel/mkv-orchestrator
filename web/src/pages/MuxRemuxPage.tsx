@@ -16,7 +16,7 @@ import { SortableColumnHeader, type SortDirection } from "../components/Sortable
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 import { useOperationJob } from "../state/OperationJobContext";
 
-type FileSortKey = "file" | "audio" | "subtitles" | "status";
+type FileSortKey = "file" | "reader" | "codec" | "resolution" | "audio" | "subtitles" | "status";
 
 export function MuxRemuxPage() {
   const { files, selectedPaths, setSelectedPaths, toggleSelectedPath, templateFilePath, syncFromBackend, isWorkingView } = useMediaLibrary();
@@ -378,17 +378,11 @@ export function MuxRemuxPage() {
               }}
               aria-label="MKV Operations file selection"
             >
-              <table className="w-full min-w-[56.25rem] table-fixed border-collapse text-left text-sm">
-                <colgroup>
-                  <col className="w-[64%]" />
-                  <col className="w-[14%]" />
-                  <col className="w-[13%]" />
-                  <col className="w-[9%]" />
-                </colgroup>
+              <table className="w-full min-w-[68.75rem] border-collapse text-left text-sm">
                 <thead className="sticky top-0 bg-card text-xs text-text">
                   <tr>
-                    {(["file", "audio", "subtitles", "status"] as FileSortKey[]).map((key) => (
-                      <SortableColumnHeader key={key} active={fileSort.key === key} direction={fileSort.direction} label={{ file: "File", audio: "Audio", subtitles: "Subtitles", status: "Status" }[key]} onSort={() => setFileSort((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }))} />
+                    {(["file", "reader", "codec", "resolution", "audio", "subtitles", "status"] as FileSortKey[]).map((key) => (
+                      <SortableColumnHeader key={key} active={fileSort.key === key} direction={fileSort.direction} label={{ file: "File", reader: "Reader", codec: "Codec", resolution: "Resolution", audio: "Audio", subtitles: "Subtitles", status: "Status" }[key]} onSort={() => setFileSort((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }))} />
                     ))}
                   </tr>
                 </thead>
@@ -416,8 +410,11 @@ export function MuxRemuxPage() {
                           <span className="truncate" title={file.path}>{file.fileName}</span>
                         </div>
                       </td>
-                      <td className="truncate border-b border-border px-3 py-2">{file.audioSummary || "None"}</td>
-                      <td className="truncate border-b border-border px-3 py-2">{file.subtitleSummary || "None"}</td>
+                      <td className="border-b border-border px-3 py-2">{file.reader}</td>
+                      <td className="border-b border-border px-3 py-2">{file.codec || "Unknown"}</td>
+                      <td className="border-b border-border px-3 py-2">{file.resolution || "Unknown"}</td>
+                      <td className="max-w-[15.625rem] truncate border-b border-border px-3 py-2" title={file.audioSummary}>{file.audioSummary || "None"}</td>
+                      <td className="max-w-[15.625rem] truncate border-b border-border px-3 py-2" title={file.subtitleSummary}>{file.subtitleSummary || "None"}</td>
                       <td className={["truncate border-b border-border px-3 py-2", fileStatus === "Warning" ? "text-warning" : fileStatus === "Template" ? "text-template" : "text-success"].join(" ")}>{fileStatus}</td>
                     </tr>
                     );
@@ -600,7 +597,15 @@ function normalizePath(path: string) {
 function sortOperationFiles(files: ReturnType<typeof useMediaLibrary>["files"], key: FileSortKey, direction: SortDirection, templateFile: ReturnType<typeof useMediaLibrary>["files"][number] | null) {
   const multiplier = direction === "asc" ? 1 : -1;
   return files.map((file, index) => ({ file, index })).sort((left, right) => {
-    const value = (file: typeof left.file) => key === "file" ? file.fileName : key === "audio" ? file.audioSummary || "None" : key === "subtitles" ? file.subtitleSummary || "None" : operationFileStatus(file, templateFile);
+    const value = (file: typeof left.file) => {
+      if (key === "file") return file.fileName;
+      if (key === "reader") return file.reader;
+      if (key === "codec") return file.codec || "Unknown";
+      if (key === "resolution") return file.resolution || "Unknown";
+      if (key === "audio") return file.audioSummary || "None";
+      if (key === "subtitles") return file.subtitleSummary || "None";
+      return operationFileStatus(file, templateFile);
+    };
     const compared = value(left.file).localeCompare(value(right.file), undefined, { numeric: true, sensitivity: "base" });
     return compared === 0 ? left.index - right.index : compared * multiplier;
   }).map(({ file }) => file);

@@ -127,6 +127,9 @@ describe("MKV Operations file selection", () => {
     );
 
     await screen.findByText("Episode 01.mkv");
+    expect(screen.getByRole("button", { name: "Sort by Reader" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sort by Codec" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sort by Resolution" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sort by Status" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tracks" })).toBeInTheDocument();
     const selection = screen.getByLabelText("MKV Operations file selection");
