@@ -99,7 +99,7 @@ describe("MKV Operations file selection", () => {
 
   it("selects every current file by default and offers select-all controls on right click", async () => {
     const user = userEvent.setup();
-    const files = [mediaFile("Episode 01.mkv"), mediaFile("Episode 02.mkv")];
+    const files = [mediaFile("Episode 01.mkv"), { ...mediaFile("Episode 02.mkv"), subtitleSummary: "eng x2" }];
     const setFileSelection = vi.fn((selectedPaths: string[]) => Promise.resolve({
       updatedUtc: "2026-08-15T20:00:00Z",
       files,
@@ -127,6 +127,7 @@ describe("MKV Operations file selection", () => {
     );
 
     await screen.findByText("Episode 01.mkv");
+    expect(screen.getByRole("button", { name: "Sort by Status" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tracks" })).toBeInTheDocument();
     const selection = screen.getByLabelText("MKV Operations file selection");
     const checkboxes = within(selection).getAllByRole("checkbox");
@@ -134,6 +135,8 @@ describe("MKV Operations file selection", () => {
     expect(setFileSelection).toHaveBeenCalledWith(files.map((file) => file.path));
 
     const rows = within(selection).getAllByRole("row").slice(1);
+    expect(rows[0]).toHaveTextContent("Template");
+    expect(rows[1]).toHaveTextContent("Warning");
     await user.click(rows[0]);
     fireEvent.click(rows[1], { ctrlKey: true });
     fireEvent.keyDown(selection, { key: " " });

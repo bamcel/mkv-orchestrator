@@ -214,6 +214,10 @@ export function DashboardPage() {
     if (files.length === 0) return null;
     return files.find((file) => file.path === templateFilePath) ?? files[0];
   }, [files, templateFilePath]);
+  const warningFileCount = useMemo(
+    () => files.filter((file) => file.path !== templateFile?.path && hasTemplateMismatch(file, templateFile)).length,
+    [files, templateFile]
+  );
   const displayedFiles = useMemo(
     () => sortMediaFiles(files, fileSort.key, fileSort.direction, templateFile),
     [files, fileSort, templateFile]
@@ -661,7 +665,12 @@ export function DashboardPage() {
             </button>
           </div>
 
-          <div className="mt-4 text-sm text-success">{dashboardStatus}</div>
+          <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <span className="text-success">{dashboardStatus}</span>
+            {!actionStatus && !isScanning && files.length > 0 ? (
+              <span className="text-warning">{warningFileCount} warning file(s)</span>
+            ) : null}
+          </div>
           {selectedMismatchMessages.length > 0 ? (
             <div className="mt-3 rounded-md border border-warning bg-input p-3 text-xs text-warning">
               <div className="font-semibold">Selected file mismatches</div>
