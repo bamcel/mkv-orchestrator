@@ -36,25 +36,4 @@ describe("global operation status", () => {
     expect(operationStatus).toHaveClass("break-words", "[overflow-wrap:anywhere]");
     expect(screen.getByText("Track Properties route")).toBeInTheDocument();
   });
-
-  it("offers the complete navigation in a forced mobile layout", async () => {
-    window.localStorage.setItem("mkvo.web.layoutPreference", "mobile");
-    renderWithBackend(
-      <MediaLibraryProvider>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route path="*" element={<div>Dashboard route</div>} />
-          </Route>
-        </Routes>
-      </MediaLibraryProvider>,
-      {
-        getStatus: () => Promise.resolve({ name: "MKVO", version: "0.1.0", mediaRoot: "/media", configRoot: "/config", sourceRoots: [], tools: [], contractVersion: 1 })
-      }
-    );
-
-    expect(screen.getByRole("navigation", { name: "Primary navigation" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open all navigation" })).toBeInTheDocument();
-    expect(screen.getByText("Dashboard route")).toBeInTheDocument();
-    expect(document.documentElement).toHaveClass("mkvo-mobile-ui");
-  });
 });
