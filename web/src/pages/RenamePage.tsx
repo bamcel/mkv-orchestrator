@@ -36,6 +36,7 @@ type StoredRenameState = {
   /** The last title filled in from a scan, so a typed one is recognisable. */
   autoFilledTitle?: string;
   template?: string;
+  customSeriesTitle?: string;
   selectedIndex?: string;
   scopeKey?: string;
   scopeKeys?: string[];
@@ -96,6 +97,7 @@ export function RenamePage() {
   // title look hand-written and auto-fill would never fire again.
   const [autoFilledTitle, setAutoFilledTitle] = useState(storedRenameState.autoFilledTitle || "");
   const [template, setTemplate] = useState(storedRenameState.template || "{series} - S{season:00}E{episode:00} - {episodeTitle}");
+  const [customSeriesTitle, setCustomSeriesTitle] = useState(storedRenameState.customSeriesTitle || storedRenameState.searchTitle || "");
   const [selectedIndex, setSelectedIndex] = useState(storedRenameState.selectedIndex || "0");
   const [scopeKeys, setScopeKeys] = useState<string[]>(
     storedRenameState.scopeKeys ?? (storedRenameState.scopeKey ? [storedRenameState.scopeKey] : [])
@@ -180,6 +182,7 @@ export function RenamePage() {
         searchTitle,
         autoFilledTitle,
         template,
+        customSeriesTitle,
         selectedIndex,
         scopeKeys,
         previewRows,
@@ -191,7 +194,7 @@ export function RenamePage() {
     } catch {
       // Session restore is optional; the page still works without storage access.
     }
-  }, [provider, language, searchTitle, autoFilledTitle, template, selectedIndex, scopeKeys, previewRows, previewSummary, statusText, searchResults, scopeRows]);
+  }, [provider, language, searchTitle, autoFilledTitle, template, customSeriesTitle, selectedIndex, scopeKeys, previewRows, previewSummary, statusText, searchResults, scopeRows]);
 
   useEffect(() => {
     if (!currentScan.data) return;
@@ -220,6 +223,7 @@ export function RenamePage() {
     // afterwards, and nothing is searched until Search is pressed.
     setSearchTitle(guessed);
     setAutoFilledTitle(guessed);
+    setCustomSeriesTitle(guessed);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scannedFileNames]);
 
@@ -263,6 +267,7 @@ export function RenamePage() {
       setSearchResults(response.results);
       setScopeRows([]);
       setSelectedIndex("0");
+      setCustomSeriesTitle(response.results[0]?.name ?? searchTitle);
       setScopeKeys([]);
       setPreviewRows([]);
       setPreviewSummary("");
@@ -302,7 +307,8 @@ export function RenamePage() {
           provider: variables.provider,
           language: variables.language,
           scopeKeys: selectedScopeKeys,
-          template
+          template,
+          customSeriesTitle
         });
       }
     }
@@ -511,7 +517,8 @@ export function RenamePage() {
           provider,
           language,
           scopeKeys: ["all"],
-          template
+          template,
+          customSeriesTitle
         });
         plans.push({ sourcePath: item.file.path, preview: response });
         rows.push(...response.items.map((row) => ({ ...row, selected: row.canApply })));
@@ -604,7 +611,8 @@ export function RenamePage() {
       provider,
       language,
       scopeKeys,
-      template
+      template,
+      customSeriesTitle
     });
   }
 
@@ -832,7 +840,9 @@ export function RenamePage() {
           <select
             value={selectedIndex}
             onChange={(event) => {
-              setSelectedIndex(event.target.value);
+              const nextIndex = event.target.value;
+              setSelectedIndex(nextIndex);
+              setCustomSeriesTitle(results[Number(nextIndex)]?.name ?? searchTitle);
               setScopeRows([]);
               setScopeKeys([]);
               setPreviewRows([]);
@@ -908,6 +918,18 @@ export function RenamePage() {
             className="hidden"
           />
           <div className="mt-1 text-[0.6875rem] text-muted">Manage templates in Settings &gt; Rename.</div>
+
+          <label className={["mt-3 block text-sm font-semibold", selectedIsMovie ? "text-disabled" : ""].join(" ")} htmlFor="rename-custom-series">
+            Custom {"{series}"}
+          </label>
+          <input
+            id="rename-custom-series"
+            value={customSeriesTitle}
+            disabled={selectedIsMovie}
+            onChange={(event) => setCustomSeriesTitle(event.target.value)}
+            placeholder="Series title used by {series}"
+            className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
+          />
 
           <div className="mt-3 text-sm font-semibold">Execution</div>
           <div className="mt-3 flex gap-2">

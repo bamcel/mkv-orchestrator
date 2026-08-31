@@ -351,16 +351,19 @@ pub fn build_file_name(file: &MediaFile, template: &str) -> String {
 
 #[must_use]
 pub fn sanitize_file_name(value: &str) -> String {
-    let replaced: String = value
-        .chars()
-        .map(|character| {
-            if character.is_control() || "\\/:*?\"<>|".contains(character) {
-                '-'
-            } else {
-                character
-            }
-        })
-        .collect();
+    let mut replaced = String::with_capacity(value.len());
+    for character in value.chars() {
+        if character == ':' {
+            // A colon in provider metadata normally separates title parts.
+            // Windows forbids it in a filename, so preserve that visual
+            // separation with the application's standard spaced dash.
+            replaced.push_str(" - ");
+        } else if character.is_control() || "\\/*?\"<>|".contains(character) {
+            replaced.push('-');
+        } else {
+            replaced.push(character);
+        }
+    }
     let collapsed = replaced.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut clean = collapsed.trim().trim_end_matches(['.', ' ']).to_owned();
     while clean.contains(" -  ") {
@@ -661,7 +664,23 @@ mod tests {
     #[test]
     fn renders_and_sanitizes_series_template() {
         let name = build_file_name(&media("old.MKV", 2), DEFAULT_SERIES_TEMPLATE);
-        assert_eq!(name, "Show- Name - S01E02 - Pilot - Part 1.MKV");
+        assert_eq!(name, "Show - Name - S01E02 - Pilot - Part 1.MKV");
+    }
+
+    #[test]
+    fn provider_title_colon_becomes_a_spaced_dash() {
+        let mut file = media(
+            "Demon Slayer - Kimetsu no Yaiba (2019) - S01E01 - Cruelty [Bluray-1080p].mkv",
+            1,
+        );
+        let episode = file.episode.as_mut().expect("episode");
+        episode.series_title = Some("Demon Slayer: Kimetsu no Yaiba".to_owned());
+        episode.episode_title = Some("Cruelty".to_owned());
+
+        assert_eq!(
+            build_file_name(&file, DEFAULT_SERIES_TEMPLATE),
+            "Demon Slayer - Kimetsu no Yaiba - S01E01 - Cruelty.mkv"
+        );
     }
 
     #[test]

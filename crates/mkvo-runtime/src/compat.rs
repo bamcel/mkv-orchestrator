@@ -93,6 +93,8 @@ pub struct RenamePreviewRequest {
     #[serde(default)]
     pub scope_keys: Vec<String>,
     pub template: Option<String>,
+    #[serde(default)]
+    pub custom_series_title: String,
     pub idempotency_key: Option<IdempotencyKey>,
 }
 

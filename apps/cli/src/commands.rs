@@ -280,6 +280,7 @@ pub async fn rename(runtime: &MkvoRuntime, args: RenameArgs) -> Result<u8> {
             language: args.language.clone(),
             scope_keys: Vec::new(),
             template: args.template.clone(),
+            custom_series_title: String::new(),
             idempotency_key: None,
         })
         .await?;

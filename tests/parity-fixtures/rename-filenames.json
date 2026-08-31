@@ -98,7 +98,7 @@
         "template": "{title}",
         "isMovie": false
       },
-      "expected": "Show- Bad-Name- -Pilot--.mkv"
+      "expected": "Show - Bad-Name- -Pilot--.mkv"
     },
     {
       "id": "planner-invalid-characters-become-spaces",

@@ -27,6 +27,11 @@ impl MkvoRuntime {
             .await?;
         let selected_seasons = selected_seasons(&request.scope_keys);
         let is_movie = request.selected_result.format.eq_ignore_ascii_case("movie");
+        let series_title = if !is_movie && !request.custom_series_title.trim().is_empty() {
+            request.custom_series_title.trim()
+        } else {
+            request.selected_result.name.as_str()
+        };
         for file in &mut files {
             // A film has no episode number to parse out of its name, so
             // requiring one left every movie unmatched and every token empty --
@@ -40,7 +45,7 @@ impl MkvoRuntime {
             };
             if let Some(episode) = matched {
                 file.episode = Some(EpisodeIdentity {
-                    series_title: Some(request.selected_result.name.clone()),
+                    series_title: Some(series_title.to_owned()),
                     season: Some(episode.season),
                     episode: Some(episode.episode),
                     absolute_episode: episode.absolute_episode,
@@ -52,7 +57,7 @@ impl MkvoRuntime {
                     provider,
                     media_id: request.selected_result.media_id(),
                     episode_id: Some(episode.id.clone()),
-                    title: request.selected_result.name.clone(),
+                    title: series_title.to_owned(),
                     episode_title: Some(episode.title.clone()),
                     confidence: Some(100),
                 });

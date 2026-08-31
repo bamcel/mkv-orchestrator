@@ -264,6 +264,7 @@ export function buildRenamePreview(request: {
   language?: string;
   scopeKeys?: string[];
   template?: string;
+  customSeriesTitle?: string;
 }): Promise<RenamePreviewResponse> {
   return getBackendClient().buildRenamePreview(request);
 }

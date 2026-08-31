@@ -70,6 +70,7 @@ export type RenamePreviewRequest = RenameScopesRequest & {
   files: MediaFileRow[];
   scopeKeys?: string[];
   template?: string;
+  customSeriesTitle?: string;
 };
 
 export type RenameApplyRequest = {

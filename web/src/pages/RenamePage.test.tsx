@@ -157,6 +157,7 @@ describe("rename episode scope", () => {
 
     await waitFor(() => expect(screen.getByText("All episodes (78)")).toBeInTheDocument());
     expect(screen.queryByText(/not applicable to a movie/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Custom {series}" })).toHaveValue("Obsession");
   });
 
   it("treats the backend all scope as exclusive", async () => {
