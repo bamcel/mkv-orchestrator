@@ -360,12 +360,17 @@ export function TrackPropertiesPage() {
               labels={{ remove: "Remove video name", keep: "Keep existing name", file: "Use file name", episode_title: "Use episode title" }}
             />
 
-            <FlagSelect
-              label="Set video default flag"
+            <label className="mt-3 block text-xs font-semibold text-muted" htmlFor="video-default-flag">Set video default flag</label>
+            <select
+              id="video-default-flag"
               value={defaultVideo}
-              onChange={setDefaultVideo}
-              options={["Keep existing", "Default", "None"]}
-            />
+              onChange={(event) => setDefaultVideo(event.target.value)}
+              className="mt-2 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
+            >
+              {["Keep existing", "Default", "None"].map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
 
             <div className="mt-3 text-xs font-semibold text-muted">Video Track Language</div>
             <label className="mt-2 flex items-center gap-2 text-sm text-text">
