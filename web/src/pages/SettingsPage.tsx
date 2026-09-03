@@ -96,7 +96,7 @@ type EditableMediaServer = WebMediaServer & {
 const themeColorOptions = [
   { name: "Accent", label: "Accent", cssVariable: "--color-accent" },
   { name: "AccentHover", label: "Accent hover", cssVariable: "--color-accent-hover" },
-  { name: "AppTitle", label: "App title and logo", cssVariable: "--color-app-title" },
+  { name: "AppTitle", label: "AppTitle", cssVariable: "--color-app-title" },
   { name: "Border", label: "Border", cssVariable: "--color-border" },
   { name: "BorderStrong", label: "Strong border", cssVariable: "--color-border-strong" },
   { name: "Brand", label: "Brand", cssVariable: "--color-brand" },
