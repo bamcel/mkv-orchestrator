@@ -27,6 +27,7 @@ const languagePresets = ["eng", "jpn", "kor", "und"];
 const configurationStorageKey = "mkvo.web.trackPropertiesConfiguration";
 const configurationVersion = 7;
 const metadataTrackNameValue = "__mkvo_metadata_track_name__";
+const channelTrackNameValue = "__mkvo_channel_track_name__";
 
 type StoredTrackPropertiesConfiguration = {
   configurationVersion?: number;
@@ -312,7 +313,7 @@ export function TrackPropertiesPage() {
       else next.delete(key);
       return next;
     });
-    if (value) updateTrack(type, trackNumber, { nameFromMetadata: false });
+    if (value) updateTrack(type, trackNumber, { nameFromMetadata: false, nameFromChannels: false });
   }
 
   const audioFlagOptions = ["Keep existing", ...audioTracks.map((track) => track.trackLabel), "None"];
@@ -573,10 +574,10 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
                 const channelNameOption = type === "audio" && track.currentChannels != null
                   ? descriptiveChannelName(track.currentChannels)
                   : "";
-                const nameOptions = buildTrackOptions(namePresets, track.editedName, track.currentName, channelNameOption);
+                const nameOptions = buildTrackOptions(namePresets, track.editedName, track.currentName);
                 const languageOptions = buildTrackOptions(languagePresets, track.editedLanguage, track.currentLanguage);
                 const metadataName = buildMetadataTrackName(track);
-                const selectedName = track.nameFromMetadata ? metadataTrackNameValue : track.editedName;
+                const selectedName = track.nameFromChannels ? channelTrackNameValue : track.nameFromMetadata ? metadataTrackNameValue : track.editedName;
 
                 return (
                   <tr key={`${type}-${track.trackNumber}`} className="bg-card hover:bg-selected">
@@ -588,7 +589,7 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
                       {isCustom ? (
                         <input
                           value={track.editedName}
-                          onChange={(event) => onChange(type, track.trackNumber, { editedName: event.target.value, nameFromMetadata: false })}
+                          onChange={(event) => onChange(type, track.trackNumber, { editedName: event.target.value, nameFromMetadata: false, nameFromChannels: false })}
                           placeholder="Type custom name"
                           className="h-8 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                         />
@@ -598,13 +599,16 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
                           onChange={(event) => onChange(
                             type,
                             track.trackNumber,
-                            event.target.value === metadataTrackNameValue
-                              ? { nameFromMetadata: true }
-                              : { editedName: event.target.value, nameFromMetadata: false }
+                            event.target.value === channelTrackNameValue
+                              ? { nameFromChannels: true, nameFromMetadata: false }
+                              : event.target.value === metadataTrackNameValue
+                                ? { nameFromMetadata: true, nameFromChannels: false }
+                                : { editedName: event.target.value, nameFromMetadata: false, nameFromChannels: false }
                           )}
                           className="h-8 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
                         >
                           {type === "audio" && <option value={metadataTrackNameValue}>{metadataName}</option>}
+                          {type === "audio" && <option value={channelTrackNameValue}>Auto: {channelNameOption || "channel name"} (per file)</option>}
                           {nameOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                         </select>
                       )}

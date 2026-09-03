@@ -45,6 +45,7 @@ pub enum TextEdit {
     FromFileName,
     FromEpisodeTitle,
     FromTrackMetadata,
+    FromTrackChannels,
     Set(String),
     Delete,
 }
@@ -228,6 +229,10 @@ fn build_item(
             TextEdit::FromTrackMetadata => {
                 TextEdit::Set(metadata_track_name(track, edit.language.as_deref()))
             }
+            TextEdit::FromTrackChannels => match track.channels {
+                Some(channels) => TextEdit::Set(descriptive_channel_name(channels)),
+                None => TextEdit::Keep,
+            },
             _ => edit.name.clone(),
         };
         add_track_name_edit(
@@ -340,7 +345,7 @@ fn add_container_edit(
                 value: episode_title.to_owned(),
             });
         }
-        TextEdit::FromTrackMetadata | TextEdit::FromEpisodeTitle => {}
+        TextEdit::FromTrackMetadata | TextEdit::FromTrackChannels | TextEdit::FromEpisodeTitle => {}
         TextEdit::Set(value) if current != Some(value.as_str()) => {
             mutations.push(PropertyMutation::SetContainerTitle {
                 value: value.clone(),
@@ -367,6 +372,16 @@ fn metadata_track_name(track: &mkvo_domain::MediaTrack, edited_language: Option<
         parts.push(channel_display_name(channels));
     }
     parts.join(" ")
+}
+
+fn descriptive_channel_name(channels: u16) -> String {
+    match channels {
+        1 => "1.0 Mono".to_owned(),
+        2 => "2.0 Stereo".to_owned(),
+        6 => "5.1 Surround".to_owned(),
+        8 => "7.1 Surround".to_owned(),
+        value => channel_display_name(value),
+    }
 }
 
 fn channel_display_name(channels: u16) -> String {
@@ -440,7 +455,7 @@ fn add_track_name_edit(
                 value: episode_title.to_owned(),
             });
         }
-        TextEdit::FromTrackMetadata | TextEdit::FromEpisodeTitle => {}
+        TextEdit::FromTrackMetadata | TextEdit::FromTrackChannels | TextEdit::FromEpisodeTitle => {}
         TextEdit::Set(value) if current != Some(value.as_str()) => {
             if value.is_empty() {
                 mutations.push(PropertyMutation::DeleteTrackName { selector });
@@ -551,6 +566,41 @@ mod tests {
             forced: None,
         };
         assert!(validate_track_intents(&[edit.clone(), edit]).is_err());
+    }
+
+    #[test]
+    fn channel_names_resolve_per_file_and_keep_unknown_channel_names() {
+        let files = [Some(6), Some(8), Some(2), None].into_iter().map(|channels| {
+            let mut file = media();
+            file.tracks[1].channels = channels;
+            file
+        }).collect();
+        let plan = PropertyEditPlanner.build_plan(PropertyEditPlanRequest {
+            files,
+            source_access: BTreeMap::new(),
+            container_title: TextEdit::Keep,
+            video_track_name: TextEdit::Keep,
+            track_edits: vec![TrackEditIntent {
+                kind: TrackKind::Audio,
+                ordinal: 1,
+                name: TextEdit::FromTrackChannels,
+                language: None,
+                default: None,
+                forced: None,
+            }],
+            authorized_roots: Vec::new(),
+            settings_fingerprint: "settings".to_owned(),
+            tool_fingerprints: BTreeMap::new(),
+            expires_in_seconds: 60,
+            idempotency_key: IdempotencyKey::generate(),
+        }).unwrap();
+        let names: Vec<_> = plan.payload.items.iter().map(|item| {
+            item.mutations.iter().find_map(|mutation| match mutation {
+                PropertyMutation::SetTrackName { value, .. } => Some(value.as_str()),
+                _ => None,
+            })
+        }).collect();
+        assert_eq!(names, [Some("5.1 Surround"), Some("7.1 Surround"), Some("2.0 Stereo"), None]);
     }
 
     #[test]

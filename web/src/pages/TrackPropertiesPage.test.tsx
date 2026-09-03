@@ -94,11 +94,18 @@ describe("Track Properties template synchronization", () => {
     );
 
     expect(await screen.findByRole("option", { name: "AAC English 5.1" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "5.1 Surround" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Auto: 5.1 Surround (per file)" })).toHaveValue("__mkvo_channel_track_name__");
     expect(screen.getByRole("option", { name: "AC-3 English 2.0" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "2.0 Stereo" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Auto: 2.0 Stereo (per file)" })).toHaveValue("__mkvo_channel_track_name__");
     expect(screen.getAllByRole("radio", { name: "Use episode title" })).toHaveLength(2);
     expect(screen.queryByRole("radio", { name: /custom/i })).not.toBeInTheDocument();
+    const autoChannelOption = screen.getByRole("option", { name: "Auto: 5.1 Surround (per file)" });
+    await userEvent.setup().selectOptions(autoChannelOption.closest("select")!, "__mkvo_channel_track_name__");
+    await waitFor(() => {
+      const saved = JSON.parse(window.sessionStorage.getItem("mkvo.web.trackPropertiesConfiguration")!);
+      expect(saved.audioTracks[0].nameFromChannels).toBe(true);
+      expect(saved.audioTracks[0].nameFromMetadata).toBe(false);
+    });
   });
 
   it("defaults audio and subtitle forced-track selections to None", async () => {

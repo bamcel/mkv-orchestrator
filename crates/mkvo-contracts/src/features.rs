@@ -828,6 +828,8 @@ pub struct PropEditTrackConfigRow {
     pub edited_name: String,
     #[serde(default)]
     pub name_from_metadata: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name_from_channels: Option<bool>,
     pub edited_language: String,
 }
 
