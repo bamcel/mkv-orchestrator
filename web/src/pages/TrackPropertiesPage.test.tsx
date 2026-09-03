@@ -1,7 +1,7 @@
 import { useMediaLibrary, MediaLibraryProvider } from "../state/MediaLibraryContext";
 import { renderWithBackend } from "../test/render";
 import type { MediaFileRow, PropEditTemplateRequest, PropEditTemplateResponse, WebSettings } from "../generated/contracts";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TrackPropertiesPage } from "./TrackPropertiesPage";
@@ -122,6 +122,39 @@ describe("Track Properties template synchronization", () => {
     const forcedTrackSelections = screen.getAllByRole("combobox", { name: "Set forced track" });
     expect(forcedTrackSelections).toHaveLength(2);
     forcedTrackSelections.forEach((selection) => expect(selection).toHaveValue("None"));
+  });
+
+  it("can set or clear the first video track default flag", async () => {
+    const user = userEvent.setup();
+    const scannedFile = file("Episode 01.mkv");
+    const loadedTemplate = template(scannedFile.path);
+    const buildPropEditPreview = vi.fn(() => Promise.resolve({
+      actions: [], skipped: [], noChange: [], summary: "No changes", status: "No changes",
+      planId: null, planFingerprint: null, idempotencyKey: null
+    }));
+
+    renderWithBackend(
+      <MediaLibraryProvider><TrackPropertiesPage /></MediaLibraryProvider>,
+      {
+        getCurrentScanFiles: () => Promise.resolve({ updatedUtc: "2026-08-25T20:00:00Z", files: [scannedFile], selectedPaths: [scannedFile.path], summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 0 } }),
+        getWebSettings: () => Promise.resolve({ audioNamePresets: [], subtitleNamePresets: [], languagePresets: [] } as unknown as WebSettings),
+        loadPropEditTemplate: () => Promise.resolve(loadedTemplate),
+        buildPropEditPreview
+      }
+    );
+
+    await screen.findByText(`Template loaded: ${scannedFile.fileName}`);
+    const videoDefault = screen.getByRole("combobox", { name: "Set video default flag" });
+    expect(within(videoDefault).getByRole("option", { name: "Default" })).toBeInTheDocument();
+    expect(within(videoDefault).getByRole("option", { name: "None" })).toBeInTheDocument();
+
+    await user.selectOptions(videoDefault, "Default");
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(buildPropEditPreview).toHaveBeenLastCalledWith(expect.objectContaining({ selectedDefaultVideo: "Default" })));
+
+    await user.selectOptions(videoDefault, "None");
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(buildPropEditPreview).toHaveBeenLastCalledWith(expect.objectContaining({ selectedDefaultVideo: "None" })));
   });
 
   it("reloads its track template when Dashboard changes the shared template file", async () => {

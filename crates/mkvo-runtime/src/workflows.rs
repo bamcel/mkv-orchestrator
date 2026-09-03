@@ -359,13 +359,18 @@ fn title_edit(mode: TitleEditMode, custom: &str) -> TextEdit {
 
 fn build_track_edits(request: &PropEditPreviewRequest) -> Vec<TrackEditIntent> {
     let mut edits = Vec::new();
-    if let Some(language) = request.video_track_language.as_deref() {
+    let video_language = request
+        .video_track_language
+        .as_deref()
+        .map(|language| language.trim().to_owned());
+    let video_default = track_flag_edit(&request.selected_default_video, "Default");
+    if video_language.is_some() || video_default.is_some() {
         edits.push(TrackEditIntent {
             kind: TrackKind::Video,
             ordinal: 1,
             name: TextEdit::Keep,
-            language: Some(language.trim().to_owned()),
-            default: None,
+            language: video_language,
+            default: video_default,
             forced: None,
         });
     }
@@ -770,6 +775,7 @@ mod tests {
             video_title_mode: TitleEditMode::Keep,
             custom_video_title: String::new(),
             video_track_language: None,
+            selected_default_video: "Keep existing".to_owned(),
             audio_tracks: vec![PropEditTrackConfigRow {
                 track_number: 1,
                 track_label: "Audio 1".to_owned(),
@@ -829,6 +835,7 @@ mod tests {
             video_title_mode: TitleEditMode::Keep,
             custom_video_title: String::new(),
             video_track_language: None,
+            selected_default_video: "Keep existing".to_owned(),
             audio_tracks: Vec::new(),
             subtitle_tracks: Vec::new(),
             selected_default_audio: "Keep existing".to_owned(),
@@ -848,6 +855,17 @@ mod tests {
         assert_eq!(edits[0].kind, TrackKind::Video);
         assert_eq!(edits[0].ordinal, 1);
         assert_eq!(edits[0].language.as_deref(), Some("und"));
+
+        request.video_track_language = None;
+        request.selected_default_video = "Default".to_owned();
+        let edits = build_track_edits(&request);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].kind, TrackKind::Video);
+        assert_eq!(edits[0].default, Some(true));
+
+        request.selected_default_video = "None".to_owned();
+        let edits = build_track_edits(&request);
+        assert_eq!(edits[0].default, Some(false));
     }
 
     #[tokio::test]

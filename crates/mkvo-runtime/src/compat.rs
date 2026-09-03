@@ -195,6 +195,8 @@ pub struct PropEditPreviewRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video_track_language: Option<String>,
     #[serde(default)]
+    pub selected_default_video: String,
+    #[serde(default)]
     pub audio_tracks: Vec<PropEditTrackConfigRow>,
     #[serde(default)]
     pub subtitle_tracks: Vec<PropEditTrackConfigRow>,

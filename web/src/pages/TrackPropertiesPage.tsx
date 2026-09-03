@@ -25,7 +25,7 @@ const audioNamePresets = ["English", "Japanese", "Commentary"];
 const subtitleNamePresets = ["Dialogue", "English", "English Forced", "English SDH", "Signs & Songs", "Fansub"];
 const languagePresets = ["eng", "jpn", "kor", "und"];
 const configurationStorageKey = "mkvo.web.trackPropertiesConfiguration";
-const configurationVersion = 6;
+const configurationVersion = 7;
 const metadataTrackNameValue = "__mkvo_metadata_track_name__";
 
 type StoredTrackPropertiesConfiguration = {
@@ -36,6 +36,7 @@ type StoredTrackPropertiesConfiguration = {
   videoMode: TitleMode;
   videoLanguageEnabled: boolean;
   videoLanguage: string;
+  defaultVideo: string;
   audioTracks: PropEditTrackConfigRow[];
   subtitleTracks: PropEditTrackConfigRow[];
   defaultAudio: string;
@@ -65,6 +66,7 @@ export function TrackPropertiesPage() {
   const [videoMode, setVideoMode] = useState<TitleMode>(storedConfiguration.current?.videoMode ?? "keep");
   const [videoLanguageEnabled, setVideoLanguageEnabled] = useState(storedConfiguration.current?.videoLanguageEnabled ?? false);
   const [videoLanguage, setVideoLanguage] = useState(storedConfiguration.current?.videoLanguage ?? "und");
+  const [defaultVideo, setDefaultVideo] = useState(storedConfiguration.current?.defaultVideo ?? "Keep existing");
   const [template, setTemplate] = useState<PropEditTemplateResponse | null>(null);
   const [audioTracks, setAudioTracks] = useState<PropEditTrackConfigRow[]>([]);
   const [subtitleTracks, setSubtitleTracks] = useState<PropEditTrackConfigRow[]>([]);
@@ -129,6 +131,7 @@ export function TrackPropertiesPage() {
     setVideoMode(canRestore ? stored!.videoMode : "keep");
     setVideoLanguageEnabled(canRestore ? stored!.videoLanguageEnabled ?? false : false);
     setVideoLanguage(canRestore ? stored!.videoLanguage || "und" : "und");
+    setDefaultVideo(canRestore ? stored!.defaultVideo || "Keep existing" : "Keep existing");
     storedConfiguration.current = canRestore ? stored : null;
     setPreviewResult(null);
     setConfigurationReady(true);
@@ -157,6 +160,7 @@ export function TrackPropertiesPage() {
       videoMode,
       videoLanguageEnabled,
       videoLanguage,
+      defaultVideo,
       audioTracks,
       subtitleTracks,
       defaultAudio,
@@ -172,7 +176,7 @@ export function TrackPropertiesPage() {
     }
   }, [
     currentScan.data, configurationReady, template, templatePath, containerMode, videoMode,
-    videoLanguageEnabled, videoLanguage, audioTracks, subtitleTracks, defaultAudio,
+    videoLanguageEnabled, videoLanguage, defaultVideo, audioTracks, subtitleTracks, defaultAudio,
     forcedAudio, defaultSubtitle, forcedSubtitle, customTrackKeys
   ]);
 
@@ -241,6 +245,7 @@ export function TrackPropertiesPage() {
       videoTitleMode: videoMode,
       customVideoTitle: "",
       videoTrackLanguage: videoLanguageEnabled ? videoLanguage.trim() || "und" : null,
+      selectedDefaultVideo: defaultVideo,
       audioTracks,
       subtitleTracks,
       selectedDefaultAudio: defaultAudio,
@@ -353,6 +358,13 @@ export function TrackPropertiesPage() {
               value={videoMode}
               onChange={setVideoMode}
               labels={{ remove: "Remove video name", keep: "Keep existing name", file: "Use file name", episode_title: "Use episode title" }}
+            />
+
+            <FlagSelect
+              label="Set video default flag"
+              value={defaultVideo}
+              onChange={setDefaultVideo}
+              options={["Keep existing", "Default", "None"]}
             />
 
             <div className="mt-3 text-xs font-semibold text-muted">Video Track Language</div>
