@@ -886,8 +886,8 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "library" ? (
-            <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,0.8fr)]">
-              <SettingsCard className="xl:col-start-2 xl:row-start-1" title="Manual Watch Folders" description="Fallback paths available with or without a media server.">
+            <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-[minmax(0,2fr)_minmax(18rem,0.8fr)] xl:items-stretch">
+              <SettingsCard className="xl:col-start-2 xl:row-start-1 xl:h-full" title="Manual Watch Folders" description="Fallback paths available with or without a media server.">
                 <label className="block">
                   <span className="text-xs font-semibold text-muted">Watch folders</span>
                   <textarea
@@ -911,7 +911,7 @@ export function SettingsPage() {
                 </div>
               </SettingsCard>
 
-              <SettingsCard className="xl:col-start-1 xl:row-start-1" title="Media Servers" description="Connect Emby, Jellyfin, or Plex. API keys and tokens are encrypted before they are stored.">
+              <SettingsCard className="xl:col-start-1 xl:row-start-1 xl:h-full" title="Media Servers" description="Connect Emby, Jellyfin, or Plex. API keys and tokens are encrypted before they are stored.">
                 <div className="max-h-64 space-y-2 overflow-auto pr-1">
                   {mediaServers.length === 0 ? (
                     <div className="rounded-md border border-border bg-input px-3 py-2 text-sm text-subtle">
