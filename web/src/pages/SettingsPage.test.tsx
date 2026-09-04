@@ -55,12 +55,36 @@ const status = {
   contractVersion: 1
 };
 
-/// Provider settings live behind the Rename tab, so every test opens it first.
 async function openRenameTab(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole("button", { name: /^rename$/i }));
 }
 
+async function openProvidersTab(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", { name: /^api providers$/i }));
+}
+
 describe("Settings providers", () => {
+  it("places API Providers directly after General and keeps providers out of Rename", async () => {
+    const user = userEvent.setup();
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+
+    const tabs = await screen.findAllByRole("button");
+    const generalIndex = tabs.findIndex((button) => button.textContent === "General");
+    const providersIndex = tabs.findIndex((button) => button.textContent === "API Providers");
+    expect(providersIndex).toBe(generalIndex + 1);
+
+    await openProvidersTab(user);
+    for (const heading of ["TVDB", "TMDB", "AniDB", "Provider Defaults"]) {
+      expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
+    }
+    await openRenameTab(user);
+    expect(screen.queryByRole("heading", { name: "API Providers" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Rename Templates" })).toBeInTheDocument();
+  });
+
   /// The backend supports four providers. Anything missing from this list is
   /// unreachable however well the Rust side works.
   it("offers every provider the backend implements", async () => {
@@ -69,7 +93,7 @@ describe("Settings providers", () => {
       getStatus: () => Promise.resolve(status),
       getWebSettings: () => Promise.resolve(settings())
     });
-    await openRenameTab(user);
+    await openProvidersTab(user);
 
     for (const provider of ["TVDB", "TMDB", "AniDB", "AniList"]) {
       expect(await screen.findByRole("option", { name: provider })).toBeInTheDocument();
@@ -88,7 +112,7 @@ describe("Settings providers", () => {
       saveWebSettings
     });
 
-    await openRenameTab(user);
+    await openProvidersTab(user);
     const field = await screen.findByLabelText(/anidb client/i);
     await user.type(field, "mkvo/1");
     await user.click(screen.getByRole("button", { name: /save settings/i }));
@@ -109,7 +133,7 @@ describe("Settings providers", () => {
       saveWebSettings
     });
 
-    await openRenameTab(user);
+    await openProvidersTab(user);
     const field = await screen.findByLabelText(/tvdb api key/i);
     expect(field).toHaveAttribute("placeholder", "••••••••••••");
     expect(field).toHaveValue("");
@@ -134,7 +158,7 @@ describe("Settings providers", () => {
       })),
       testRenameProvider
     });
-    await openRenameTab(user);
+    await openProvidersTab(user);
 
     expect(screen.queryByText(/remove saved/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Test TVDB" }));

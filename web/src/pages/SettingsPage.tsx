@@ -76,6 +76,7 @@ const attributions = [
 
 const settingsTabs = [
   { id: "general", label: "General", Icon: Wrench },
+  { id: "providers", label: "API Providers", Icon: KeyRound },
   { id: "rename", label: "Rename", Icon: KeyRound },
   { id: "presets", label: "Presets", Icon: SlidersHorizontal },
   { id: "library", label: "Library", Icon: Database },
@@ -682,11 +683,13 @@ export function SettingsPage() {
             </div>
           ) : null}
 
-          {activeTab === "rename" ? (
+          {activeTab === "providers" ? (
             <div className="grid min-w-0 gap-3">
               <SettingsCard title="API Providers" description="TVDB and TMDB lookup requires your own API keys. Leave saved key fields blank to keep existing values.">
-                <div className="grid grid-cols-4 gap-3">
-                  <div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <h3 className="mb-3 text-sm font-semibold text-text">TVDB</h3>
+                    <div className="grid grid-cols-2 gap-3">
                     <label className="block">
                       <span className="text-xs font-semibold text-muted">TVDB API Key</span>
                       <input
@@ -697,9 +700,6 @@ export function SettingsPage() {
                         className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                       />
                     </label>
-                    <ProviderTestButton provider="TVDB" testingProvider={testingProvider} onTest={testProvider} />
-                  </div>
-                  <div>
                     <label className="block">
                       <span className="text-xs font-semibold text-muted">TVDB PIN</span>
                       <input
@@ -710,8 +710,11 @@ export function SettingsPage() {
                         className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                       />
                     </label>
+                    </div>
+                    <ProviderTestButton provider="TVDB" testingProvider={testingProvider} onTest={testProvider} />
                   </div>
-                  <div>
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <h3 className="mb-3 text-sm font-semibold text-text">TMDB</h3>
                     <label className="block">
                       <span className="text-xs font-semibold text-muted">TMDB API Key</span>
                       <input
@@ -724,7 +727,8 @@ export function SettingsPage() {
                     </label>
                     <ProviderTestButton provider="TMDB" testingProvider={testingProvider} onTest={testProvider} />
                   </div>
-                  <div>
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <h3 className="mb-3 text-sm font-semibold text-text">AniDB</h3>
                     <label className="block">
                       <span className="text-xs font-semibold text-muted">AniDB Client</span>
                       <input
@@ -737,6 +741,11 @@ export function SettingsPage() {
                     <p className="mt-1.5 text-xs text-subtle">
                       AniDB identifies callers by a registered client name and version rather than an API key. Searching works without it; loading episodes requires it.
                     </p>
+                  </div>
+                  <div className="col-span-3 grid grid-cols-2 gap-3 rounded-lg border border-border bg-card p-3">
+                  <div className="col-span-2">
+                    <h3 className="text-sm font-semibold text-text">Provider Defaults</h3>
+                    <p className="mt-1 text-xs text-subtle">Choose the language and provider used for new metadata searches.</p>
                   </div>
                   <label className="block">
                     <span className="text-xs font-semibold text-muted">Metadata Language</span>
@@ -759,17 +768,14 @@ export function SettingsPage() {
                       <option value="AniList">AniList</option>
                     </select>
                   </label>
-                  <label className="col-span-2 block">
-                    <span className="text-xs font-semibold text-muted">Default Rename Template</span>
-                    <input
-                      value={template}
-                      onChange={(event) => setTemplate(event.target.value)}
-                      className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
-                    />
-                  </label>
+                  </div>
                 </div>
               </SettingsCard>
+            </div>
+          ) : null}
 
+          {activeTab === "rename" ? (
+            <div className="grid min-w-0 gap-3">
               <SettingsCard title="Rename Templates" description="One template per line. The selected default template is always preserved when settings are saved." actions={
                   <button
                     type="button"
@@ -783,6 +789,14 @@ export function SettingsPage() {
                     Reset to Defaults
                   </button>
               }>
+                <label className="block">
+                  <span className="text-xs font-semibold text-muted">Default Rename Template</span>
+                  <input
+                    value={template}
+                    onChange={(event) => setTemplate(event.target.value)}
+                    className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
+                  />
+                </label>
                 <p className="text-xs leading-5 text-muted">
                   Series templates can use {"{series}"}, {"{season:00}"}, {"{episode:00}"}, {"{episodeTitle}"}, and {"{absolute:000}"}. Movie templates can use {"{title}"} and {"{year}"}.
                 </p>
