@@ -118,6 +118,31 @@ describe("Settings providers", () => {
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
     expect(saveWebSettings.mock.calls[0][0].tvdbApiKey).toBeUndefined();
   });
+
+  it("tests TVDB and TMDB directly and omits saved-secret removal checkboxes", async () => {
+    const user = userEvent.setup();
+    const testRenameProvider = vi.fn()
+      .mockResolvedValueOnce({ status: "TVDB connection successful." })
+      .mockResolvedValueOnce({ status: "TMDB connection successful." });
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings({
+        hasTvdbApiKey: true,
+        hasTvdbPin: true,
+        hasTmdbApiKey: true,
+        hasAnidbClient: true
+      })),
+      testRenameProvider
+    });
+    await openRenameTab(user);
+
+    expect(screen.queryByText(/remove saved/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Test TVDB" }));
+    await waitFor(() => expect(testRenameProvider).toHaveBeenLastCalledWith({ provider: "TVDB", language: "eng" }));
+    await user.click(screen.getByRole("button", { name: "Test TMDB" }));
+    await waitFor(() => expect(testRenameProvider).toHaveBeenLastCalledWith({ provider: "TMDB", language: "eng" }));
+    expect(testRenameProvider).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("Settings library folders", () => {

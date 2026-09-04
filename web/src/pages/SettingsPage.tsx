@@ -132,12 +132,8 @@ export function SettingsPage() {
   const [tvdbApiKey, setTvdbApiKey] = useState("");
   const [tvdbPin, setTvdbPin] = useState("");
   const [tmdbApiKey, setTmdbApiKey] = useState("");
-  const [clearTvdbApiKey, setClearTvdbApiKey] = useState(false);
-  const [clearTvdbPin, setClearTvdbPin] = useState(false);
-  const [clearTmdbApiKey, setClearTmdbApiKey] = useState(false);
   const [anidbClient, setAnidbClient] = useState("");
-  const [clearAnidbClient, setClearAnidbClient] = useState(false);
-  const [isTestingProvider, setIsTestingProvider] = useState(false);
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [language, setLanguage] = useState("eng");
   const [provider, setProvider] = useState("TVDB");
   const [template, setTemplate] = useState(defaultRenameTemplate);
@@ -214,10 +210,10 @@ export function SettingsPage() {
   }, [isDesktop, status.data?.mediaRoot, webSettings.data]);
 
   const pendingSettingsRequest: WebSettingsRequest = {
-    tvdbApiKey: clearTvdbApiKey ? "" : tvdbApiKey || undefined,
-    tvdbPin: clearTvdbPin ? "" : tvdbPin || undefined,
-    tmdbApiKey: clearTmdbApiKey ? "" : tmdbApiKey || undefined,
-    anidbClient: clearAnidbClient ? "" : anidbClient || undefined,
+    tvdbApiKey: tvdbApiKey || undefined,
+    tvdbPin: tvdbPin || undefined,
+    tmdbApiKey: tmdbApiKey || undefined,
+    anidbClient: anidbClient || undefined,
     tvdbLanguage: language,
     renameLookupProvider: provider,
     renameTemplate: template,
@@ -272,10 +268,6 @@ export function SettingsPage() {
       setTvdbPin("");
       setTmdbApiKey("");
       setAnidbClient("");
-      setClearTvdbApiKey(false);
-      setClearTvdbPin(false);
-      setClearTmdbApiKey(false);
-      setClearAnidbClient(false);
       setSettingsStatus("Settings saved.");
       webSettings.refetch();
       setLanguage(saved.tvdbLanguage);
@@ -396,16 +388,16 @@ export function SettingsPage() {
     }
   }
 
-  async function testSelectedProvider() {
-    setIsTestingProvider(true);
-    setSettingsStatus(`Testing ${provider} connection...`);
+  async function testProvider(providerName: "TVDB" | "TMDB") {
+    setTestingProvider(providerName);
+    setSettingsStatus(`Testing ${providerName} connection...`);
     try {
-      const result = await testRenameProvider({ provider, language });
+      const result = await testRenameProvider({ provider: providerName, language });
       setSettingsStatus(result.status);
     } catch (error) {
       setSettingsStatus(error instanceof Error ? error.message : "Provider test failed.");
     } finally {
-      setIsTestingProvider(false);
+      setTestingProvider(null);
     }
   }
 
@@ -691,9 +683,9 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "rename" ? (
-            <div className="grid min-w-0 gap-5">
+            <div className="grid min-w-0 gap-3">
               <SettingsCard title="API Providers" description="TVDB and TMDB lookup requires your own API keys. Leave saved key fields blank to keep existing values.">
-                <div className="grid gap-4 xl:grid-cols-2">
+                <div className="grid grid-cols-4 gap-3">
                   <div>
                     <label className="block">
                       <span className="text-xs font-semibold text-muted">TVDB API Key</span>
@@ -702,16 +694,10 @@ export function SettingsPage() {
                         onChange={(event) => setTvdbApiKey(event.target.value)}
                         placeholder={webSettings.data?.hasTvdbApiKey ? savedSecretPlaceholder : "User-provided TVDB API key"}
                         type="password"
-                        disabled={clearTvdbApiKey}
-                        className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
+                        className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                       />
                     </label>
-                    {webSettings.data?.hasTvdbApiKey ? (
-                      <label className="mt-1.5 flex items-center gap-2 text-xs text-muted">
-                        <input type="checkbox" checked={clearTvdbApiKey} onChange={(event) => setClearTvdbApiKey(event.target.checked)} />
-                        Remove saved key on next save
-                      </label>
-                    ) : null}
+                    <ProviderTestButton provider="TVDB" testingProvider={testingProvider} onTest={testProvider} />
                   </div>
                   <div>
                     <label className="block">
@@ -721,16 +707,9 @@ export function SettingsPage() {
                         onChange={(event) => setTvdbPin(event.target.value)}
                         placeholder={webSettings.data?.hasTvdbPin ? savedSecretPlaceholder : "Optional TVDB subscriber PIN"}
                         type="password"
-                        disabled={clearTvdbPin}
-                        className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
+                        className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                       />
                     </label>
-                    {webSettings.data?.hasTvdbPin ? (
-                      <label className="mt-1.5 flex items-center gap-2 text-xs text-muted">
-                        <input type="checkbox" checked={clearTvdbPin} onChange={(event) => setClearTvdbPin(event.target.checked)} />
-                        Remove saved PIN on next save
-                      </label>
-                    ) : null}
                   </div>
                   <div>
                     <label className="block">
@@ -740,16 +719,10 @@ export function SettingsPage() {
                         onChange={(event) => setTmdbApiKey(event.target.value)}
                         placeholder={webSettings.data?.hasTmdbApiKey ? savedSecretPlaceholder : "User-provided TMDB API key"}
                         type="password"
-                        disabled={clearTmdbApiKey}
-                        className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
+                        className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                       />
                     </label>
-                    {webSettings.data?.hasTmdbApiKey ? (
-                      <label className="mt-1.5 flex items-center gap-2 text-xs text-muted">
-                        <input type="checkbox" checked={clearTmdbApiKey} onChange={(event) => setClearTmdbApiKey(event.target.checked)} />
-                        Remove saved key on next save
-                      </label>
-                    ) : null}
+                    <ProviderTestButton provider="TMDB" testingProvider={testingProvider} onTest={testProvider} />
                   </div>
                   <div>
                     <label className="block">
@@ -758,26 +731,19 @@ export function SettingsPage() {
                         value={anidbClient}
                         onChange={(event) => setAnidbClient(event.target.value)}
                         placeholder={webSettings.data?.hasAnidbClient ? "Saved - leave blank to keep" : "Registered client name, e.g. mkvo/1"}
-                        disabled={clearAnidbClient}
-                        className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
+                        className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                       />
                     </label>
                     <p className="mt-1.5 text-xs text-subtle">
                       AniDB identifies callers by a registered client name and version rather than an API key. Searching works without it; loading episodes requires it.
                     </p>
-                    {webSettings.data?.hasAnidbClient ? (
-                      <label className="mt-1.5 flex items-center gap-2 text-xs text-muted">
-                        <input type="checkbox" checked={clearAnidbClient} onChange={(event) => setClearAnidbClient(event.target.checked)} />
-                        Remove saved client on next save
-                      </label>
-                    ) : null}
                   </div>
                   <label className="block">
                     <span className="text-xs font-semibold text-muted">Metadata Language</span>
                     <input
                       value={language}
                       onChange={(event) => setLanguage(event.target.value)}
-                      className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
+                      className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
                     />
                   </label>
                   <label className="block">
@@ -785,7 +751,7 @@ export function SettingsPage() {
                     <select
                       value={provider}
                       onChange={(event) => setProvider(event.target.value)}
-                      className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
+                      className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
                     >
                       <option value="TVDB">TVDB</option>
                       <option value="TMDB">TMDB</option>
@@ -793,28 +759,18 @@ export function SettingsPage() {
                       <option value="AniList">AniList</option>
                     </select>
                   </label>
-                  <label className="block">
+                  <label className="col-span-2 block">
                     <span className="text-xs font-semibold text-muted">Default Rename Template</span>
                     <input
                       value={template}
                       onChange={(event) => setTemplate(event.target.value)}
-                      className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
+                      className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
                     />
                   </label>
                 </div>
-                <button
-                  type="button"
-                  onClick={testSelectedProvider}
-                  disabled={isTestingProvider}
-                  className="mt-4 inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
-                >
-                  <CheckCircle2 size={15} />
-                  {isTestingProvider ? "Testing..." : "Test Selected Provider"}
-                </button>
               </SettingsCard>
 
-              <SettingsCard title="Rename Templates" description="One template per line. The selected default template is always preserved when settings are saved.">
-                <div className="flex justify-end">
+              <SettingsCard title="Rename Templates" description="One template per line. The selected default template is always preserved when settings are saved." actions={
                   <button
                     type="button"
                     onClick={() => {
@@ -826,14 +782,14 @@ export function SettingsPage() {
                     <RefreshCw size={14} />
                     Reset to Defaults
                   </button>
-                </div>
+              }>
                 <p className="text-xs leading-5 text-muted">
                   Series templates can use {"{series}"}, {"{season:00}"}, {"{episode:00}"}, {"{episodeTitle}"}, and {"{absolute:000}"}. Movie templates can use {"{title}"} and {"{year}"}.
                 </p>
                 <textarea
                   value={renameTemplatesText}
                   onChange={(event) => setRenameTemplatesText(event.target.value)}
-                  rows={12}
+                  rows={6}
                   className="mt-3 w-full resize-none rounded-md border border-border bg-input p-3 font-mono text-xs leading-5 text-text outline-none placeholder:text-subtle focus:border-accent"
                 />
               </SettingsCard>
@@ -1439,6 +1395,29 @@ function SettingsTabButton({ tab, active, onSelect }: { tab: SettingsTabDefiniti
     >
       <Icon size={16} />
       {tab.label}
+    </button>
+  );
+}
+
+function ProviderTestButton({
+  provider,
+  testingProvider,
+  onTest
+}: {
+  provider: "TVDB" | "TMDB";
+  testingProvider: string | null;
+  onTest: (provider: "TVDB" | "TMDB") => void;
+}) {
+  const testing = testingProvider === provider;
+  return (
+    <button
+      type="button"
+      onClick={() => onTest(provider)}
+      disabled={testingProvider !== null}
+      className="mt-2 inline-flex h-8 items-center gap-2 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+    >
+      <CheckCircle2 size={14} />
+      {testing ? "Testing..." : `Test ${provider}`}
     </button>
   );
 }
