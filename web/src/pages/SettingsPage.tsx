@@ -839,9 +839,8 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "presets" ? (
-            <div className="grid min-w-0 gap-5">
-              <SettingsCard title="Track Presets" description="These lists feed Rename language choices and Track Properties name/language selectors.">
-                <div className="mb-4 flex justify-end">
+            <div className="grid min-w-0 gap-3">
+              <SettingsCard title="Track Presets" description="These lists feed Rename language choices and Track Properties name/language selectors." actions={
                   <button
                     type="button"
                     onClick={() => {
@@ -857,8 +856,8 @@ export function SettingsPage() {
                     <RefreshCw size={14} />
                     Reset All Presets
                   </button>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              }>
+                <div className="grid grid-cols-4 gap-3">
                   <PresetEditor label="Audio Name Presets" value={audioNamePresetsText} onChange={setAudioNamePresetsText} />
                   <PresetEditor label="Subtitle Name Presets" value={subtitleNamePresetsText} onChange={setSubtitleNamePresetsText} />
                   <PresetEditor label="Language Presets" value={languagePresetsText} onChange={setLanguagePresetsText} />
@@ -867,6 +866,7 @@ export function SettingsPage() {
               </SettingsCard>
 
               <SettingsCard title="MKV Operations Defaults" description="Default keep-language values for track removal workflows.">
+                <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-xs font-semibold text-muted">Default audio languages to keep</span>
                   <input
@@ -876,7 +876,7 @@ export function SettingsPage() {
                     className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                   />
                 </label>
-                <label className="mt-4 block">
+                <label className="block">
                   <span className="text-xs font-semibold text-muted">Default subtitle languages to keep</span>
                   <input
                     value={muxSubtitleDefaults}
@@ -885,6 +885,7 @@ export function SettingsPage() {
                     className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                   />
                 </label>
+                </div>
               </SettingsCard>
             </div>
           ) : null}
@@ -1436,10 +1437,13 @@ function SettingsTabButton({ tab, active, onSelect }: { tab: SettingsTabDefiniti
   );
 }
 
-function SettingsCard({ title, description, children, className = "" }: { title: string; description?: string; children: React.ReactNode; className?: string }) {
+function SettingsCard({ title, description, children, actions, className = "" }: { title: string; description?: string; children: React.ReactNode; actions?: React.ReactNode; className?: string }) {
   return (
     <section className={`min-w-0 rounded-lg border border-border bg-panel p-4 ${className}`}>
-      <h2 className="text-base font-semibold">{title}</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">{title}</h2>
+        {actions ? <div className="shrink-0">{actions}</div> : null}
+      </div>
       {description ? <p className="mt-2 text-sm leading-6 text-muted">{description}</p> : null}
       <div className="mt-4 min-w-0">{children}</div>
     </section>

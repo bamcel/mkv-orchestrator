@@ -571,12 +571,8 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
             <tbody>
               {rows.map((track) => {
                 const isCustom = customTrackKeys.has(getTrackKey(type, track.trackNumber));
-                const channelNameOption = type === "audio" && track.currentChannels != null
-                  ? descriptiveChannelName(track.currentChannels)
-                  : "";
                 const nameOptions = buildTrackOptions(namePresets, track.editedName, track.currentName);
                 const languageOptions = buildTrackOptions(languagePresets, track.editedLanguage, track.currentLanguage);
-                const metadataName = buildMetadataTrackName(track);
                 const selectedName = track.nameFromChannels ? channelTrackNameValue : track.nameFromMetadata ? metadataTrackNameValue : track.editedName;
 
                 return (
@@ -607,8 +603,8 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
                           )}
                           className="h-8 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
                         >
-                          {type === "audio" && <option value={metadataTrackNameValue}>{metadataName}</option>}
-                          {type === "audio" && <option value={channelTrackNameValue}>Auto: {channelNameOption || "channel name"} (per file)</option>}
+                          {type === "audio" && <option value={metadataTrackNameValue}>Auto Sort: [codec] [language] [channel]</option>}
+                          {type === "audio" && <option value={channelTrackNameValue}>Auto Sort: [channel]</option>}
                           {nameOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                         </select>
                       )}
