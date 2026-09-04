@@ -1104,9 +1104,27 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "appearance" ? (
-            <div className="grid min-w-0 gap-5">
-              <SettingsCard title="Theme" description="Themes are saved by MKVO and shared by the desktop and browser interfaces.">
-                <div className="flex max-w-xl items-end gap-3">
+            <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)] xl:items-stretch">
+              <SettingsCard
+                title="Theme JSON"
+                description="Edit the complete theme definition. Changes are previewed when you use the color controls or reload the theme."
+                className="flex min-h-0 flex-col xl:h-full"
+                contentClassName="flex min-h-0 flex-1 flex-col"
+              >
+                <label className="flex min-h-0 flex-1 flex-col">
+                  <span className="text-xs font-semibold text-muted">Theme JSON</span>
+                  <textarea
+                    value={themeJson}
+                    onChange={(event) => setThemeJson(event.target.value)}
+                    rows={16}
+                    className="mt-2 min-h-80 w-full flex-1 resize-none rounded-md border border-border bg-input p-3 font-mono text-xs leading-5 text-text outline-none placeholder:text-subtle focus:border-accent xl:min-h-0"
+                  />
+                </label>
+              </SettingsCard>
+
+              <div className="grid min-w-0 gap-3 xl:h-full xl:grid-rows-[auto_1fr]">
+              <SettingsCard title="Theme" description="Themes are shared by the desktop and browser interfaces.">
+                <div className="flex items-end gap-3">
                   <label className="block flex-1">
                     <span className="text-xs font-semibold text-muted">Theme</span>
                     <select
@@ -1132,7 +1150,7 @@ export function SettingsPage() {
                     Reload Theme
                   </button>
                 </div>
-                <div className="mt-4 grid max-w-xl gap-3 sm:grid-cols-2">
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <label className="block">
                     <span className="text-xs font-semibold text-muted">Color label</span>
                     <select
@@ -1160,18 +1178,9 @@ export function SettingsPage() {
                   />
                 </div>
                 <p className="mt-2 text-xs text-subtle">Choose a label, then use the color picker to preview that theme color immediately. Save the edited theme below to keep it.</p>
-                <label className="mt-4 block">
-                  <span className="text-xs font-semibold text-muted">Theme JSON</span>
-                  <textarea
-                    value={themeJson}
-                    onChange={(event) => setThemeJson(event.target.value)}
-                    rows={16}
-                    className="mt-2 w-full resize-none rounded-md border border-border bg-input p-3 font-mono text-xs leading-5 text-text outline-none placeholder:text-subtle focus:border-accent"
-                  />
-                </label>
               </SettingsCard>
 
-              <SettingsCard title="Custom Theme" description="Save edited JSON as a named custom theme or remove a selected custom theme.">
+              <SettingsCard className="xl:h-full" title="Custom Theme" description="Save the edited JSON as a named theme or remove the selected custom theme.">
                 <label className="block">
                   <span className="text-xs font-semibold text-muted">Custom Theme Name</span>
                   <input
@@ -1196,6 +1205,7 @@ export function SettingsPage() {
                   Remove Custom Theme
                 </button>
               </SettingsCard>
+              </div>
             </div>
           ) : null}
 
@@ -1476,7 +1486,7 @@ function ProviderTestButton({
   );
 }
 
-function SettingsCard({ title, description, children, actions, className = "" }: { title: string; description?: string; children: React.ReactNode; actions?: React.ReactNode; className?: string }) {
+function SettingsCard({ title, description, children, actions, className = "", contentClassName = "" }: { title: string; description?: string; children: React.ReactNode; actions?: React.ReactNode; className?: string; contentClassName?: string }) {
   return (
     <section className={`min-w-0 rounded-lg border border-border bg-panel p-4 ${className}`}>
       <div className="flex items-center justify-between gap-3">
@@ -1484,7 +1494,7 @@ function SettingsCard({ title, description, children, actions, className = "" }:
         {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
       {description ? <p className="mt-2 text-sm leading-6 text-muted">{description}</p> : null}
-      <div className="mt-4 min-w-0">{children}</div>
+      <div className={`mt-4 min-w-0 ${contentClassName}`}>{children}</div>
     </section>
   );
 }
