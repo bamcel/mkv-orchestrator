@@ -369,6 +369,25 @@ export function SettingsPage() {
     }
   }
 
+  async function testNewServer() {
+    if (!newServerUrl.trim()) {
+      setSettingsStatus("Enter a media server URL before testing it.");
+      return;
+    }
+
+    await testServer({
+      id: "new-media-server",
+      name: newServerName.trim() || newServerType,
+      type: newServerType,
+      serverUrl: newServerUrl.trim(),
+      apiKey: newServerApiKey,
+      hasApiKey: Boolean(newServerApiKey.trim()),
+      isDefault: makeNewServerDefault,
+      lastSyncedUtc: null,
+      libraries: []
+    });
+  }
+
   async function syncServer(server: EditableMediaServer) {
     setSettingsStatus(`Saving and syncing ${server.name}...`);
     const saved = await saveSettings();
@@ -867,19 +886,19 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "library" ? (
-            <div className="grid min-w-0 gap-5">
-              <SettingsCard className="order-3" title="Manual Watch Folders" description="Default fallback paths. These are always available even when no media server is configured.">
+            <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,0.8fr)]">
+              <SettingsCard className="xl:col-start-2 xl:row-start-1" title="Manual Watch Folders" description="Fallback paths available with or without a media server.">
                 <label className="block">
                   <span className="text-xs font-semibold text-muted">Watch folders</span>
                   <textarea
                     value={watchFoldersText}
                     onChange={(event) => setWatchFoldersText(event.target.value)}
-                    rows={10}
+                    rows={5}
                     placeholder={"/media/anime\n/media/movies"}
                     className="mt-2 w-full resize-none rounded-md border border-border bg-input p-3 font-mono text-xs leading-5 text-text outline-none placeholder:text-subtle focus:border-accent"
                   />
                 </label>
-                <label className="flex items-center gap-2 text-sm text-muted">
+                <label className="mt-3 flex items-center gap-2 text-sm text-muted">
                   <input
                     type="checkbox"
                     checked={liveWatcherEnabled}
@@ -887,88 +906,103 @@ export function SettingsPage() {
                   />
                   Enable live watch-folder monitoring
                 </label>
-                <div className="mt-4 rounded-lg border border-border bg-panel p-3 text-xs leading-5 text-subtle">
-                  Use container paths here. For Docker bind mounts, that usually means paths under <span className="font-mono text-text">/media</span> or <span className="font-mono text-text">/downloads</span>.
+                <div className="mt-3 rounded-md border border-border bg-input px-3 py-2 text-xs leading-5 text-subtle">
+                  Use container paths, usually under <span className="font-mono text-text">/media</span> or <span className="font-mono text-text">/downloads</span>.
                 </div>
               </SettingsCard>
 
-              <SettingsCard className="order-2" title="Media Servers" description="Optional discovery for Emby, Jellyfin, or Plex library paths. Synced and enabled libraries become available on the Library page.">
-                <div className="space-y-3">
+              <SettingsCard className="xl:col-start-1 xl:row-start-1" title="Media Servers" description="Connect Emby, Jellyfin, or Plex. API keys and tokens are encrypted before they are stored.">
+                <div className="max-h-64 space-y-2 overflow-auto pr-1">
                   {mediaServers.length === 0 ? (
-                    <div className="rounded-lg border border-border bg-input p-3 text-sm text-subtle">
+                    <div className="rounded-md border border-border bg-input px-3 py-2 text-sm text-subtle">
                       No media servers configured. Manual watch folders remain the fallback.
                     </div>
                   ) : mediaServers.map((server) => (
                     <div key={server.id} className="rounded-lg border border-border bg-input p-3">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-[15rem] flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
+                      <div className="grid gap-2 lg:grid-cols-[minmax(9rem,1fr)_8rem_minmax(12rem,1.35fr)_minmax(10rem,1fr)_auto] lg:items-end">
+                        <label className="block min-w-0">
+                          <span className="text-[0.6875rem] font-semibold text-muted">Name</span>
                             <input
                               value={server.name}
                               onChange={(event) => updateMediaServer(server.id, { name: event.target.value })}
-                              className="h-9 min-w-[11.25rem] flex-1 rounded-md border border-border bg-card px-3 text-sm font-semibold text-text outline-none focus:border-accent"
+                            className="mt-1 h-9 w-full rounded-md border border-border bg-card px-3 text-sm font-semibold text-text outline-none focus:border-accent"
                             />
+                        </label>
+                        <label className="block min-w-0">
+                          <span className="text-[0.6875rem] font-semibold text-muted">Type</span>
                             <select
                               value={server.type}
                               onChange={(event) => updateMediaServer(server.id, { type: event.target.value })}
-                              className="h-9 rounded-md border border-border bg-card px-3 text-sm text-text outline-none focus:border-accent"
+                            className="mt-1 h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-text outline-none focus:border-accent"
                             >
                               <option value="Emby">Emby</option>
                               <option value="Jellyfin">Jellyfin</option>
                               <option value="Plex">Plex</option>
                             </select>
-                            {server.isDefault ? <span className="rounded bg-accent/20 px-2 py-1 text-[0.6875rem] font-semibold text-accent">default</span> : null}
-                          </div>
+                        </label>
+                        <label className="block min-w-0">
+                          <span className="text-[0.6875rem] font-semibold text-muted">Server URL</span>
                           <input
                             value={server.serverUrl}
                             onChange={(event) => updateMediaServer(server.id, { serverUrl: event.target.value })}
                             placeholder="http://localhost:8096"
-                            className="mt-2 h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
+                            className="mt-1 h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                           />
+                        </label>
+                        <label className="block min-w-0">
+                          <span className="text-[0.6875rem] font-semibold text-muted">API key / token</span>
                           <input
                             value={server.apiKey ?? ""}
                             onChange={(event) => updateMediaServer(server.id, { apiKey: event.target.value })}
                             placeholder={server.hasApiKey ? savedSecretPlaceholder : "API key or token"}
                             type="password"
-                            className="mt-2 h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
+                            className="mt-1 h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                           />
-                          <label className="mt-2 flex items-center gap-2 text-xs text-muted">
-                            <input
-                              type="checkbox"
-                              checked={server.isDefault}
-                              onChange={(event) => updateMediaServer(server.id, { isDefault: event.target.checked })}
-                            />
-                            Use as default media server
-                          </label>
-                        </div>
-                        <div className="flex shrink-0 flex-wrap gap-2">
+                        </label>
+                        <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={() => testServer(server)}
-                            className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                            title="Test connection"
+                            aria-label={`Test ${server.name}`}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-button text-muted transition hover:bg-button-hover hover:text-text"
                           >
                             <CheckCircle2 size={14} />
-                            Test
                           </button>
                           <button
                             type="button"
                             onClick={() => syncServer(server)}
-                            className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-3 text-xs font-semibold text-window transition hover:bg-accent-hover"
+                            title="Sync libraries"
+                            aria-label={`Sync ${server.name}`}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent text-window transition hover:bg-accent-hover"
                           >
                             <RefreshCw size={14} />
-                            Sync
                           </button>
                           <button
                             type="button"
                             onClick={() => removeMediaServer(server.id)}
-                            className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                            title="Remove server"
+                            aria-label={`Remove ${server.name}`}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-button text-muted transition hover:bg-button-hover hover:text-text"
                           >
                             <Trash2 size={14} />
                           </button>
                         </div>
                       </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                          <label className="flex items-center gap-2 text-xs text-muted">
+                            <input
+                              type="checkbox"
+                              checked={server.isDefault}
+                              onChange={(event) => updateMediaServer(server.id, { isDefault: event.target.checked })}
+                            />
+                            Use as default server
+                          </label>
+                          {server.isDefault ? <span className="rounded bg-accent/20 px-2 py-1 text-[0.6875rem] font-semibold text-accent">default</span> : null}
+                          {server.lastSyncedUtc ? <span className="text-[0.6875rem] text-subtle">Last synced: {formatDateTime(server.lastSyncedUtc)}</span> : null}
+                      </div>
                       {server.libraries.length > 0 ? (
-                        <div className="mt-3 max-h-36 overflow-auto rounded-md border border-border bg-card">
+                        <div className="mt-2 max-h-24 overflow-auto rounded-md border border-border bg-card">
                           {server.libraries.map((library) => (
                             <label key={library.id} className="grid grid-cols-[1.5rem_minmax(7.5rem,11.25rem)_1fr] gap-2 border-b border-border px-3 py-2 text-xs last:border-b-0">
                               <input
@@ -986,26 +1020,23 @@ export function SettingsPage() {
                           ))}
                         </div>
                       ) : (
-                        <div className="mt-3 rounded-md border border-border bg-card p-2 text-xs text-subtle">
+                        <div className="mt-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-subtle">
                           No synced libraries yet. Save settings, then click Sync.
                         </div>
                       )}
-                      {server.lastSyncedUtc ? (
-                        <div className="mt-2 text-[0.6875rem] text-subtle">Last synced: {formatDateTime(server.lastSyncedUtc)}</div>
-                      ) : null}
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-4 rounded-lg border border-border bg-panel p-3">
+                <div className="mt-3 rounded-lg border border-border bg-panel p-3">
                   <h3 className="text-sm font-semibold">Add a server</h3>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div className="mt-2 grid gap-2 md:grid-cols-2">
                     <label className="block">
                       <span className="text-xs font-semibold text-muted">Name</span>
                       <input
                         value={newServerName}
                         onChange={(event) => setNewServerName(event.target.value)}
-                        className="mt-2 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
+                        className="mt-1 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
                       />
                     </label>
                     <label className="block">
@@ -1013,7 +1044,7 @@ export function SettingsPage() {
                       <select
                         value={newServerType}
                         onChange={(event) => setNewServerType(event.target.value)}
-                        className="mt-2 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
+                        className="mt-1 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
                       >
                         <option value="Emby">Emby</option>
                         <option value="Jellyfin">Jellyfin</option>
@@ -1026,7 +1057,7 @@ export function SettingsPage() {
                         value={newServerUrl}
                         onChange={(event) => setNewServerUrl(event.target.value)}
                         placeholder="http://localhost:8096"
-                        className="mt-2 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
+                        className="mt-1 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                       />
                     </label>
                     <label className="block">
@@ -1035,7 +1066,7 @@ export function SettingsPage() {
                         value={newServerApiKey}
                         onChange={(event) => setNewServerApiKey(event.target.value)}
                         type="password"
-                        className="mt-2 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
+                        className="mt-1 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
                       />
                     </label>
                   </div>
@@ -1055,6 +1086,15 @@ export function SettingsPage() {
                     >
                       <Plus size={16} />
                       Add Server
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void testNewServer()}
+                      disabled={!newServerUrl.trim()}
+                      className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <CheckCircle2 size={16} />
+                      Test connection
                     </button>
                   </div>
                 </div>
