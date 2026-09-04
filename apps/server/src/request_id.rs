@@ -12,9 +12,6 @@ tokio::task_local! {
     pub static REQUEST_CORRELATION_ID: String;
 }
 
-#[derive(Clone, Debug)]
-pub struct RequestCorrelationId(pub String);
-
 pub async fn attach_correlation_id(mut request: Request, next: Next) -> Response {
     let value = request
         .headers()
@@ -26,9 +23,6 @@ pub async fn attach_correlation_id(mut request: Request, next: Next) -> Response
     let header_value = HeaderValue::from_str(&value)
         .expect("a UUID correlation identifier is always a valid HTTP header value");
 
-    request
-        .extensions_mut()
-        .insert(RequestCorrelationId(value.clone()));
     request
         .headers_mut()
         .insert(CORRELATION_ID_HEADER.clone(), header_value.clone());

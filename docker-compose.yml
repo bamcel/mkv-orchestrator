@@ -16,6 +16,11 @@ services:
       MKVO_AUTH_MODE: "${MKVO_AUTH_MODE:-disabled}"
       MKVO_AUTH_USERNAME: "${MKVO_AUTH_USERNAME:-}"
       MKVO_AUTH_PASSWORD: "${MKVO_AUTH_PASSWORD:-}"
+      # Empty preserves legacy mode/credentials; set true or false to override.
+      MKVO_AUTH_ENABLED: "${MKVO_AUTH_ENABLED:-}"
+      MKVO_USERNAME: "${MKVO_USERNAME:-}"
+      MKVO_PASSWORD: "${MKVO_PASSWORD:-}"
+      MKVO_SECURE_COOKIES: "${MKVO_SECURE_COOKIES:-false}"
       PUID: "${PUID:-1000}"
       PGID: "${PGID:-1000}"
       UMASK: "${UMASK:-}"

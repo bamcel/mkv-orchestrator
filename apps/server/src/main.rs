@@ -47,17 +47,20 @@ async fn main() -> Result<()> {
     }
 
     let bind = config.bind;
-    let app = build_router(Arc::clone(&config), runtime);
+    let app = build_router(Arc::clone(&config), runtime)?;
     let listener = TcpListener::bind(bind)
         .await
         .with_context(|| format!("failed to bind MKVO server at {bind}"))?;
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-    let server = axum::serve(listener, app)
-        .with_graceful_shutdown(async {
-            let _ = shutdown_rx.await;
-        })
-        .into_future();
+    let server = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(async {
+        let _ = shutdown_rx.await;
+    })
+    .into_future();
     tokio::pin!(server);
 
     info!(%bind, "MKVO Rust server listening");

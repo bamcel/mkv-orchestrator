@@ -42,27 +42,34 @@ pub fn build_runtime(config: &ServerConfig) -> RuntimeResult<MkvoRuntime> {
     builder.build()
 }
 
-pub fn build_router(config: Arc<ServerConfig>, runtime: Arc<MkvoRuntime>) -> Router {
+pub fn build_router(
+    config: Arc<ServerConfig>,
+    runtime: Arc<MkvoRuntime>,
+) -> anyhow::Result<Router> {
+    let auth = auth::AuthState::load(
+        &config.config_dir,
+        config.auth.as_ref().map(|auth| auth.password.as_str()),
+        &config.auth_username,
+        config.secure_cookies,
+    )?
+    .with_authentication(config.auth_enabled);
     let state = AppState { runtime };
     let protected = routes::api_router(state)
+        .merge(auth::protected_router(auth.clone()))
+        .layer(middleware::from_fn_with_state(
+            auth.clone(),
+            auth::require_auth,
+        ));
+
+    Ok(Router::new()
+        .route("/api/health", axum::routing::get(routes::health))
+        .merge(auth::public_router(auth))
+        .merge(protected)
         .fallback_service(
             ServeDir::new(&config.ui_dir)
                 .fallback(ServeFile::new(config.ui_dir.join("index.html"))),
         )
-        .layer(DefaultBodyLimit::max(config.request_body_limit_bytes));
-
-    let protected = if let Some(auth) = config.auth.clone() {
-        protected.layer(middleware::from_fn_with_state(
-            auth,
-            auth::require_basic_auth,
-        ))
-    } else {
-        protected
-    };
-
-    Router::new()
-        .route("/api/health", axum::routing::get(routes::health))
-        .merge(protected)
+        .layer(DefaultBodyLimit::max(config.request_body_limit_bytes))
         .layer(
             TraceLayer::new_for_http().make_span_with(|request: &Request| {
                 let correlation_id = request
@@ -78,7 +85,7 @@ pub fn build_router(config: Arc<ServerConfig>, runtime: Arc<MkvoRuntime>) -> Rou
                 )
             }),
         )
-        .layer(middleware::from_fn(request_id::attach_correlation_id))
+        .layer(middleware::from_fn(request_id::attach_correlation_id)))
 }
 
 pub async fn shutdown_signal() {
@@ -152,6 +159,12 @@ mod tests {
                 }],
                 config_dir,
                 ui_dir,
+                auth_enabled: auth.is_some(),
+                auth_username: auth
+                    .as_ref()
+                    .map_or("admin", |auth| auth.username.as_str())
+                    .to_owned(),
+                secure_cookies: false,
                 auth,
                 provider_secret_overrides,
                 request_body_limit_bytes: 1024,
@@ -166,7 +179,7 @@ mod tests {
         }
 
         fn router(&self) -> Router {
-            build_router(Arc::clone(&self.config), Arc::clone(&self.runtime))
+            build_router(Arc::clone(&self.config), Arc::clone(&self.runtime)).unwrap()
         }
     }
 
@@ -202,6 +215,235 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn session_login_logout_and_security_http_contract() {
+        let host = TestHost::new(Some(BasicAuth {
+            username: "curator".to_owned(),
+            password: "secret".to_owned(),
+        }));
+        let router = host.router();
+        for path in ["/api/status", "/api/security/settings", "/api/unknown"] {
+            let response = router
+                .clone()
+                .oneshot(Request::get(path).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{path}");
+        }
+        let response = router
+            .clone()
+            .oneshot(Request::get("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let response = router
+            .clone()
+            .oneshot(
+                Request::get("/api/auth/status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        let status: serde_json::Value = serde_json::from_str(&body_text(response).await).unwrap();
+        assert_eq!(status["username"], "curator");
+        assert_eq!(status["authenticated"], false);
+        assert_eq!(status["password_required"], true);
+        assert!(status["idle_timeout_minutes"].is_null());
+        assert!(status.get("password").is_none());
+        for (username, password) in [
+            ("admin", "secret"),
+            ("CURATOR", "secret"),
+            ("curator", "wrong"),
+        ] {
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::post("/api/auth/login")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(
+                            serde_json::json!({"username": username, "password": password})
+                                .to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+            assert_eq!(
+                body_text(response).await,
+                r#"{"detail":"Incorrect username or password."}"#
+            );
+        }
+        let response = router
+            .clone()
+            .oneshot(
+                Request::post("/api/auth/login")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"username":"curator","password":"secret"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let cookie = response.headers()[header::SET_COOKIE].clone();
+        for invalid in [
+            r#"{"idle_timeout_minutes":0,"local_network_bypass":false}"#,
+            r#"{"idle_timeout_minutes":1441,"local_network_bypass":false}"#,
+            r#"{"idle_timeout_minutes":1.5,"local_network_bypass":false}"#,
+            r#"{"idle_timeout_minutes":"30","local_network_bypass":false}"#,
+        ] {
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::put("/api/security/settings")
+                        .header(header::COOKIE, &cookie)
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(invalid))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        }
+        let response = router
+            .clone()
+            .oneshot(
+                Request::put("/api/security/settings")
+                    .header(header::COOKIE, &cookie)
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        r#"{"idle_timeout_minutes":30,"local_network_bypass":false}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let response = router
+            .clone()
+            .oneshot(
+                Request::post("/api/auth/activity")
+                    .header(header::COOKIE, &cookie)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        let response = router
+            .clone()
+            .oneshot(
+                Request::post("/api/auth/logout")
+                    .header(header::COOKIE, &cookie)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(
+            response.headers()[header::SET_COOKIE]
+                .to_str()
+                .unwrap()
+                .contains("Max-Age=0")
+        );
+        let response = router
+            .clone()
+            .oneshot(
+                Request::get("/api/status")
+                    .header(header::COOKIE, &cookie)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let response = router
+            .oneshot(
+                Request::post("/api/auth/activity")
+                    .header(header::COOKIE, &cookie)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let persisted: serde_json::Value = serde_json::from_slice(
+            &fs::read(host.config.config_dir.join("security-settings.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(persisted["idle_timeout_minutes"], 30);
+    }
+
+    #[tokio::test]
+    async fn disabled_login_has_no_barrier_and_no_idle_timeout() {
+        let host = TestHost::new(None);
+        fs::write(
+            host.config.config_dir.join("security-settings.json"),
+            r#"{"idle_timeout_minutes":1,"local_network_bypass":false}"#,
+        )
+        .unwrap();
+        let router = host.router();
+        let response = router
+            .clone()
+            .oneshot(
+                Request::get("/api/auth/status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status: serde_json::Value = serde_json::from_str(&body_text(response).await).unwrap();
+        assert_eq!(status["authenticated"], true);
+        assert_eq!(status["password_required"], false);
+        assert!(status["idle_timeout_minutes"].is_null());
+        let response = router
+            .oneshot(Request::get("/api/status").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn lan_bypass_ignores_forwarded_headers_and_fails_closed_without_peer() {
+        let host = TestHost::new(Some(BasicAuth {
+            username: "admin".to_owned(),
+            password: "secret".to_owned(),
+        }));
+        fs::write(
+            host.config.config_dir.join("security-settings.json"),
+            r#"{"idle_timeout_minutes":null,"local_network_bypass":true}"#,
+        )
+        .unwrap();
+        let router = host.router();
+        for peer in [
+            None,
+            Some("8.8.8.8:1234"),
+            Some("100.64.0.1:1234"),
+            Some("192.168.1.2:1234"),
+        ] {
+            let mut request = Request::get("/api/status")
+                .header("X-Forwarded-For", "127.0.0.1")
+                .header("Host", "localhost")
+                .body(Body::empty())
+                .unwrap();
+            if let Some(peer) = peer {
+                request.extensions_mut().insert(axum::extract::ConnectInfo(
+                    peer.parse::<SocketAddr>().unwrap(),
+                ));
+            }
+            let response = router.clone().oneshot(request).await.unwrap();
+            assert_eq!(
+                response.status(),
+                if peer == Some("192.168.1.2:1234") {
+                    StatusCode::OK
+                } else {
+                    StatusCode::UNAUTHORIZED
+                }
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn health_is_public_and_has_legacy_contract() {
         let host = TestHost::new(Some(BasicAuth {
             username: "mkvo".to_owned(),
@@ -218,32 +460,51 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn protects_api_and_accepts_valid_basic_auth() {
+    async fn protects_api_and_accepts_valid_session_cookie() {
         let host = TestHost::new(Some(BasicAuth {
             username: "mkvo".to_owned(),
             password: "secret".to_owned(),
         }));
-        let unauthorized = host
-            .router()
+        let router = host.router();
+        let unauthorized = router
+            .clone()
             .oneshot(Request::get("/api/status").body(Body::empty()).unwrap())
             .await
             .unwrap();
         assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
-        assert_eq!(
-            unauthorized.headers()[header::WWW_AUTHENTICATE],
-            "Basic realm=\"MKV Orchestrator\", charset=\"UTF-8\""
+        assert!(
+            !unauthorized
+                .headers()
+                .contains_key(header::WWW_AUTHENTICATE)
         );
         assert!(
             body_text(unauthorized)
                 .await
-                .contains("\"code\":\"unauthorized\"")
+                .contains("\"detail\":\"Authentication required.\"")
         );
 
-        let authorized = host
-            .router()
+        let login = router
+            .clone()
+            .oneshot(
+                Request::post("/api/auth/login")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(r#"{"username":"mkvo","password":"secret"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(login.status(), StatusCode::OK);
+        let cookie = login.headers()[header::SET_COOKIE].clone();
+        assert!(
+            cookie
+                .to_str()
+                .unwrap()
+                .contains("HttpOnly; SameSite=Strict")
+        );
+        let authorized = router
             .oneshot(
                 Request::get("/api/status")
-                    .header(header::AUTHORIZATION, "Basic bWt2bzpzZWNyZXQ=")
+                    .header(header::COOKIE, cookie)
                     .body(Body::empty())
                     .unwrap(),
             )

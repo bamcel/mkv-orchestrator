@@ -49,8 +49,10 @@ MKVO_SOURCE_ROOTS=downloads=/downloads
 | `MKVO_EDIT_WORKERS` | `2` | Maximum concurrent mkvpropedit edits (clamped 1-6). |
 | `PUID` / `PGID` | `0` / `0` | Run the app as this user/group so files written to shares are not root-owned. Unraid users typically want `99` / `100`. |
 | `UMASK` | unset | File creation mask applied at startup. |
-| `MKVO_AUTH_MODE` | `disabled` in the supplied container definitions; `auto` in the server | `disabled` allows trusted-LAN access without a login. `basic` requires credentials. `auto` refuses an unauthenticated non-loopback bind. |
-| `MKVO_AUTH_USERNAME` / `MKVO_AUTH_PASSWORD` | unset | Required together when `MKVO_AUTH_MODE=basic`. The browser shows a native login prompt. `/api/health` stays open for the container healthcheck. |
+| `MKVO_AUTH_ENABLED` | false in supplied container definitions; true in standalone server | False gives everyone who can reach MKVO full access, including reverse-proxy visitors. True enables the in-app administrator login. |
+| `MKVO_USERNAME` / `MKVO_PASSWORD` | admin / generated | Blank password creates and preserves `/config/admin-password.txt`. Never publish that file. |
+| `MKVO_SECURE_COOKIES` | false | Enable for HTTPS; leave false for plain HTTP. |
+| `MKVO_AUTH_MODE`, `MKVO_AUTH_USERNAME`, `MKVO_AUTH_PASSWORD` | legacy | Existing settings are honored unless their new equivalents are explicitly set. Compose retains disabled as its legacy fallback for compatibility. |
 | `MKVO_TVDB_API_KEY`, `MKVO_TVDB_PIN`, `MKVO_TMDB_API_KEY` | unset | Optional provider credentials; Settings-page values take effect otherwise. |
 
 Container-provided provider credentials appear as configured in the Settings
@@ -64,10 +66,9 @@ a value entered through the web UI.
 - Filesystem browsing through the web UI is limited to the configured source
   roots, watch folders, and enabled media-server library paths. Arbitrary
   container paths are rejected.
-- The supplied Docker and Unraid configurations use `MKVO_AUTH_MODE=disabled`
-  for convenient trusted-LAN access. Switch to `basic`, set both credentials,
-  and use HTTPS or an authenticating reverse proxy before exposing it beyond a
-  trusted network.
+- The supplied Docker and Unraid configurations default to login disabled.
+  Enable `MKVO_AUTH_ENABLED=true` and use HTTPS and network restrictions before
+  exposing MKVO beyond a trusted network. See [authentication notes](AUTHENTICATION.md).
 
 ## Long-Running Operations
 

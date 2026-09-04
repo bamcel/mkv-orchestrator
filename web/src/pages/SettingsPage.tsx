@@ -29,6 +29,7 @@ import {
 import type { SourceRoot, WebMediaServer, WebSettings, WebSettingsRequest } from "../api";
 import { FileBrowser } from "../components/FileBrowser";
 import { SectionHeader } from "../components/SectionHeader";
+import SecuritySection from "../components/SecuritySection";
 import ffmpegLogo from "../assets/logos/ffmpeg.png";
 import mkvtoolnixLogo from "../assets/logos/mkvtoolnix.png";
 import tmdbLogo from "../assets/logos/tmdb.png";
@@ -79,6 +80,7 @@ const settingsTabs = [
   { id: "presets", label: "Presets", Icon: SlidersHorizontal },
   { id: "library", label: "Library", Icon: Database },
   { id: "appearance", label: "Appearance", Icon: Palette },
+  { id: "security", label: "Privacy / Security", Icon: KeyRound },
   { id: "about", label: "About", Icon: BookOpen }
 ] as const;
 
@@ -470,7 +472,7 @@ export function SettingsPage() {
               <SettingsTabButton key={tab.id} tab={tab} active={activeTab === tab.id} onSelect={setActiveTab} />
             ))}
           </div>
-          <div className="flex items-center gap-3">
+          {activeTab !== "security" ? <div className="flex items-center gap-3">
             <span className="max-w-[22.5rem] truncate text-sm text-success" title={settingsStatus}>{settingsStatus}</span>
             <button
               type="button"
@@ -479,7 +481,7 @@ export function SettingsPage() {
             >
               Save Settings
             </button>
-          </div>
+          </div> : null}
         </div>
 
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-5">
@@ -836,6 +838,10 @@ export function SettingsPage() {
                 />
               </SettingsCard>
             </div>
+          ) : null}
+
+          {activeTab === "security" ? (
+            isDesktop ? <p className="text-sm text-muted">Login and session settings apply to the container web server. The native desktop app uses your operating-system account.</p> : <SecuritySection />
           ) : null}
 
           {activeTab === "presets" ? (

@@ -57,6 +57,12 @@ body {
   color: var(--color-text);
 }
 
+/* Keep the reference login's accent action without changing console buttons. */
+.auth-form button[type="submit"]:not(:disabled) {
+  background-color: var(--color-accent) !important;
+  color: #15171c !important;
+}
+
 /*
  * Lucide renders its size prop as pixel width and height attributes, which
  * would leave icons frozen while everything around them scaled. Restating each

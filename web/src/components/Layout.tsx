@@ -5,6 +5,7 @@ import { getStatus } from "../api";
 import mkvoIcon from "../assets/mkvo-icon-purple.png";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 import { useOperationJob } from "../state/OperationJobContext";
+import { SignOutButton } from "./SignOutButton";
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: Activity },
@@ -74,7 +75,9 @@ export function Layout() {
             })}
           </nav>
 
-          <div className="mt-auto min-w-0 overflow-hidden rounded-lg border border-border bg-panel p-3">
+          <div className="mt-auto">
+          <SignOutButton className="mb-3 hidden md:block" />
+          <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-panel p-3">
             <div className="text-[0.6875rem] font-semibold uppercase tracking-wide text-subtle">Status</div>
             <div className={["mt-2 min-w-0 break-words text-sm font-medium [overflow-wrap:anywhere]", operation.isRunning ? "text-accent" : "text-success"].join(" ")} title={operation.statusText ?? undefined}>
               {operation.statusText ?? (status.isLoading ? "checking tools" : missingTools === 0 ? "ready" : `${missingTools} tool issue(s)`)}
@@ -84,9 +87,11 @@ export function Layout() {
               <span className="truncate">{status.data?.mediaRoot ?? "/media"}</span>
             </div>
           </div>
+          </div>
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden px-8 py-8">
+          <header className="shrink-0 md:hidden"><SignOutButton className="mb-3" /></header>
           {selectionError ? (
             <div role="alert" className="mb-3 shrink-0 rounded-md border border-warning bg-panel px-4 py-2 text-sm text-warning">
               Selection sync failed: {selectionError}

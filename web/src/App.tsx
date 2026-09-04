@@ -1,4 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import AuthGate from "./components/AuthGate";
+import { getBackendTransport } from "./api";
 import { Layout } from "./components/Layout";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LibraryPage } from "./pages/LibraryPage";
@@ -12,6 +14,11 @@ import { PropEditTemplateWarmer } from "./state/propEditTemplate";
 import { OperationJobProvider } from "./state/OperationJobContext";
 
 export default function App() {
+  if (getBackendTransport() === "tauri") return <ProtectedApp />;
+  return <AuthGate><ProtectedApp /></AuthGate>;
+}
+
+function ProtectedApp() {
   return (
     <MediaLibraryProvider>
       <OperationJobProvider>

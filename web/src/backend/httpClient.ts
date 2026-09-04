@@ -46,6 +46,7 @@ import type {
   Unsubscribe
 } from "./client";
 import { ApiError, normalizeApiError } from "./error";
+import { announceUnauthorized } from "../auth/api";
 import { validateContract, type ContractName } from "../generated/contracts";
 
 export type HttpBackendClientOptions = {
@@ -128,6 +129,7 @@ export class HttpBackendClient implements BackendClient {
     }
 
     if (!response.ok) {
+      if (response.status === 401) announceUnauthorized();
       const errorPayload = payload && typeof payload === "object" ? (payload as ErrorPayload) : undefined;
       const fallback =
         (typeof payload === "string" && payload.trim()) ||
