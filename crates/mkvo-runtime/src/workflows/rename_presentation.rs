@@ -3,7 +3,7 @@ use std::path::Path;
 
 use mkvo_application::{parse_episode_number, parse_season_episode};
 use mkvo_contracts::RenameScopeRow;
-use mkvo_domain::{EpisodeMetadata, RemuxMode, RemuxPlanItem, TrackKind};
+use mkvo_domain::{EpisodeMetadata, ExternalSubtitle, RemuxMode, RemuxPlanItem, TrackKind};
 
 pub(super) fn selected_seasons(keys: &[String]) -> BTreeSet<u32> {
     keys.iter()
@@ -87,12 +87,45 @@ pub(super) fn remux_description(item: &RemuxPlanItem) -> String {
             format!("Extract {} subtitle track(s)", item.extract_tracks.len())
         }
         RemuxMode::MuxSubtitles => format!(
-            "Remux with {} matching external subtitle(s)",
-            item.external_subtitles.len()
+            "Remux with {} matching external subtitle(s):\n{}",
+            item.external_subtitles.len(),
+            external_subtitle_list(&item.external_subtitles)
         ),
         RemuxMode::ConvertToMkv => "Losslessly copy streams into MKV".to_owned(),
         RemuxMode::Remux => format!("Keep {} selected track(s)", item.selected_track_ids.len()),
     }
+}
+
+fn external_subtitle_list(subtitles: &[ExternalSubtitle]) -> String {
+    subtitles
+        .iter()
+        .map(|subtitle| {
+            let mut details = Vec::new();
+            if !subtitle.language.trim().is_empty() {
+                details.push(subtitle.language.trim().to_owned());
+            }
+            if let Some(name) = subtitle
+                .name
+                .as_deref()
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+            {
+                details.push(name.to_owned());
+            }
+            if subtitle.default {
+                details.push("default".to_owned());
+            }
+            if subtitle.forced {
+                details.push("forced".to_owned());
+            }
+
+            let suffix = (!details.is_empty())
+                .then(|| format!(" ({})", details.join(" · ")))
+                .unwrap_or_default();
+            format!("• {}{suffix}", file_name(&subtitle.path))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub(super) fn redacted_remux_command(item: &RemuxPlanItem) -> String {
@@ -159,5 +192,30 @@ mod tests {
         let matched = match_episode_for_file("Superstore - Episode 1.mkv", &episodes, &selected)
             .expect("unique selected-season match");
         assert_eq!(matched.season, 6);
+    }
+
+    #[test]
+    fn external_subtitle_list_names_every_matching_sidecar() {
+        let subtitles = vec![
+            ExternalSubtitle {
+                path: "shows/Episode 01.eng.srt".into(),
+                language: "eng".to_owned(),
+                name: Some("English".to_owned()),
+                default: true,
+                forced: false,
+            },
+            ExternalSubtitle {
+                path: "shows/Episode 01.jpn.forced.ass".into(),
+                language: "jpn".to_owned(),
+                name: None,
+                default: false,
+                forced: true,
+            },
+        ];
+
+        assert_eq!(
+            external_subtitle_list(&subtitles),
+            "• Episode 01.eng.srt (eng · English · default)\n• Episode 01.jpn.forced.ass (jpn · forced)"
+        );
     }
 }
