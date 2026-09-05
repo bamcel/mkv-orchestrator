@@ -1107,6 +1107,7 @@ export function SettingsPage() {
             <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-2 xl:items-stretch">
               <SettingsCard
                 title="Theme JSON"
+                description="Edit or paste the complete theme definition."
                 className="flex min-h-0 flex-col xl:h-full"
                 contentClassName="flex min-h-0 flex-1 flex-col"
               >
@@ -1209,12 +1210,13 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "about" ? (
-            <div className="grid min-w-0 gap-5">
+            <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-2 xl:items-stretch">
+              <div className="grid min-w-0 gap-3 xl:h-full xl:grid-rows-[auto_1fr]">
               <SettingsCard
                 title={isDesktop ? "About MKV Orchestrator Desktop" : "About MKV Orchestrator Server"}
                 description={isDesktop ? "The native Tauri desktop backed by the shared Rust runtime." : "The Rust server for browser, Docker, and NAS access."}
               >
-                <div className="space-y-3 text-sm leading-6 text-muted">
+                <div className="space-y-2 text-sm leading-5 text-muted">
                   <p>
                     This React interface uses the same Rust application services through {isDesktop ? "typed Tauri IPC" : "the typed HTTP API"}.
                   </p>
@@ -1227,10 +1229,23 @@ export function SettingsPage() {
                 </div>
               </SettingsCard>
 
+              <SettingsCard className="xl:h-full" title="Configuration Safety" description="Keep deployment-specific data out of source control.">
+                <div className="space-y-2 text-sm leading-5 text-muted">
+                  <p>
+                    The repository should contain application code and default examples only. Personal paths, API keys, cache databases, and runtime logs belong in mounted volumes or environment variables.
+                  </p>
+                  <p>
+                    Docker users should mount media into <span className="font-mono text-text">/media</span> and configuration into <span className="font-mono text-text">/config</span>.
+                  </p>
+                </div>
+              </SettingsCard>
+              </div>
+
               {/* Required, not decorative: TMDB's API terms oblige the notice
                   below. Kept in About and away from the workflow screens, per
                   docs/ATTRIBUTION_AND_LOGOS.md. */}
               <SettingsCard
+                className="xl:h-full"
                 title="Attribution"
                 description="MKVO relies on these third-party services and tools."
               >
@@ -1238,28 +1253,17 @@ export function SettingsPage() {
                   {attributions.map((item) => (
                     <li
                       key={item.name}
-                      className="flex flex-col gap-2 rounded-lg border border-border bg-input p-3"
+                      className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-input p-3"
                     >
                       <img
                         src={item.logo}
                         alt={`${item.name} logo`}
-                        className="h-12 w-auto max-w-[8.75rem] self-start object-contain"
+                        className="h-10 w-20 shrink-0 object-contain"
                       />
-                      <p className="text-xs leading-5 text-muted">{item.notice}</p>
+                      <p className="min-w-0 text-xs leading-5 text-muted">{item.notice}</p>
                     </li>
                   ))}
                 </ul>
-              </SettingsCard>
-
-              <SettingsCard title="Configuration Safety" description="Deployment-specific data should live in mounted volumes or environment variables, not source control.">
-                <div className="space-y-3 text-sm leading-6 text-muted">
-                  <p>
-                    The repository should contain application code and default examples only. Personal paths, API keys, cache databases, and runtime logs belong outside Git.
-                  </p>
-                  <p>
-                    Docker users should mount media into <span className="font-mono text-text">/media</span> and configuration into <span className="font-mono text-text">/config</span>.
-                  </p>
-                </div>
               </SettingsCard>
             </div>
           ) : null}
