@@ -498,7 +498,7 @@ export function SettingsPage() {
 
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-5">
           {activeTab === "general" ? (
-            <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-[minmax(0,1.1fr)_minmax(25rem,0.9fr)] xl:items-stretch">
+            <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-2 xl:items-stretch">
               <SettingsCard
                 className="flex min-h-0 flex-col xl:h-full"
                 contentClassName="flex min-h-0 flex-1 flex-col"
