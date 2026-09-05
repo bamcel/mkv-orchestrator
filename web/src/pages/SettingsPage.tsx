@@ -498,8 +498,10 @@ export function SettingsPage() {
 
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-5">
           {activeTab === "general" ? (
-            <div className="grid min-w-0 gap-5">
+            <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-[minmax(0,1.1fr)_minmax(25rem,0.9fr)] xl:items-stretch">
               <SettingsCard
+                className="flex min-h-0 flex-col xl:h-full"
+                contentClassName="flex min-h-0 flex-1 flex-col"
                 title={isDesktop ? "Dashboard" : "Default Directory"}
                 description={isDesktop
                   ? "Choose the default folder the Dashboard opens for browsing and scans."
@@ -534,8 +536,8 @@ export function SettingsPage() {
                   </button>
                 </div>
 
-                <div className="mt-5 border-t border-border pt-4">
-                  <div className="mb-3">
+                <div className="mt-4 flex min-h-0 flex-1 flex-col border-t border-border pt-3">
+                  <div className="mb-2">
                     <h3 className="text-base font-semibold text-text">Quick Access</h3>
                     <p className="mt-1 text-xs leading-5 text-subtle">
                       {isDesktop
@@ -543,7 +545,7 @@ export function SettingsPage() {
                         : "Add named folder shortcuts for faster browsing inside the server's mounted storage."}
                     </p>
                   </div>
-                  <div className="space-y-2">
+                  <div className="min-h-0 flex-1 space-y-2 overflow-auto pr-1">
                     {libraryRoots.length === 0 ? (
                       <div className="rounded-lg border border-border bg-input p-3 text-sm text-subtle">
                         {isDesktop
@@ -553,7 +555,7 @@ export function SettingsPage() {
                     ) : null}
 
                     {libraryRoots.map((root, index) => (
-                      <div key={index} className="flex flex-wrap items-center gap-2">
+                      <div key={index} className="grid items-center gap-2 sm:grid-cols-[7rem_minmax(10rem,1fr)_auto_auto_auto_auto]">
                         <input
                           value={root.name}
                           onChange={(event) =>
@@ -565,7 +567,7 @@ export function SettingsPage() {
                           }
                           placeholder="Anime"
                           aria-label={`Quick access folder ${index + 1} name`}
-                          className="h-9 w-32 shrink-0 rounded-md border border-border bg-input px-2 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
+                          className="h-9 w-full rounded-md border border-border bg-input px-2 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                         />
                         <input
                           value={root.path}
@@ -578,7 +580,7 @@ export function SettingsPage() {
                           }
                           placeholder={isDesktop ? "D:\\Anime" : "/mnt/user/anime"}
                           aria-label={`Quick access folder ${index + 1} path`}
-                          className="h-9 min-w-[11.25rem] flex-1 rounded-md border border-border bg-input px-2 font-mono text-xs text-text outline-none placeholder:text-subtle focus:border-accent"
+                          className="h-9 min-w-0 rounded-md border border-border bg-input px-2 font-mono text-xs text-text outline-none placeholder:text-subtle focus:border-accent"
                         />
                         <button
                           type="button"
@@ -627,25 +629,27 @@ export function SettingsPage() {
                       </div>
                     ))}
 
+                  </div>
+
                     <button
                       type="button"
                       onClick={() => setLibraryRoots((current) => [...current, { name: "", path: "" }])}
-                      className="h-9 rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
+                      className="mt-2 h-9 self-start rounded-md border border-border bg-button px-3 text-xs font-semibold text-muted transition hover:bg-button-hover hover:text-text"
                     >
                       Add folder
                     </button>
-                  </div>
                 </div>
               </SettingsCard>
 
               <SettingsCard
+                className="xl:h-full"
                 title="Media Tools"
                 description={isDesktop
                   ? "MKVO resolves installed MKVToolNix and FFmpeg commands for scan, remux, extraction, and property workflows."
                   : "The server image provides MKVToolNix and FFmpeg for scan, remux, extraction, and property workflows."}
               >
                 {isDesktop ? (
-                  <div className="mb-4 grid gap-3">
+                  <div className="mb-3 grid gap-2">
                     <ToolDirectoryField
                       label="MKVToolNix directory"
                       value={mkvToolNixDirectory}
