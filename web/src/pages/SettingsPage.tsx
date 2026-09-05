@@ -1104,10 +1104,9 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "appearance" ? (
-            <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)] xl:items-stretch">
+            <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-2 xl:items-stretch">
               <SettingsCard
                 title="Theme JSON"
-                description="Edit the complete theme definition. Changes are previewed when you use the color controls or reload the theme."
                 className="flex min-h-0 flex-col xl:h-full"
                 contentClassName="flex min-h-0 flex-1 flex-col"
               >
