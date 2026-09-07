@@ -46,6 +46,7 @@ pub enum TextEdit {
     FromEpisodeTitle,
     FromTrackMetadata,
     FromTrackChannels,
+    FromTrackCodecChannels,
     Set(String),
     Delete,
 }
@@ -233,6 +234,7 @@ fn build_item(
                 Some(channels) => TextEdit::Set(descriptive_channel_name(channels)),
                 None => TextEdit::Keep,
             },
+            TextEdit::FromTrackCodecChannels => TextEdit::Set(codec_channel_track_name(track)),
             _ => edit.name.clone(),
         };
         add_track_name_edit(
@@ -345,7 +347,10 @@ fn add_container_edit(
                 value: episode_title.to_owned(),
             });
         }
-        TextEdit::FromTrackMetadata | TextEdit::FromTrackChannels | TextEdit::FromEpisodeTitle => {}
+        TextEdit::FromTrackMetadata
+        | TextEdit::FromTrackChannels
+        | TextEdit::FromTrackCodecChannels
+        | TextEdit::FromEpisodeTitle => {}
         TextEdit::Set(value) if current != Some(value.as_str()) => {
             mutations.push(PropertyMutation::SetContainerTitle {
                 value: value.clone(),
@@ -368,6 +373,18 @@ fn metadata_track_name(track: &mkvo_domain::MediaTrack, edited_language: Option<
         parts.push(codec);
     }
     parts.push(language);
+    if let Some(channels) = track.channels {
+        parts.push(channel_display_name(channels));
+    }
+    parts.join(" ")
+}
+
+fn codec_channel_track_name(track: &mkvo_domain::MediaTrack) -> String {
+    let mut parts = Vec::new();
+    let codec = codec_display_name(&track.codec);
+    if !codec.is_empty() {
+        parts.push(codec);
+    }
     if let Some(channels) = track.channels {
         parts.push(channel_display_name(channels));
     }
@@ -455,7 +472,10 @@ fn add_track_name_edit(
                 value: episode_title.to_owned(),
             });
         }
-        TextEdit::FromTrackMetadata | TextEdit::FromTrackChannels | TextEdit::FromEpisodeTitle => {}
+        TextEdit::FromTrackMetadata
+        | TextEdit::FromTrackChannels
+        | TextEdit::FromTrackCodecChannels
+        | TextEdit::FromEpisodeTitle => {}
         TextEdit::Set(value) if current != Some(value.as_str()) => {
             if value.is_empty() {
                 mutations.push(PropertyMutation::DeleteTrackName { selector });
@@ -613,6 +633,15 @@ mod tests {
             metadata_track_name(&audio, Some("eng")),
             "AAC English 5.1"
         );
+    }
+
+    #[test]
+    fn codec_channel_audio_name_omits_language() {
+        let mut audio = track(1, TrackKind::Audio, None);
+        audio.codec = "eac3".to_owned();
+        audio.channels = Some(8);
+
+        assert_eq!(codec_channel_track_name(&audio), "E-AC-3 7.1");
     }
 
     #[test]

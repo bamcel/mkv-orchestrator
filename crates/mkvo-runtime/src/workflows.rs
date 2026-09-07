@@ -403,7 +403,9 @@ fn append_track_edits(
         // for every target, even when the user did not alter the template row.
         // Encoding an unchanged template value as Keep made every mismatching
         // target keep its own value instead of converging on the template.
-        let name = if kind == TrackKind::Audio && row.name_from_channels == Some(true) {
+        let name = if kind == TrackKind::Audio && row.name_from_codec_channels == Some(true) {
+            TextEdit::FromTrackCodecChannels
+        } else if kind == TrackKind::Audio && row.name_from_channels == Some(true) {
             TextEdit::FromTrackChannels
         } else if row.name_from_metadata {
             TextEdit::FromTrackMetadata
@@ -457,6 +459,7 @@ fn prop_track_row(index: usize, track: &MediaTrack) -> PropEditTrackConfigRow {
         edited_name: track.name.clone().unwrap_or_default(),
         name_from_metadata: track.kind == TrackKind::Audio && !has_name,
         name_from_channels: None,
+        name_from_codec_channels: None,
         edited_language: track.language_or_undetermined().to_owned(),
     }
 }
@@ -791,6 +794,7 @@ mod tests {
                 edited_name: "English".to_owned(),
                 name_from_metadata: false,
                 name_from_channels: None,
+                name_from_codec_channels: None,
                 edited_language: "eng".to_owned(),
             }],
             subtitle_tracks: Vec::new(),
@@ -811,6 +815,12 @@ mod tests {
         assert_eq!(edits[0].forced, None);
         request.audio_tracks[0].name_from_channels = Some(true);
         assert_eq!(build_track_edits(&request)[0].name, TextEdit::FromTrackChannels);
+        request.audio_tracks[0].name_from_channels = None;
+        request.audio_tracks[0].name_from_codec_channels = Some(true);
+        assert_eq!(
+            build_track_edits(&request)[0].name,
+            TextEdit::FromTrackCodecChannels
+        );
     }
 
     #[test]

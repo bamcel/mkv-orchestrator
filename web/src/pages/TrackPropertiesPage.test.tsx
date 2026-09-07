@@ -96,6 +96,9 @@ describe("Track Properties template synchronization", () => {
     const metadataOptions = await screen.findAllByRole("option", { name: "Auto Sort: [codec] [language] [channel]" });
     expect(metadataOptions).toHaveLength(2);
     metadataOptions.forEach((option) => expect(option).toHaveValue("__mkvo_metadata_track_name__"));
+    const codecChannelOptions = screen.getAllByRole("option", { name: "Auto Sort: [codec] [channel]" });
+    expect(codecChannelOptions).toHaveLength(2);
+    codecChannelOptions.forEach((option) => expect(option).toHaveValue("__mkvo_codec_channel_track_name__"));
     const channelOptions = screen.getAllByRole("option", { name: "Auto Sort: [channel]" });
     expect(channelOptions).toHaveLength(2);
     channelOptions.forEach((option) => expect(option).toHaveValue("__mkvo_channel_track_name__"));
@@ -106,6 +109,13 @@ describe("Track Properties template synchronization", () => {
     await waitFor(() => {
       const saved = JSON.parse(window.sessionStorage.getItem("mkvo.web.trackPropertiesConfiguration")!);
       expect(saved.audioTracks[0].nameFromChannels).toBe(true);
+      expect(saved.audioTracks[0].nameFromMetadata).toBe(false);
+    });
+    await userEvent.setup().selectOptions(autoChannelOption.closest("select")!, "__mkvo_codec_channel_track_name__");
+    await waitFor(() => {
+      const saved = JSON.parse(window.sessionStorage.getItem("mkvo.web.trackPropertiesConfiguration")!);
+      expect(saved.audioTracks[0].nameFromCodecChannels).toBe(true);
+      expect(saved.audioTracks[0].nameFromChannels).toBe(false);
       expect(saved.audioTracks[0].nameFromMetadata).toBe(false);
     });
   });

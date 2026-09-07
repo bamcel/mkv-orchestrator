@@ -28,6 +28,7 @@ const configurationStorageKey = "mkvo.web.trackPropertiesConfiguration";
 const configurationVersion = 7;
 const metadataTrackNameValue = "__mkvo_metadata_track_name__";
 const channelTrackNameValue = "__mkvo_channel_track_name__";
+const codecChannelTrackNameValue = "__mkvo_codec_channel_track_name__";
 
 type StoredTrackPropertiesConfiguration = {
   configurationVersion?: number;
@@ -313,7 +314,7 @@ export function TrackPropertiesPage() {
       else next.delete(key);
       return next;
     });
-    if (value) updateTrack(type, trackNumber, { nameFromMetadata: false, nameFromChannels: false });
+    if (value) updateTrack(type, trackNumber, { nameFromMetadata: false, nameFromChannels: false, nameFromCodecChannels: false });
   }
 
   const audioFlagOptions = ["Keep existing", ...audioTracks.map((track) => track.trackLabel), "None"];
@@ -573,7 +574,13 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
                 const isCustom = customTrackKeys.has(getTrackKey(type, track.trackNumber));
                 const nameOptions = buildTrackOptions(namePresets, track.editedName, track.currentName);
                 const languageOptions = buildTrackOptions(languagePresets, track.editedLanguage, track.currentLanguage);
-                const selectedName = track.nameFromChannels ? channelTrackNameValue : track.nameFromMetadata ? metadataTrackNameValue : track.editedName;
+                const selectedName = track.nameFromCodecChannels
+                  ? codecChannelTrackNameValue
+                  : track.nameFromChannels
+                    ? channelTrackNameValue
+                    : track.nameFromMetadata
+                      ? metadataTrackNameValue
+                      : track.editedName;
 
                 return (
                   <tr key={`${type}-${track.trackNumber}`} className="bg-card hover:bg-selected">
@@ -585,7 +592,7 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
                       {isCustom ? (
                         <input
                           value={track.editedName}
-                          onChange={(event) => onChange(type, track.trackNumber, { editedName: event.target.value, nameFromMetadata: false, nameFromChannels: false })}
+                          onChange={(event) => onChange(type, track.trackNumber, { editedName: event.target.value, nameFromMetadata: false, nameFromChannels: false, nameFromCodecChannels: false })}
                           placeholder="Type custom name"
                           className="h-8 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
                         />
@@ -595,15 +602,18 @@ function TrackEditor({ title, rows, type, defaultValue, onDefaultChange, forcedV
                           onChange={(event) => onChange(
                             type,
                             track.trackNumber,
-                            event.target.value === channelTrackNameValue
-                              ? { nameFromChannels: true, nameFromMetadata: false }
+                            event.target.value === codecChannelTrackNameValue
+                              ? { nameFromCodecChannels: true, nameFromChannels: false, nameFromMetadata: false }
+                              : event.target.value === channelTrackNameValue
+                              ? { nameFromChannels: true, nameFromMetadata: false, nameFromCodecChannels: false }
                               : event.target.value === metadataTrackNameValue
-                                ? { nameFromMetadata: true, nameFromChannels: false }
-                                : { editedName: event.target.value, nameFromMetadata: false, nameFromChannels: false }
+                                ? { nameFromMetadata: true, nameFromChannels: false, nameFromCodecChannels: false }
+                                : { editedName: event.target.value, nameFromMetadata: false, nameFromChannels: false, nameFromCodecChannels: false }
                           )}
                           className="h-8 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
                         >
                           {type === "audio" && <option value={metadataTrackNameValue}>Auto Sort: [codec] [language] [channel]</option>}
+                          {type === "audio" && <option value={codecChannelTrackNameValue}>Auto Sort: [codec] [channel]</option>}
                           {type === "audio" && <option value={channelTrackNameValue}>Auto Sort: [channel]</option>}
                           {nameOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                         </select>
