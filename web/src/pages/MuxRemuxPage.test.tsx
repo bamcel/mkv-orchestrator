@@ -46,7 +46,7 @@ describe("MKV Operations file selection", () => {
       idempotencyKey: null
     }));
     renderWithBackend(
-      <MediaLibraryProvider><MuxRemuxPage /></MediaLibraryProvider>,
+      <MediaLibraryProvider><MuxRemuxPage workflow="subtitles" /></MediaLibraryProvider>,
       {
         getCurrentScanFiles: () => Promise.resolve({
           updatedUtc: "2026-09-07T20:00:00Z",
@@ -65,7 +65,6 @@ describe("MKV Operations file selection", () => {
     );
 
     await screen.findByText("Episode 01.mkv");
-    await user.click(screen.getByRole("button", { name: "Subtitles" }));
     await user.click(screen.getByRole("button", { name: "Browse subtitle files" }));
     await user.dblClick(await screen.findByText("Episode 01.eng.srt"));
     expect(await screen.findByText("Into: Episode 01.mkv")).toBeInTheDocument();
@@ -82,7 +81,7 @@ describe("MKV Operations file selection", () => {
   it("shows MP4 conversion above track removal when MP4 files are present", async () => {
     const mp4 = { ...mediaFile("Movie.mp4"), extension: ".mp4", reader: "ffprobe" };
     renderWithBackend(
-      <MediaLibraryProvider><MuxRemuxPage /></MediaLibraryProvider>,
+      <MediaLibraryProvider><MuxRemuxPage workflow="convert" /></MediaLibraryProvider>,
       {
         getCurrentScanFiles: () => Promise.resolve({
           updatedUtc: "2026-08-28T20:00:00Z",
@@ -101,8 +100,8 @@ describe("MKV Operations file selection", () => {
     );
 
     const conversion = await screen.findByRole("heading", { name: "MP4 Conversion" });
-    const trackRemoval = screen.getByRole("heading", { name: "Track Removal" });
-    expect(conversion.compareDocumentPosition(trackRemoval) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(conversion).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Track Removal" })).not.toBeInTheDocument();
   });
 
   it("restores a running operation after navigating away and back", async () => {
@@ -177,7 +176,7 @@ describe("MKV Operations file selection", () => {
     expect(screen.getByRole("button", { name: "Sort by Codec" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sort by Resolution" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sort by Status" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Tracks" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Track Removal" })).toBeInTheDocument();
     const selection = screen.getByLabelText("MKV Operations file selection");
     const checkboxes = within(selection).getAllByRole("checkbox");
     await waitFor(() => checkboxes.forEach((checkbox) => expect(checkbox).toBeChecked()));

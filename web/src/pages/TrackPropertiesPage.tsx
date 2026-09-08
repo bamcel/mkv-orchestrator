@@ -96,7 +96,7 @@ export function TrackPropertiesPage() {
   }, [files, templateFilePath, templatePath]);
 
   const mkvFiles = useMemo(() => files.filter((file) => file.extension.toLowerCase() === ".mkv"), [files]);
-  // Track Properties is always a complete MKV batch. Selections made in
+  // Edit Tracks is always a complete MKV batch. Selections made in
   // Rename, Mux/Remux, or the library do not narrow this workflow.
   const selectedMkvPaths = useMemo(() => mkvFiles.map((file) => file.path), [mkvFiles]);
   const nonMkvCount = files.length - mkvFiles.length;
@@ -201,15 +201,15 @@ export function TrackPropertiesPage() {
   const apply = useMutation({
     mutationFn: startPropEditApply,
     onSuccess: (job) => {
-      operation.trackJob(job.id, "Track Properties");
+      operation.trackJob(job.id, "Edit Tracks");
       setStatusText(`Applying ${job.total} track property edit(s)...`);
     },
     onError: (error) => setStatusText(error instanceof Error ? error.message : "Apply failed.")
   });
 
   const cancelApply = useMutation({ mutationFn: cancelOperationJob });
-  const runningJob = operation.activeOperation?.label === "Track Properties" ? operation.job : undefined;
-  const isApplying = apply.isPending || (operation.activeOperation?.label === "Track Properties" && operation.isRunning);
+  const runningJob = operation.activeOperation?.label === "Edit Tracks" ? operation.job : undefined;
+  const isApplying = apply.isPending || (operation.activeOperation?.label === "Edit Tracks" && operation.isRunning);
 
   useEffect(() => {
     if (!runningJob) return;
@@ -259,7 +259,7 @@ export function TrackPropertiesPage() {
 
   function runPreview() {
     if (mkvFiles.length === 0) {
-      setStatusText("Track Properties requires scanned MKV files. MP4 files can be inspected and renamed, but cannot be edited with mkvpropedit.");
+      setStatusText("Edit Tracks requires scanned MKV files. MP4 files can be inspected and renamed, but cannot be edited with mkvpropedit.");
       return;
     }
 
@@ -286,7 +286,7 @@ export function TrackPropertiesPage() {
   }
 
   function cancelRunningApply() {
-    if (!operation.activeOperation || operation.activeOperation.label !== "Track Properties") return;
+    if (!operation.activeOperation || operation.activeOperation.label !== "Edit Tracks") return;
     cancelApply.mutate(operation.activeOperation.id);
     setStatusText("Canceling property edit job...");
   }
@@ -325,7 +325,7 @@ export function TrackPropertiesPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <SectionHeader title="Track Properties" description="Edit container, track title, language, default, and forced flags." />
+      <SectionHeader title="Edit Tracks" description="Edit container, track title, language, default, and forced flags." />
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
         <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex items-center justify-between">
@@ -345,7 +345,7 @@ export function TrackPropertiesPage() {
             <div className="mt-1 text-[0.6875rem] text-muted">Uses template track order; validates before editing.</div>
             {nonMkvCount > 0 ? (
               <div className="mt-2 rounded-md border border-warning bg-input p-2 text-xs leading-5 text-warning">
-                {nonMkvCount} non-MKV file(s) are excluded. Track Properties uses mkvpropedit and supports MKV files only.
+                {nonMkvCount} non-MKV file(s) are excluded. Edit Tracks uses mkvpropedit and supports MKV files only.
               </div>
             ) : null}
 
@@ -417,7 +417,7 @@ export function TrackPropertiesPage() {
         <div className="min-h-0 min-w-0">
           <section className="flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex shrink-0 items-center justify-between gap-3">
-              <h2 className="text-base font-semibold">Track Properties</h2>
+              <h2 className="text-base font-semibold">Edit Tracks</h2>
               <button
                 type="button"
                 onClick={() => setIsSummaryExpanded(true)}
@@ -463,7 +463,7 @@ export function TrackPropertiesPage() {
       </div>
       {isSummaryExpanded ? (
         <PreviewSummaryModal
-          title="Track Properties Preview Summary"
+          title="Edit Tracks Preview Summary"
           emptyText="Build a preview to see planned property edits."
           available={previewResult !== null}
           status={previewResult?.status ?? ""}

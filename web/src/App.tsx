@@ -22,7 +22,7 @@ function ProtectedApp() {
   return (
     <MediaLibraryProvider>
       <OperationJobProvider>
-      {/* Reads the track layout as soon as a scan lands, so Track Properties
+      {/* Reads the track layout as soon as a scan lands, so Edit Tracks
           opens with it rather than starting the read on arrival. */}
       <PropEditTemplateWarmer />
       <Routes>
@@ -30,8 +30,12 @@ function ProtectedApp() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/rename" element={<RenamePage />} />
-          <Route path="/mux-remux" element={<MuxRemuxPage />} />
-          <Route path="/track-properties" element={<TrackPropertiesPage />} />
+          <Route path="/remove-tracks" element={<MuxRemuxPage workflow="remove" />} />
+          <Route path="/subtitles" element={<MuxRemuxPage workflow="subtitles" />} />
+          <Route path="/convert-remux" element={<MuxRemuxPage workflow="convert" />} />
+          <Route path="/edit-tracks" element={<TrackPropertiesPage />} />
+          <Route path="/mux-remux" element={<Navigate to="/remove-tracks" replace />} />
+          <Route path="/track-properties" element={<Navigate to="/edit-tracks" replace />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/logs" element={<LogsPage />} />

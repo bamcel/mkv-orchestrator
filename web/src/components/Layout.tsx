@@ -1,4 +1,4 @@
-import { Activity, Database, FileCog, FolderOpen, ListVideo, Logs, Settings, Shuffle } from "lucide-react";
+import { Activity, Captions, Database, FileCog, FolderOpen, ListVideo, Logs, RefreshCw, Settings, Trash2 } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getStatus } from "../api";
@@ -10,18 +10,21 @@ import { SignOutButton } from "./SignOutButton";
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: Activity },
   { to: "/rename", label: "Rename Files", icon: ListVideo },
-  { to: "/mux-remux", label: "MKV Operations", icon: Shuffle },
-  { to: "/track-properties", label: "Track Properties", icon: FileCog },
+  { to: "/remove-tracks", label: "Remove Tracks", icon: Trash2 },
+  { to: "/edit-tracks", label: "Edit Tracks", icon: FileCog },
+  { to: "/subtitles", label: "Subtitles", icon: Captions },
+  { to: "/convert-remux", label: "Convert / Remux", icon: RefreshCw, requiresMp4: true },
   { to: "/library", label: "Library", icon: Database },
-  { to: "/settings", label: "Settings", icon: Settings },
-  { to: "/logs", label: "Logs", icon: Logs }
+  { to: "/logs", label: "Logs", icon: Logs },
+  { to: "/settings", label: "Settings", icon: Settings }
 ];
 
 export function Layout() {
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const missingTools = status.data?.tools.filter((tool) => !tool.available).length ?? 0;
-  const { selectionError } = useMediaLibrary();
+  const { files, selectionError } = useMediaLibrary();
   const operation = useOperationJob();
+  const hasMp4Files = files.some((file) => file.extension.toLowerCase() === ".mp4");
 
   return (
     <div className="h-screen overflow-hidden bg-window text-text">
@@ -53,7 +56,7 @@ export function Layout() {
           </div>
 
           <nav className="space-y-1.5">
-            {navItems.map((item) => {
+            {navItems.filter((item) => !item.requiresMp4 || hasMp4Files).map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink
