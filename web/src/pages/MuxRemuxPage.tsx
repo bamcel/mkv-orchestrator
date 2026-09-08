@@ -282,9 +282,9 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
       <SectionHeader title={pageTitle} description={pageDescription} />
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
         <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
-          <div className="flex justify-end">
+          {workflow !== "subtitles" ? <div className="flex justify-end">
             <button onClick={refreshFiles} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">Refresh</button>
-          </div>
+          </div> : null}
 
           {workflow === "remove" ? (
             <div className="mt-4 space-y-3">
@@ -303,8 +303,11 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
           ) : null}
 
           {workflow === "subtitles" ? (
-            <div className="mt-4 space-y-3">
-              <h2 className="text-sm font-semibold">Subtitle Mux</h2>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold">Subtitle Mux</h2>
+                <button onClick={refreshFiles} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">Refresh</button>
+              </div>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={muxExternal} onChange={(event) => setMuxExternal(event.target.checked)} /> Mux matching external subtitles</label>
               <div className="text-sm text-muted">File Format: <span className="text-accent">file_name.language.tag.ext</span></div>
               <Field label="Fallback language" value={externalLanguage} onChange={setExternalLanguage} placeholder="eng" />
