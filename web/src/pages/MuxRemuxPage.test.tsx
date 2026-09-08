@@ -65,6 +65,9 @@ describe("MKV Operations file selection", () => {
     );
 
     await screen.findByText("Episode 01.mkv");
+    expect(screen.getByRole("tab", { name: "Batch Subtitles" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("button", { name: "Browse subtitle files" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Manual" }));
     await user.click(screen.getByRole("button", { name: "Browse subtitle files" }));
     await user.dblClick(await screen.findByText("Episode 01.eng.srt"));
     expect(await screen.findByText("Into: Episode 01.mkv")).toBeInTheDocument();
