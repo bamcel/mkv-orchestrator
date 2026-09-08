@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { buildRemovedTrackDetails, MuxRemuxPage } from "./MuxRemuxPage";
 import { MediaLibraryProvider } from "../state/MediaLibraryContext";
 import { renderWithBackend } from "../test/render";
-import type { MediaFileRow, WebSettings } from "../generated/contracts";
+import type { MediaFileRow, MuxPreviewRequest, WebSettings } from "../generated/contracts";
 
 function mediaFile(name: string): MediaFileRow {
   return {
@@ -36,7 +36,7 @@ describe("MKV Operations file selection", () => {
   it("adds a manually browsed subtitle to the highlighted MKV preview", async () => {
     const user = userEvent.setup();
     const file = mediaFile("Episode 01.mkv");
-    const buildMuxPreview = vi.fn(() => Promise.resolve({
+    const buildMuxPreview = vi.fn((_request: MuxPreviewRequest) => Promise.resolve({
       actions: [],
       noChangeFiles: [],
       summary: "Preview ready",
