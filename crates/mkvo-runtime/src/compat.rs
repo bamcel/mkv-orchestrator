@@ -6,8 +6,9 @@
 
 use chrono::{DateTime, Utc};
 use mkvo_contracts::{
-    JobSnapshot, JobStatus, MediaFileRow, MuxActionRow, PropEditActionRow, PropEditNoChangeRow,
-    PropEditSkippedRow, PropEditTrackConfigRow, RenamePreviewRow, RenameScopeRow, TitleEditMode,
+    JobSnapshot, JobStatus, ManualSubtitleSelection, MediaFileRow, MuxActionRow,
+    PropEditActionRow, PropEditNoChangeRow, PropEditSkippedRow, PropEditTrackConfigRow,
+    RenamePreviewRow, RenameScopeRow, TitleEditMode,
 };
 use mkvo_domain::{IdempotencyKey, PlanId};
 use serde::{Deserialize, Serialize};
@@ -140,6 +141,8 @@ pub struct MuxPreviewRequest {
     pub preserve_chapters: bool,
     pub preserve_attachments: bool,
     pub mux_matching_external_subtitles: bool,
+    #[serde(default)]
+    pub manual_subtitle_selections: Vec<ManualSubtitleSelection>,
     pub external_subtitle_language: String,
     #[serde(default)]
     pub external_subtitle_track_name: Option<String>,

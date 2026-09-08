@@ -18,13 +18,17 @@ impl MkvoRuntime {
             RemuxMode::ConvertToMkv
         } else if request.extract_subtitles {
             RemuxMode::ExtractSubtitles
-        } else if request.mux_matching_external_subtitles {
+        } else if request.mux_matching_external_subtitles
+            || !request.manual_subtitle_selections.is_empty()
+        {
             RemuxMode::MuxSubtitles
         } else {
             RemuxMode::Remux
         };
         let mut existing_paths = self.current_existing_paths().await;
-        let mut external_subtitles = if mode == RemuxMode::MuxSubtitles {
+        let mut external_subtitles = if mode == RemuxMode::MuxSubtitles
+            && request.mux_matching_external_subtitles
+        {
             discover_external_subtitles(
                 &files,
                 &request.external_subtitle_formats,
@@ -35,11 +39,62 @@ impl MkvoRuntime {
         } else {
             BTreeMap::new()
         };
+        let allowed_subtitle_formats = split_strings(&request.external_subtitle_formats);
+        let mut manual_subtitle_paths = BTreeSet::new();
+        for selection in &request.manual_subtitle_selections {
+            let target = PathBuf::from(&selection.target_path);
+            let Some(file) = files.iter().find(|file| same_path(&file.path, &target)) else {
+                return Err(RuntimeError::invalid(format!(
+                    "Manual subtitle target is not a selected MKV: {}",
+                    selection.target_path
+                )));
+            };
+            let subtitle_path = PathBuf::from(&selection.subtitle_path);
+            let extension = subtitle_path.extension().map_or_else(String::new, |value| {
+                value.to_string_lossy().to_ascii_lowercase()
+            });
+            if !allowed_subtitle_formats.contains(&extension) {
+                return Err(RuntimeError::invalid(format!(
+                    "Unsupported manual subtitle format: {}",
+                    selection.subtitle_path
+                )));
+            }
+            if !tokio::fs::metadata(&subtitle_path)
+                .await
+                .is_ok_and(|metadata| metadata.is_file())
+            {
+                return Err(RuntimeError::not_found(format!(
+                    "Manual subtitle file was not found: {}",
+                    selection.subtitle_path
+                )));
+            }
+            let subtitle_key = path_key(&subtitle_path.to_string_lossy());
+            manual_subtitle_paths.insert(subtitle_key.clone());
+            let subtitles = external_subtitles.entry(file.path.clone()).or_default();
+            if subtitles
+                .iter()
+                .any(|subtitle| path_key(&subtitle.path.to_string_lossy()) == subtitle_key)
+            {
+                continue;
+            }
+            let forced = subtitle_path
+                .file_stem()
+                .is_some_and(|stem| stem.to_string_lossy().to_ascii_lowercase().contains("forced"));
+            subtitles.push(ExternalSubtitle {
+                path: subtitle_path,
+                language: request.external_subtitle_language.trim().to_owned(),
+                name: None,
+                default: false,
+                forced,
+            });
+        }
         if request.skip_mux_if_subtitle_already_exists {
             for file in &files {
                 if let Some(subtitles) = external_subtitles.get_mut(&file.path) {
                     subtitles.retain(|subtitle| {
-                        !file.tracks.iter().any(|track| {
+                        manual_subtitle_paths
+                            .contains(&path_key(&subtitle.path.to_string_lossy()))
+                            || !file.tracks.iter().any(|track| {
                             track.kind == TrackKind::Subtitle
                                 && track
                                     .language_or_undetermined()

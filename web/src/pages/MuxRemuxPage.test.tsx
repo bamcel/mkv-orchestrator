@@ -33,6 +33,52 @@ beforeEach(() => {
 });
 
 describe("MKV Operations file selection", () => {
+  it("adds a manually browsed subtitle to the highlighted MKV preview", async () => {
+    const user = userEvent.setup();
+    const file = mediaFile("Episode 01.mkv");
+    const buildMuxPreview = vi.fn(() => Promise.resolve({
+      actions: [],
+      noChangeFiles: [],
+      summary: "Preview ready",
+      status: "Preview ready",
+      planId: null,
+      planFingerprint: null,
+      idempotencyKey: null
+    }));
+    renderWithBackend(
+      <MediaLibraryProvider><MuxRemuxPage /></MediaLibraryProvider>,
+      {
+        getCurrentScanFiles: () => Promise.resolve({
+          updatedUtc: "2026-09-07T20:00:00Z",
+          files: [file],
+          selectedPaths: [file.path],
+          summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 0 }
+        }),
+        getWebSettings: () => Promise.resolve({ mkvMergeDefaultAudioLanguages: "eng", mkvMergeDefaultSubtitleLanguages: "eng", libraryRoots: [] } as unknown as WebSettings),
+        browseFileSystem: () => Promise.resolve({
+          path: "/media/Show",
+          parentPath: "/media",
+          entries: [{ name: "Episode 01.eng.srt", path: "/media/Show/Episode 01.eng.srt", kind: "file", sizeBytes: 128, modifiedUtc: "2026-09-07T19:00:00Z" }]
+        }),
+        buildMuxPreview
+      }
+    );
+
+    await screen.findByText("Episode 01.mkv");
+    await user.click(screen.getByRole("button", { name: "Subtitles" }));
+    await user.click(screen.getByRole("button", { name: "Browse subtitle files" }));
+    await user.dblClick(await screen.findByText("Episode 01.eng.srt"));
+    expect(await screen.findByText("Into: Episode 01.mkv")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
+    expect(buildMuxPreview.mock.calls[0][0].manualSubtitleSelections).toEqual([{
+      targetPath: file.path,
+      subtitlePath: "/media/Show/Episode 01.eng.srt"
+    }]);
+    expect(buildMuxPreview.mock.calls[0][0].muxMatchingExternalSubtitles).toBe(false);
+  });
+
   it("shows MP4 conversion above track removal when MP4 files are present", async () => {
     const mp4 = { ...mediaFile("Movie.mp4"), extension: ".mp4", reader: "ffprobe" };
     renderWithBackend(

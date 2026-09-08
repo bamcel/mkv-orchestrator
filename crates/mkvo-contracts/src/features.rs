@@ -720,6 +720,13 @@ pub struct RenameProviderTestResponse {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ManualSubtitleSelection {
+    pub target_path: String,
+    pub subtitle_path: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MuxPreviewRequest {
     #[serde(default)]
     pub files: Vec<MediaFileDto>,
@@ -734,6 +741,8 @@ pub struct MuxPreviewRequest {
     pub preserve_chapters: bool,
     pub preserve_attachments: bool,
     pub mux_matching_external_subtitles: bool,
+    #[serde(default)]
+    pub manual_subtitle_selections: Vec<ManualSubtitleSelection>,
     pub external_subtitle_language: String,
     pub external_subtitle_formats: String,
     pub preserve_external_subtitle_files: bool,

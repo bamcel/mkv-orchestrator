@@ -734,6 +734,7 @@ mod tests {
             preserve_chapters: true,
             preserve_attachments: true,
             mux_matching_external_subtitles: false,
+            manual_subtitle_selections: Vec::new(),
             external_subtitle_language: "eng".to_owned(),
             external_subtitle_track_name: Some("{tag}".to_owned()),
             external_subtitle_formats: "srt".to_owned(),
