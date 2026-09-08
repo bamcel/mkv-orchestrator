@@ -102,8 +102,9 @@ describe("Track Properties template synchronization", () => {
     const channelOptions = screen.getAllByRole("option", { name: "Auto Sort: [channel]" });
     expect(channelOptions).toHaveLength(2);
     channelOptions.forEach((option) => expect(option).toHaveValue("__mkvo_channel_track_name__"));
-    expect(screen.getAllByRole("radio", { name: "Use episode title" })).toHaveLength(2);
-    expect(screen.queryByRole("radio", { name: /custom/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("option", { name: "Use episode title" })).toHaveLength(2);
+    expect(screen.getByRole("option", { name: "Custom title" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Custom name" })).toBeInTheDocument();
     const autoChannelOption = channelOptions[0];
     await userEvent.setup().selectOptions(autoChannelOption.closest("select")!, "__mkvo_channel_track_name__");
     await waitFor(() => {
