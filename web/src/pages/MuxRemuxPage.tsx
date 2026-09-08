@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { FolderOpen, RefreshCw, Wand2, X } from "lucide-react";
+import { RefreshCw, Wand2 } from "lucide-react";
 import {
   buildMuxPreview,
   cancelOperationJob,
@@ -11,7 +11,6 @@ import {
   startMuxApply
 } from "../api";
 import { PreviewSummaryModal } from "../components/PreviewSummaryModal";
-import { FileBrowser } from "../components/FileBrowser";
 import { SectionHeader } from "../components/SectionHeader";
 import { SortableColumnHeader, type SortDirection } from "../components/SortableColumnHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
@@ -26,7 +25,6 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
   const operation = useOperationJob();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
-  const [subtitleTab, setSubtitleTab] = useState<"batch" | "manual">("batch");
   const [detailTab, setDetailTab] = useState<"tracks" | "attachments">("tracks");
   const [selectedDetailPath, setSelectedDetailPath] = useState("");
   const [removeAudio, setRemoveAudio] = useState(false);
@@ -40,10 +38,8 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
   const [muxExternal, setMuxExternal] = useState(false);
   const [externalLanguage, setExternalLanguage] = useState("eng");
   const [externalFormats, setExternalFormats] = useState("srt,ass,ssa,sub,idx");
-  const [manualSubtitleSelections, setManualSubtitleSelections] = useState<Array<{ targetPath: string; subtitlePath: string }>>([]);
-  const [manualSubtitleBrowseTarget, setManualSubtitleBrowseTarget] = useState<string | null>(null);
   const [preserveSidecars, setPreserveSidecars] = useState(true);
-  const [skipExistingSubtitle, setSkipExistingSubtitle] = useState(true);
+  const [skipExistingSubtitle, setSkipExistingSubtitle] = useState(false);
   const [extractSubtitles, setExtractSubtitles] = useState(false);
   const [extractLanguages, setExtractLanguages] = useState("eng");
   const [extractOverwrite, setExtractOverwrite] = useState(false);
@@ -187,9 +183,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
       preserveChapters,
       preserveAttachments,
       muxMatchingExternalSubtitles: muxExternal,
-      manualSubtitleSelections: manualSubtitleSelections.filter((selection) =>
-        selectedMkvPaths.some((path) => normalizePath(path) === normalizePath(selection.targetPath))
-      ),
+      manualSubtitleSelections: [],
       externalSubtitleLanguage: externalLanguage,
       externalSubtitleFormats: externalFormats,
       preserveExternalSubtitleFiles: preserveSidecars,
@@ -214,53 +208,6 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
 
   function togglePath(path: string) {
     toggleSelectedPath(path);
-  }
-
-  function openManualSubtitleBrowser() {
-    const detailTarget = selectedDetailFile?.extension.toLowerCase() === ".mkv"
-      && selectedMkvPaths.some((path) => normalizePath(path) === normalizePath(selectedDetailFile.path))
-      ? selectedDetailFile.path
-      : null;
-    const targetPath = detailTarget ?? (selectedMkvPaths.length === 1 ? selectedMkvPaths[0] : null);
-    if (!targetPath) {
-      setStatusText("Highlight one selected MKV before choosing a manual subtitle file.");
-      return;
-    }
-    setManualSubtitleBrowseTarget(targetPath);
-  }
-
-  function addManualSubtitle(path: string, kind: "folder" | "file") {
-    if (kind !== "file" || !manualSubtitleBrowseTarget) {
-      setStatusText("Select a subtitle file, not a folder.");
-      return;
-    }
-    if (!isSupportedSubtitlePath(path, externalFormats)) {
-      setStatusText(`Choose one of the configured subtitle formats: ${externalFormats}.`);
-      return;
-    }
-    addManualSubtitlePaths([path], manualSubtitleBrowseTarget);
-    setManualSubtitleBrowseTarget(null);
-  }
-
-  function addManualSubtitlePaths(paths: string[], targetPath: string) {
-    const supported = paths.filter((path) => isSupportedSubtitlePath(path, externalFormats));
-    if (supported.length === 0) {
-      setStatusText(`Choose one of the configured subtitle formats: ${externalFormats}.`);
-      return;
-    }
-    setManualSubtitleSelections((current) => {
-      const next = [...current];
-      for (const subtitlePath of supported) {
-        if (!next.some((selection) =>
-          normalizePath(selection.targetPath) === normalizePath(targetPath)
-          && normalizePath(selection.subtitlePath) === normalizePath(subtitlePath)
-        )) {
-          next.push({ targetPath, subtitlePath });
-        }
-      }
-      return next;
-    });
-    setStatusText(`${supported.length} manual subtitle file(s) selected for ${fileNameFromPath(targetPath)}.`);
   }
 
   function highlightFile(path: string, index: number, modifiers: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) {
@@ -356,48 +303,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
           ) : null}
 
           {workflow === "subtitles" ? (
-            <div className="mt-3">
-              <div className="flex gap-5 border-b border-border text-sm" role="tablist" aria-label="Subtitle workflow">
-                <button type="button" role="tab" aria-selected={subtitleTab === "batch"} onClick={() => setSubtitleTab("batch")} className={["pb-2 font-semibold", subtitleTab === "batch" ? "border-b border-accent text-text" : "text-muted hover:text-text"].join(" ")}>Batch Subtitles</button>
-                <button type="button" role="tab" aria-selected={subtitleTab === "manual"} onClick={() => setSubtitleTab("manual")} className={["pb-2 font-semibold", subtitleTab === "manual" ? "border-b border-accent text-text" : "text-muted hover:text-text"].join(" ")}>Manual</button>
-              </div>
-
-              {subtitleTab === "manual" ? (
-              <div className="mt-4 rounded-md border border-border bg-panel p-3">
-                <h2 className="text-sm font-semibold">Manual Subtitle Selection</h2>
-                <button
-                  type="button"
-                  onClick={openManualSubtitleBrowser}
-                  disabled={selectedMkvPaths.length === 0}
-                  className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled"
-                >
-                  <FolderOpen size={15} />
-                  Browse subtitle files
-                </button>
-                <p className="mt-2 text-xs leading-5 text-subtle">Highlight a selected MKV, then choose one or more subtitle files to mux into that file.</p>
-                {manualSubtitleSelections.length > 0 ? (
-                  <div className="mt-2 max-h-28 space-y-1 overflow-auto">
-                    {manualSubtitleSelections.map((selection) => (
-                      <div key={`${selection.targetPath}-${selection.subtitlePath}`} className="flex min-w-0 items-center gap-2 rounded border border-border bg-input px-2 py-1 text-xs">
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-text" title={selection.subtitlePath}>{fileNameFromPath(selection.subtitlePath)}</div>
-                          <div className="truncate text-subtle" title={selection.targetPath}>Into: {fileNameFromPath(selection.targetPath)}</div>
-                        </div>
-                        <button
-                          type="button"
-                          aria-label={`Remove ${fileNameFromPath(selection.subtitlePath)}`}
-                          onClick={() => setManualSubtitleSelections((current) => current.filter((item) => item !== selection))}
-                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-subtle hover:bg-button-hover hover:text-text"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-              ) : (
-              <div className="mt-4 space-y-3">
+            <div className="mt-4 space-y-3">
               <h2 className="text-sm font-semibold">Subtitle Mux</h2>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={muxExternal} onChange={(event) => setMuxExternal(event.target.checked)} /> Mux matching external subtitles</label>
               <div className="text-sm text-muted">File Format: <span className="text-accent">file_name.language.tag.ext</span></div>
@@ -411,8 +317,6 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extractSubtitles} onChange={(event) => setExtractSubtitles(event.target.checked)} /> Extract subtitles</label>
               <Field label="Subtitle languages" value={extractLanguages} onChange={setExtractLanguages} placeholder="eng or all" />
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extractOverwrite} onChange={(event) => setExtractOverwrite(event.target.checked)} /> Overwrite existing extracted files</label>
-              </div>
-              )}
             </div>
           ) : null}
 
@@ -623,21 +527,6 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
           onClose={() => setIsSummaryExpanded(false)}
         />
       ) : null}
-      {manualSubtitleBrowseTarget ? (
-        <FileBrowser
-          initialPath={parentPath(manualSubtitleBrowseTarget) || settings.data?.defaultRoot || ""}
-          homeRoot={settings.data?.defaultRoot ? { name: settings.data.defaultRootName || "Home", path: settings.data.defaultRoot } : undefined}
-          roots={settings.data?.libraryRoots ?? []}
-          onCancel={() => setManualSubtitleBrowseTarget(null)}
-          onSelect={addManualSubtitle}
-          onSelectMany={(entries) => {
-            const targetPath = manualSubtitleBrowseTarget;
-            if (!targetPath) return;
-            addManualSubtitlePaths(entries.filter((entry) => entry.kind === "file").map((entry) => entry.path), targetPath);
-            setManualSubtitleBrowseTarget(null);
-          }}
-        />
-      ) : null}
       {selectionMenu ? (
         <div
           role="menu"
@@ -704,21 +593,6 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
 
 function normalizePath(path: string) {
   return path.replace(/\\/g, "/").toLowerCase();
-}
-
-function parentPath(path: string) {
-  const trimmed = path.replace(/[\\/]+$/, "");
-  const separatorIndex = Math.max(trimmed.lastIndexOf("\\"), trimmed.lastIndexOf("/"));
-  return separatorIndex > 0 ? trimmed.slice(0, separatorIndex) : "";
-}
-
-function fileNameFromPath(path: string) {
-  return path.split(/[\\/]/).pop() || path;
-}
-
-function isSupportedSubtitlePath(path: string, formats: string) {
-  const extension = path.split(".").pop()?.toLowerCase() ?? "";
-  return new Set(formats.split(/[\s,;]+/).map((format) => format.trim().replace(/^\./, "").toLowerCase()).filter(Boolean)).has(extension);
 }
 
 function sortOperationFiles(files: ReturnType<typeof useMediaLibrary>["files"], key: FileSortKey, direction: SortDirection, templateFile: ReturnType<typeof useMediaLibrary>["files"][number] | null) {

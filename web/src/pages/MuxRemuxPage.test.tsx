@@ -33,7 +33,7 @@ beforeEach(() => {
 });
 
 describe("MKV Operations file selection", () => {
-  it("adds a manually browsed subtitle to the highlighted MKV preview", async () => {
+  it("removes manual subtitle browsing and does not skip existing subtitles by default", async () => {
     const user = userEvent.setup();
     const file = mediaFile("Episode 01.mkv");
     const buildMuxPreview = vi.fn((_request: MuxPreviewRequest) => Promise.resolve({
@@ -55,29 +55,19 @@ describe("MKV Operations file selection", () => {
           summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 0 }
         }),
         getWebSettings: () => Promise.resolve({ mkvMergeDefaultAudioLanguages: "eng", mkvMergeDefaultSubtitleLanguages: "eng", libraryRoots: [] } as unknown as WebSettings),
-        browseFileSystem: () => Promise.resolve({
-          path: "/media/Show",
-          parentPath: "/media",
-          entries: [{ name: "Episode 01.eng.srt", path: "/media/Show/Episode 01.eng.srt", kind: "file", sizeBytes: 128, modifiedUtc: "2026-09-07T19:00:00Z" }]
-        }),
         buildMuxPreview
       }
     );
 
     await screen.findByText("Episode 01.mkv");
-    expect(screen.getByRole("tab", { name: "Batch Subtitles" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tab", { name: "Batch Subtitles" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Manual" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Browse subtitle files" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Manual" }));
-    await user.click(screen.getByRole("button", { name: "Browse subtitle files" }));
-    await user.dblClick(await screen.findByText("Episode 01.eng.srt"));
-    expect(await screen.findByText("Into: Episode 01.mkv")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Skip if matching subtitle already exists" })).not.toBeChecked();
 
     await user.click(screen.getByRole("button", { name: "Preview" }));
     await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
-    expect(buildMuxPreview.mock.calls[0][0].manualSubtitleSelections).toEqual([{
-      targetPath: file.path,
-      subtitlePath: "/media/Show/Episode 01.eng.srt"
-    }]);
+    expect(buildMuxPreview.mock.calls[0][0].manualSubtitleSelections).toEqual([]);
     expect(buildMuxPreview.mock.calls[0][0].muxMatchingExternalSubtitles).toBe(false);
   });
 

@@ -99,12 +99,8 @@ impl MkvoRuntime {
                                 && track
                                     .language_or_undetermined()
                                     .eq_ignore_ascii_case(&subtitle.language)
-                                && subtitle.name.as_deref().is_none_or(|name| {
-                                    track
-                                        .name
-                                        .as_deref()
-                                        .is_some_and(|existing| existing.eq_ignore_ascii_case(name))
-                                })
+                                && subtitle_codec_matches(&track.codec, track.codec_id.as_deref(), &subtitle.path)
+                                && subtitle_names_match(track.name.as_deref(), subtitle.name.as_deref())
                         })
                     });
                 }
@@ -647,5 +643,52 @@ impl MkvoRuntime {
             }
         }
         Ok(())
+    }
+}
+
+fn subtitle_codec_matches(codec: &str, codec_id: Option<&str>, subtitle_path: &Path) -> bool {
+    let extension = subtitle_path
+        .extension()
+        .map_or_else(String::new, |value| value.to_string_lossy().to_ascii_lowercase());
+    let codec = codec.to_ascii_lowercase();
+    let codec_id = codec_id.unwrap_or_default().to_ascii_lowercase();
+    match extension.as_str() {
+        "srt" => codec.contains("subrip") || codec.contains("srt") || codec_id == "s_text/utf8",
+        "ass" => codec.contains("ass") || codec_id == "s_text/ass",
+        "ssa" => codec.contains("ssa") || codec_id == "s_text/ssa",
+        "sub" | "idx" => codec.contains("vobsub") || codec_id == "s_vobsub",
+        "sup" => codec.contains("pgs") || codec.contains("hdmv") || codec_id == "s_hdmv/pgs",
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod subtitle_match_tests {
+    use super::{subtitle_codec_matches, subtitle_names_match};
+    use std::path::Path;
+
+    #[test]
+    fn requires_the_external_format_to_match_the_embedded_codec() {
+        assert!(subtitle_codec_matches("SubRip/SRT", Some("S_TEXT/UTF8"), Path::new("Episode.eng.srt")));
+        assert!(!subtitle_codec_matches("SubStationAlpha", Some("S_TEXT/ASS"), Path::new("Episode.eng.srt")));
+        assert!(subtitle_codec_matches("SubStationAlpha", Some("S_TEXT/ASS"), Path::new("Episode.eng.ass")));
+    }
+
+    #[test]
+    fn requires_both_tracks_to_have_the_same_name() {
+        assert!(subtitle_names_match(Some("Dialogue"), Some("dialogue")));
+        assert!(subtitle_names_match(None, None));
+        assert!(!subtitle_names_match(Some("Dialogue"), Some("SDH")));
+        assert!(!subtitle_names_match(Some("Dialogue"), None));
+    }
+}
+
+fn subtitle_names_match(existing: Option<&str>, candidate: Option<&str>) -> bool {
+    let existing = existing.map(str::trim).filter(|value| !value.is_empty());
+    let candidate = candidate.map(str::trim).filter(|value| !value.is_empty());
+    match (existing, candidate) {
+        (None, None) => true,
+        (Some(existing), Some(candidate)) => existing.eq_ignore_ascii_case(candidate),
+        _ => false,
     }
 }
