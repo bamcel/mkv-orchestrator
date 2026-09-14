@@ -74,10 +74,22 @@ async fn jellyfin_connection_and_libraries_round_trip_over_http() {
             "/System/Info/Public",
             get(|State(seen): State<Seen>, headers: HeaderMap| async move {
                 seen.record("/System/Info/Public", &headers);
+                if !headers
+                    .get("authorization")
+                    .and_then(|value| value.to_str().ok())
+                    .is_some_and(|value| {
+                        value.starts_with("MediaBrowser ")
+                            && value.contains("Client=\"MKV Orchestrator\"")
+                            && value.contains("Token=\"token-123\"")
+                    })
+                {
+                    return StatusCode::UNAUTHORIZED.into_response();
+                }
                 axum::Json(serde_json::json!({
                     "ServerName": "Basement Jellyfin",
-                    "Version": "10.9.11"
+                    "Version": "12.0.0"
                 }))
+                .into_response()
             }),
         )
         .route(
@@ -133,7 +145,7 @@ async fn jellyfin_connection_and_libraries_round_trip_over_http() {
         .await
         .expect("connection");
     assert_eq!(info.server_name.as_deref(), Some("Basement Jellyfin"));
-    assert_eq!(info.version.as_deref(), Some("10.9.11"));
+    assert_eq!(info.version.as_deref(), Some("12.0.0"));
 
     let mappings = [MediaServerPathMapping {
         server_path_prefix: "/data".to_owned(),
@@ -166,6 +178,13 @@ async fn jellyfin_connection_and_libraries_round_trip_over_http() {
             .as_deref(),
         Some("token-123")
     );
+    let authorization = seen
+        .header_for("/Library/VirtualFolders", "authorization")
+        .expect("Jellyfin 12 authorization header");
+    assert!(authorization.starts_with("MediaBrowser "));
+    assert!(authorization.contains("Client=\"MKV Orchestrator\""));
+    assert!(authorization.contains("DeviceId=\"mkv-orchestrator\""));
+    assert!(authorization.contains("Token=\"token-123\""));
 
     let items = client
         .discover_items(

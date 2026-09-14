@@ -409,14 +409,28 @@ fn build_url(base: &str, relative_path: &str) -> Result<Url, MediaServerError> {
 }
 
 fn apply_auth(request: RequestBuilder, server: &MediaServerConfig) -> RequestBuilder {
-    if server.api_key.expose().trim().is_empty() {
+    let token = server.api_key.expose().trim();
+    if token.is_empty() {
         return request;
     }
     match server.kind {
-        MediaServerKind::Emby | MediaServerKind::Jellyfin => request
-            .header("X-Emby-Token", server.api_key.expose().trim())
-            .header("X-MediaBrowser-Token", server.api_key.expose().trim()),
-        MediaServerKind::Plex => request.header("X-Plex-Token", server.api_key.expose().trim()),
+        MediaServerKind::Emby => request
+            .header("X-Emby-Token", token)
+            .header("X-MediaBrowser-Token", token),
+        MediaServerKind::Jellyfin => request
+            // Jellyfin 12 disables legacy token headers by default. Keep them
+            // for older installations, but authenticate through the supported
+            // MediaBrowser scheme so the same request works across versions.
+            .header(
+                reqwest::header::AUTHORIZATION,
+                format!(
+                    "MediaBrowser Client=\"MKV Orchestrator\", Device=\"MKV Orchestrator\", DeviceId=\"mkv-orchestrator\", Version=\"{}\", Token=\"{token}\"",
+                    env!("CARGO_PKG_VERSION")
+                ),
+            )
+            .header("X-Emby-Token", token)
+            .header("X-MediaBrowser-Token", token),
+        MediaServerKind::Plex => request.header("X-Plex-Token", token),
     }
 }
 
