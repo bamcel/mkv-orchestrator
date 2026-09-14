@@ -5,7 +5,21 @@ impl MkvoRuntime {
         &self,
         request: LibraryAuditRequest,
     ) -> RuntimeResult<LibraryAuditResponse> {
-        let files = self.resolve_rows(&request.files, &[]).await?;
+        let files = if request.files.is_empty() {
+            let source_paths: Vec<_> = request.source_paths.iter().map(PathBuf::from).collect();
+            self.current_domain_files()
+                .await
+                .into_iter()
+                .filter(|file| {
+                    source_paths.is_empty()
+                        || source_paths
+                            .iter()
+                            .any(|source| file.path == *source || file.path.starts_with(source))
+                })
+                .collect()
+        } else {
+            self.resolve_rows(&request.files, &[]).await?
+        };
         let audit = LibraryAuditService.build(&self.config().media_root, &files, &[]);
         let items = audit
             .groups

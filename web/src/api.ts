@@ -324,8 +324,8 @@ export function startPropEditApply(request: PropEditPreviewRequest): Promise<Ope
   return getBackendClient().startPropEditApply(request);
 }
 
-export function buildLibraryAudit(files: MediaFileRow[]): Promise<LibraryAuditResponse> {
-  return getBackendClient().buildLibraryAudit(files);
+export function buildLibraryAudit(sourcePaths: string[]): Promise<LibraryAuditResponse> {
+  return getBackendClient().buildLibraryAudit(sourcePaths);
 }
 
 export function getLibraryCatalog(request: LibraryCatalogRequest): Promise<LibraryCatalogResponse> {

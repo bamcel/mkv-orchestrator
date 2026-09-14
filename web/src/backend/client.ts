@@ -171,7 +171,7 @@ export interface PropertyEditClient {
 }
 
 export interface LibraryClient {
-  buildLibraryAudit(files: MediaFileRow[]): Promise<LibraryAuditResponse>;
+  buildLibraryAudit(sourcePaths: string[]): Promise<LibraryAuditResponse>;
   getLibraryCatalog(request: LibraryCatalogRequest): Promise<LibraryCatalogResponse>;
   getLibraryArtwork(request: LibraryArtworkRequest): Promise<LibraryArtworkResponse>;
   getLibraryLocalArtwork(request: LibraryLocalArtworkRequest): Promise<LibraryArtworkResponse>;

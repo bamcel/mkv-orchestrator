@@ -165,7 +165,7 @@ export function LibraryPage() {
       const pending = pendingTitleRebuild;
       setPendingTitleRebuild(null);
       setIsAuditingLibraries(true);
-      void buildLibraryAudit(currentScanJob.files).then((response) => {
+      void buildLibraryAudit(titleSourcePaths(pending.title)).then((response) => {
         const snapshot = mergeTitleSnapshot(pending.sourceId, pending.title, currentScanJob.files, response);
         libraryViewCache.set(pending.sourceId, snapshot);
         const source = sourceOptions.find((candidate) => candidate.id === pending.sourceId);
@@ -179,7 +179,11 @@ export function LibraryPage() {
       }).catch((error) => {
         if (mounted.current) setStatusText(error instanceof Error ? error.message : "Title audit failed.");
       }).finally(() => {
-        if (mounted.current) setIsAuditingLibraries(false);
+        queryClient.removeQueries({ queryKey: ["library-cache-job", currentScanJob.id] });
+        if (mounted.current) {
+          setScanJobId(null);
+          setIsAuditingLibraries(false);
+        }
       });
     } else if (currentScanJob.status === "Completed" && currentScanJob.id === pendingOverviewScanId) {
       setPendingOverviewScanId(null);
@@ -187,7 +191,7 @@ export function LibraryPage() {
       const sources = buildSourcesRef.current;
       void Promise.allSettled(sources.map(async (source) => {
         const files = filesForLibrarySource(currentScanJob.files, source);
-        const response = await buildLibraryAudit(files);
+        const response = await buildLibraryAudit(source.paths);
         const snapshot = librarySnapshot(source.id, files, response);
         libraryViewCache.set(source.id, snapshot);
         void persistLibrarySnapshot(source.id, librarySnapshotSignature(source, webSettings.data), snapshot);
@@ -205,7 +209,11 @@ export function LibraryPage() {
           setStatusText(error instanceof Error ? error.message : "Library audit failed.");
         }
       }).finally(() => {
-        if (mounted.current) setIsAuditingLibraries(false);
+        queryClient.removeQueries({ queryKey: ["library-cache-job", currentScanJob.id] });
+        if (mounted.current) {
+          setScanJobId(null);
+          setIsAuditingLibraries(false);
+        }
       });
     } else if (currentScanJob.status === "Failed" && currentScanJob.id === pendingTitleRebuild?.jobId) {
       setPendingTitleRebuild(null);

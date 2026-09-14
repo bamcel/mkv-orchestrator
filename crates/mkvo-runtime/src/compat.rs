@@ -6,9 +6,9 @@
 
 use chrono::{DateTime, Utc};
 use mkvo_contracts::{
-    JobSnapshot, JobStatus, ManualSubtitleSelection, MediaFileRow, MuxActionRow,
-    PropEditActionRow, PropEditNoChangeRow, PropEditSkippedRow, PropEditTrackConfigRow,
-    RenamePreviewRow, RenameScopeRow, TitleEditMode,
+    JobSnapshot, JobStatus, ManualSubtitleSelection, MediaFileRow, MuxActionRow, PropEditActionRow,
+    PropEditNoChangeRow, PropEditSkippedRow, PropEditTrackConfigRow, RenamePreviewRow,
+    RenameScopeRow, TitleEditMode,
 };
 use mkvo_domain::{IdempotencyKey, PlanId};
 use serde::{Deserialize, Serialize};
@@ -233,8 +233,13 @@ pub struct PropEditPreviewResponse {
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryAuditRequest {
+    /// Legacy callers may still provide materialized rows. New callers should
+    /// select from the runtime-owned scan with `source_paths` instead, avoiding
+    /// an O(library size) request body and a second rich in-memory copy.
     #[serde(default)]
     pub files: Vec<MediaFileRow>,
+    #[serde(default)]
+    pub source_paths: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

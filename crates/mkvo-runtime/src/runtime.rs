@@ -12,7 +12,7 @@ use mkvo_contracts::{
     AppStatus, CurrentScanResponse, FileSystemEntry, FileSystemEntryKind, FileSystemResponse,
     JobCompletion, JobKind, JobSnapshot, JobStatus, LibraryArtworkRequest, LibraryArtworkResponse,
     LibraryCatalogItem, LibraryCatalogRequest, LibraryCatalogResponse, LibraryLocalArtworkRequest,
-    LogQuery, MediaFileRow, MediaServerSyncResponse, MediaServerTestResponse, ScanJobResponse,
+    LogQuery, MediaServerSyncResponse, MediaServerTestResponse, ScanJobResponse,
     ScanRequest, SecretUpdate, SourceRoot, WebMediaServer, WebMediaServerLibraryPath,
     WebMediaServerPathMapping, WebSettings, WebSettingsRequest,
 };

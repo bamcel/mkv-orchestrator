@@ -603,4 +603,27 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
+
+    #[tokio::test]
+    async fn library_audit_selects_runtime_files_with_a_bounded_request() {
+        let mut host = TestHost::new(None);
+        Arc::get_mut(&mut host.config)
+            .unwrap()
+            .request_body_limit_bytes = 64;
+        let body = r#"{"sourcePaths":["/media/tv"]}"#;
+
+        let response = host
+            .router()
+            .oneshot(
+                Request::post("/api/library/audit")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(body.len() < 64, "audit selectors must stay below the body limit");
+    }
 }

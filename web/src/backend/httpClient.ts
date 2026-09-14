@@ -281,8 +281,8 @@ export class HttpBackendClient implements BackendClient {
     return this.json<OperationJobResponse>("/api/propedit/apply", "POST", request, "OperationJobResponse");
   }
 
-  buildLibraryAudit(files: MediaFileRow[]): Promise<LibraryAuditResponse> {
-    return this.json<LibraryAuditResponse>("/api/library/audit", "POST", { files }, "LibraryAuditResponse");
+  buildLibraryAudit(sourcePaths: string[]): Promise<LibraryAuditResponse> {
+    return this.json<LibraryAuditResponse>("/api/library/audit", "POST", { sourcePaths }, "LibraryAuditResponse");
   }
 
   getLibraryCatalog(request: LibraryCatalogRequest): Promise<LibraryCatalogResponse> {

@@ -286,10 +286,10 @@ describe("Library poster workflow", () => {
             error: ""
           } as ScanJobResponse);
         },
-        buildLibraryAudit: (files) => {
-          const row = files[0]?.path.includes("/alpha/") ? alpha : beta;
+        buildLibraryAudit: (sourcePaths) => {
+          const row = sourcePaths[0]?.includes("/alpha") ? alpha : beta;
           return Promise.resolve({
-            summary: { groups: 1, files: files.length, issueGroups: 0, standardGroups: 1 },
+            summary: { groups: 1, files: row.allFilePaths.length, issueGroups: 0, standardGroups: 1 },
             items: [row]
           });
         }
@@ -323,8 +323,8 @@ describe("Library poster workflow", () => {
     const startScan = vi.fn()
       .mockResolvedValueOnce({ id: "overview-scan", status: "Queued", files: [], completed: 0, total: 0 } as ScanJobResponse)
       .mockResolvedValueOnce({ id: "title-scan", status: "Queued", files: [], completed: 0, total: 0 } as ScanJobResponse);
-    const buildLibraryAudit = vi.fn().mockImplementation((scannedFiles: MediaFileRow[]) => Promise.resolve({
-      summary: { groups: rows.length, files: scannedFiles.length, issueGroups: 0, standardGroups: rows.length },
+    const buildLibraryAudit = vi.fn().mockImplementation((_sourcePaths: string[]) => Promise.resolve({
+      summary: { groups: rows.length, files: files.length, issueGroups: 0, standardGroups: rows.length },
       items: rows
     }));
     const titleSettings = {
@@ -368,6 +368,7 @@ describe("Library poster workflow", () => {
       forceRefresh: true
     });
     await waitFor(() => expect(buildLibraryAudit).toHaveBeenCalledTimes(2));
+    expect(buildLibraryAudit).toHaveBeenLastCalledWith(["/media/tv/Example Show"]);
     expect(await screen.findByText(/example show rebuilt: 4 files/i)).toBeInTheDocument();
   });
 });

@@ -467,11 +467,7 @@ impl MkvoRuntime {
         let state = scan_state_from_snapshot(snapshot).unwrap_or_default();
         Ok(ScanJobResponse::from_snapshot(
             snapshot,
-            if state.rows.is_empty() {
-                state.files.iter().map(MediaFileRow::from).collect()
-            } else {
-                state.rows
-            },
+            state.rows,
             state.skipped,
             state.summary,
         ))

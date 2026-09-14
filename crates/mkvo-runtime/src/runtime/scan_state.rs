@@ -12,7 +12,6 @@ use super::display_path;
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct ScanResultState {
-    pub(super) files: Vec<MediaFile>,
     pub(super) rows: Vec<MediaFileRow>,
     pub(super) skipped: Vec<String>,
     pub(super) summary: ScanSummary,
@@ -89,7 +88,6 @@ impl CurrentScanState {
 
 pub(super) fn scan_result_state(outcome: &ScanOutcome) -> ScanResultState {
     ScanResultState {
-        files: outcome.files.clone(),
         rows: outcome.files.iter().map(MediaFileRow::from).collect(),
         skipped: outcome
             .skipped
