@@ -931,7 +931,7 @@ export function SettingsPage() {
                       No media servers configured. Manual watch folders remain the fallback.
                     </div>
                   ) : mediaServers.map((server) => (
-                    <div key={server.id} className="border-b border-border pb-3 last:border-b-0">
+                    <div key={server.id} className="rounded-xl border border-border bg-input px-6 py-4">
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
@@ -1033,25 +1033,23 @@ export function SettingsPage() {
                       <button type="button" onClick={() => setEditingServerId(null)} className="mt-3 text-xs font-semibold text-muted hover:text-text">Done editing</button>
                       </div> : null}
                       {server.libraries.length > 0 ? (
-                        <details className="group mt-3 rounded-md border border-border">
-                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
-                            <span><span className="block text-xs font-semibold text-text">Libraries enabled for MKVO</span><span className="mt-1 block text-xs text-subtle">{server.libraries.filter((library) => library.isEnabled).length} of {server.libraries.length} enabled</span></span>
+                        <details className="group mt-5">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                            <span><span className="block text-sm font-semibold text-text">Show Libraries</span><span className="mt-1 block text-xs text-subtle">{server.libraries.filter((library) => library.isEnabled).length} of {server.libraries.length} shown</span></span>
                             <ChevronDown size={15} className="shrink-0 text-subtle transition-transform group-open:rotate-180" />
                           </summary>
-                          <div className="max-h-64 overflow-auto border-t border-border">
+                          <div className="mt-3 grid max-h-64 grid-cols-1 gap-x-6 gap-y-2 overflow-auto sm:grid-cols-2 lg:grid-cols-3">
                           {server.libraries.map((library) => (
-                            <label key={library.id} className="grid grid-cols-[1.5rem_minmax(7.5rem,11.25rem)_1fr] gap-2 border-b border-border px-3 py-2 text-xs last:border-b-0">
+                            <label key={library.id} className="flex min-w-0 cursor-pointer items-center gap-2 text-sm text-text" title={`${library.serverPath} -> ${library.containerPath}`}>
                               <input
                                 type="checkbox"
+                                className="size-4 shrink-0 accent-accent"
                                 checked={library.isEnabled}
                                 onChange={(event) => updateMediaServer(server.id, {
                                   libraries: server.libraries.map((item) => item.id === library.id ? { ...item, isEnabled: event.target.checked } : item)
                                 })}
                               />
-                              <span className="truncate font-semibold text-text" title={library.name}>{library.name}</span>
-                              <span className="truncate font-mono text-subtle" title={`${library.serverPath} -> ${library.containerPath}`}>
-                                {library.containerPath}
-                              </span>
+                              <span className="truncate" title={library.name}>{library.name}</span>
                             </label>
                           ))}
                           </div>
