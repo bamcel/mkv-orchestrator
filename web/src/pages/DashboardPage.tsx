@@ -702,7 +702,15 @@ export function DashboardPage() {
             </div>
           </div>
 
-          <div className="mt-4 min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-panel">
+          <div
+            data-library-handoff={isWorkingView || undefined}
+            className={[
+              "mt-4 overflow-hidden rounded-lg border border-border bg-panel",
+              isWorkingView
+                ? "h-[32vh] min-h-[13.75rem] max-h-[20rem] shrink-0"
+                : "min-h-0 flex-1"
+            ].join(" ")}
+          >
             {files.length === 0 ? (
               <div className="flex h-full min-h-[13.75rem] flex-col items-center justify-center text-center">
                 <div className="text-xl font-semibold">No files scanned yet</div>

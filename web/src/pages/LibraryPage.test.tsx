@@ -167,6 +167,9 @@ describe("Library poster workflow", () => {
     expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
     expect(await screen.findByRole("row", { name: /Episode 01\.mkv/i })).toBeInTheDocument();
     expect(screen.queryByText("Previous Scan.mkv")).not.toBeInTheDocument();
+    const handoffFileList = screen.getByLabelText("Scanned files").parentElement;
+    expect(handoffFileList).toHaveAttribute("data-library-handoff", "true");
+    expect(handoffFileList).toHaveClass("max-h-[20rem]", "shrink-0");
   });
 
   it("shows a slate placeholder and offers both Dashboard handoff scopes", async () => {
