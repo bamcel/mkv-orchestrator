@@ -62,6 +62,10 @@ pub struct RemuxOptions {
     #[serde(default = "default_true")]
     pub preserve_attachments: bool,
     #[serde(default)]
+    pub preserve_source: bool,
+    #[serde(default = "default_remux_output_suffix")]
+    pub output_suffix: String,
+    #[serde(default)]
     pub delete_source_after_success: bool,
     #[serde(default)]
     pub delete_external_subtitles_after_success: bool,
@@ -81,6 +85,8 @@ impl Default for RemuxOptions {
             remove_track_ids: BTreeSet::new(),
             preserve_chapters: true,
             preserve_attachments: true,
+            preserve_source: false,
+            output_suffix: default_remux_output_suffix(),
             delete_source_after_success: false,
             delete_external_subtitles_after_success: false,
         }
@@ -102,6 +108,19 @@ impl RemuxPlanner {
                 "remux plan expiration must be positive".to_owned(),
             ));
         }
+        let output_suffix = request.options.output_suffix.trim();
+        if request.options.preserve_source
+            && matches!(request.mode, RemuxMode::Remux | RemuxMode::MuxSubtitles)
+            && (output_suffix.is_empty()
+                || !output_suffix
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_')))
+        {
+            return Err(ApplicationError::InvalidRequest(
+                "remux output suffix must contain only letters, numbers, dots, dashes, or underscores"
+                    .to_owned(),
+            ));
+        }
         let existing: BTreeSet<_> = request
             .existing_paths
             .iter()
@@ -118,6 +137,11 @@ impl RemuxPlanner {
                     .parent()
                     .unwrap_or_else(|| Path::new(""))
                     .to_owned(),
+                RemuxMode::Remux | RemuxMode::MuxSubtitles
+                    if request.options.preserve_source =>
+                {
+                    preserved_output_for(file, output_suffix)
+                }
                 RemuxMode::Remux | RemuxMode::MuxSubtitles => file.path.clone(),
             };
             let temporary_output = temporary_output_for(file, request.mode);
@@ -201,6 +225,16 @@ impl RemuxPlanner {
                     Some(final_output.clone()),
                 ));
             }
+            if matches!(request.mode, RemuxMode::Remux | RemuxMode::MuxSubtitles)
+                && !same_path(&file.path, &final_output)
+                && existing.contains(&path_key(&final_output))
+            {
+                conflicts.push(PlanConflict::blocking(
+                    PlanConflictKind::ExistingTarget,
+                    "Preserved-source remux target already exists",
+                    Some(final_output.clone()),
+                ));
+            }
             if request.mode == RemuxMode::Remux
                 && selected_track_ids.len() == file.tracks.len()
             {
@@ -274,7 +308,13 @@ impl RemuxPlanner {
             .items
             .iter()
             .flat_map(|item| {
-                std::iter::once(ResourceClaim::write(item.source.clone()))
+                std::iter::once(if same_path(&item.source, &item.final_output)
+                    || item.delete_source_after_success
+                {
+                    ResourceClaim::write(item.source.clone())
+                } else {
+                    ResourceClaim::read(item.source.clone())
+                })
                     .chain(std::iter::once(ResourceClaim::write(
                         item.temporary_output.clone(),
                     )))
@@ -357,10 +397,23 @@ fn temporary_output_for(file: &MediaFile, mode: RemuxMode) -> PathBuf {
         .with_file_name(format!("{stem}.mkvo-{suffix}.tmp.mkv"))
 }
 
+fn preserved_output_for(file: &MediaFile, suffix: &str) -> PathBuf {
+    let stem = file
+        .path
+        .file_stem()
+        .map_or_else(String::new, |value| value.to_string_lossy().into_owned());
+    let extension = file
+        .path
+        .extension()
+        .map_or_else(|| "mkv".into(), |value| value.to_string_lossy());
+    file.path
+        .with_file_name(format!("{stem}{suffix}.{extension}"))
+}
+
 fn mark_duplicate_outputs(items: &mut [RemuxPlanItem]) {
     let mut outputs: BTreeMap<String, Vec<usize>> = BTreeMap::new();
     for (index, item) in items.iter().enumerate() {
-        if item.mode == RemuxMode::ConvertToMkv {
+        if !same_path(&item.source, &item.final_output) {
             outputs
                 .entry(path_key(&item.final_output))
                 .or_default()
@@ -382,6 +435,14 @@ fn mark_duplicate_outputs(items: &mut [RemuxPlanItem]) {
             ));
         }
     }
+}
+
+fn same_path(left: &Path, right: &Path) -> bool {
+    path_key(left) == path_key(right)
+}
+
+fn default_remux_output_suffix() -> String {
+    ".remuxed".to_owned()
 }
 
 #[cfg(test)]
@@ -427,6 +488,77 @@ mod tests {
             provider_match: None,
             status: MediaStatus::Ready,
         }
+    }
+
+    fn media_with_removable_audio(path: &str) -> MediaFile {
+        let mut file = media(path);
+        let mut audio = file.tracks[0].clone();
+        audio.mkvmerge_id = 1;
+        audio.propedit_track_number = 2;
+        audio.kind = TrackKind::Audio;
+        audio.codec = "AAC".to_owned();
+        file.tracks.push(audio);
+        file
+    }
+
+    #[test]
+    fn preserved_source_remux_writes_a_sibling_and_only_reads_the_source() {
+        let request = RemuxPlanRequest {
+            source_access: BTreeMap::new(),
+            mode: RemuxMode::Remux,
+            files: vec![media_with_removable_audio("show/Episode 01.mkv")],
+            options: RemuxOptions {
+                remove_track_ids: BTreeSet::from([1]),
+                preserve_source: true,
+                output_suffix: ".filtered".to_owned(),
+                ..RemuxOptions::default()
+            },
+            external_subtitles: BTreeMap::new(),
+            extractions: BTreeMap::new(),
+            existing_paths: BTreeSet::new(),
+            authorized_roots: Vec::new(),
+            settings_fingerprint: "settings".to_owned(),
+            tool_fingerprints: BTreeMap::new(),
+            expires_in_seconds: 60,
+            idempotency_key: IdempotencyKey::generate(),
+        };
+
+        let plan = RemuxPlanner.build_plan(request).unwrap();
+        let item = &plan.payload.items[0];
+        assert_eq!(item.final_output, PathBuf::from("show/Episode 01.filtered.mkv"));
+        assert!(item.can_apply());
+        assert!(plan.context.resources.contains(&ResourceClaim::read("show/Episode 01.mkv")));
+        assert!(plan.context.resources.contains(&ResourceClaim::write("show/Episode 01.filtered.mkv")));
+    }
+
+    #[test]
+    fn preserved_source_remux_blocks_an_existing_destination() {
+        let output = PathBuf::from("Episode 01.remuxed.mkv");
+        let request = RemuxPlanRequest {
+            source_access: BTreeMap::new(),
+            mode: RemuxMode::Remux,
+            files: vec![media_with_removable_audio("Episode 01.mkv")],
+            options: RemuxOptions {
+                remove_track_ids: BTreeSet::from([1]),
+                preserve_source: true,
+                ..RemuxOptions::default()
+            },
+            external_subtitles: BTreeMap::new(),
+            extractions: BTreeMap::new(),
+            existing_paths: BTreeSet::from([output]),
+            authorized_roots: Vec::new(),
+            settings_fingerprint: "settings".to_owned(),
+            tool_fingerprints: BTreeMap::new(),
+            expires_in_seconds: 60,
+            idempotency_key: IdempotencyKey::generate(),
+        };
+
+        let plan = RemuxPlanner.build_plan(request).unwrap();
+        assert!(!plan.payload.items[0].can_apply());
+        assert!(plan.payload.items[0]
+            .conflicts
+            .iter()
+            .any(|conflict| conflict.kind == PlanConflictKind::ExistingTarget));
     }
 
     #[test]
@@ -683,6 +815,11 @@ mod tests {
                     .collect(),
                 preserve_chapters: input["preserveChapters"].as_bool().unwrap_or(true),
                 preserve_attachments: input["preserveAttachments"].as_bool().unwrap_or(true),
+                preserve_source: input["preserveOriginal"].as_bool().unwrap_or(false),
+                output_suffix: input["remuxOutputSuffix"]
+                    .as_str()
+                    .unwrap_or(".remuxed")
+                    .to_owned(),
                 delete_source_after_success: input["deleteSourceAfterSuccess"]
                     .as_bool()
                     .unwrap_or(false),

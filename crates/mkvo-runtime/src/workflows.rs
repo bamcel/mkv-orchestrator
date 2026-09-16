@@ -733,6 +733,8 @@ mod tests {
             remove_track_ids_text: String::new(),
             preserve_chapters: true,
             preserve_attachments: true,
+            preserve_original: false,
+            remux_output_suffix: ".remuxed".to_owned(),
             mux_matching_external_subtitles: false,
             manual_subtitle_selections: Vec::new(),
             external_subtitle_language: "eng".to_owned(),

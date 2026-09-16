@@ -149,7 +149,10 @@ impl MkvoRuntime {
             .clone()
             .unwrap_or_else(IdempotencyKey::generate);
         // Extraction only reads the source; every other mode rewrites it.
-        let required = if mode == RemuxMode::ExtractSubtitles {
+        let required = if mode == RemuxMode::ExtractSubtitles
+            || (request.preserve_original
+                && matches!(mode, RemuxMode::Remux | RemuxMode::MuxSubtitles))
+        {
             RequiredAccess::Read
         } else {
             RequiredAccess::ReadWrite
@@ -168,6 +171,8 @@ impl MkvoRuntime {
                     remove_track_ids,
                     preserve_chapters: request.preserve_chapters,
                     preserve_attachments: request.preserve_attachments,
+                    preserve_source: request.preserve_original,
+                    output_suffix: request.remux_output_suffix.clone(),
                     delete_source_after_success: request.delete_mp4_after_convert,
                     delete_external_subtitles_after_success: !request
                         .preserve_external_subtitle_files,
@@ -201,6 +206,18 @@ impl MkvoRuntime {
                     resource.path.clone_from(&item.temporary_output);
                 }
             }
+            if !same_path(&item.source, &item.final_output)
+                && self.dependencies().file_system.exists(&item.final_output).await?
+                && !item.conflicts.iter().any(|conflict| {
+                    conflict.kind == mkvo_domain::PlanConflictKind::ExistingTarget
+                })
+            {
+                item.conflicts.push(mkvo_domain::PlanConflict::blocking(
+                    mkvo_domain::PlanConflictKind::ExistingTarget,
+                    "Remux output already exists",
+                    Some(item.final_output.clone()),
+                ));
+            }
         }
         context.attributes.insert(
             "preserveChapters".to_owned(),
@@ -209,6 +226,10 @@ impl MkvoRuntime {
         context.attributes.insert(
             "preserveAttachments".to_owned(),
             request.preserve_attachments.to_string(),
+        );
+        context.attributes.insert(
+            "preserveOriginal".to_owned(),
+            request.preserve_original.to_string(),
         );
         context.attributes.insert(
             "extractOverwriteExistingFiles".to_owned(),

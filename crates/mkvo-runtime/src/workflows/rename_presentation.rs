@@ -82,7 +82,7 @@ pub(super) fn remux_tool_name(mode: RemuxMode) -> &'static str {
 }
 
 pub(super) fn remux_description(item: &RemuxPlanItem) -> String {
-    match item.mode {
+    let operation = match item.mode {
         RemuxMode::ExtractSubtitles => {
             format!("Extract {} subtitle track(s)", item.extract_tracks.len())
         }
@@ -93,6 +93,11 @@ pub(super) fn remux_description(item: &RemuxPlanItem) -> String {
         ),
         RemuxMode::ConvertToMkv => "Losslessly copy streams into MKV".to_owned(),
         RemuxMode::Remux => format!("Keep {} selected track(s)", item.selected_track_ids.len()),
+    };
+    if !same_path(&item.source, &item.final_output) {
+        format!("{operation}\nOutput: {}", file_name(&item.final_output))
+    } else {
+        operation
     }
 }
 

@@ -140,6 +140,10 @@ pub struct MuxPreviewRequest {
     pub remove_track_ids_text: String,
     pub preserve_chapters: bool,
     pub preserve_attachments: bool,
+    #[serde(default)]
+    pub preserve_original: bool,
+    #[serde(default = "default_remux_output_suffix")]
+    pub remux_output_suffix: String,
     pub mux_matching_external_subtitles: bool,
     #[serde(default)]
     pub manual_subtitle_selections: Vec<ManualSubtitleSelection>,
@@ -160,6 +164,10 @@ pub struct MuxPreviewRequest {
 }
 
 pub type MuxApplyRequest = MuxPreviewRequest;
+
+fn default_remux_output_suffix() -> String {
+    ".remuxed".to_owned()
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -740,6 +740,10 @@ pub struct MuxPreviewRequest {
     pub remove_track_ids_text: String,
     pub preserve_chapters: bool,
     pub preserve_attachments: bool,
+    #[serde(default)]
+    pub preserve_original: bool,
+    #[serde(default = "default_remux_output_suffix")]
+    pub remux_output_suffix: String,
     pub mux_matching_external_subtitles: bool,
     #[serde(default)]
     pub manual_subtitle_selections: Vec<ManualSubtitleSelection>,
@@ -756,6 +760,10 @@ pub struct MuxPreviewRequest {
     pub expires_in_seconds: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency_key: Option<IdempotencyKey>,
+}
+
+fn default_remux_output_suffix() -> String {
+    ".remuxed".to_owned()
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

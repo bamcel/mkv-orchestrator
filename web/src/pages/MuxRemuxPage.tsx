@@ -35,6 +35,8 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
   const [trackIds, setTrackIds] = useState("");
   const [preserveChapters, setPreserveChapters] = useState(true);
   const [preserveAttachments, setPreserveAttachments] = useState(true);
+  const [preserveOriginal, setPreserveOriginal] = useState(true);
+  const [remuxOutputSuffix, setRemuxOutputSuffix] = useState(".remuxed");
   const [muxExternal, setMuxExternal] = useState(false);
   const [externalLanguage, setExternalLanguage] = useState("eng");
   const [externalFormats, setExternalFormats] = useState("srt,ass,ssa,sub,idx");
@@ -182,6 +184,8 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
       removeTrackIdsText: trackIds,
       preserveChapters,
       preserveAttachments,
+      preserveOriginal: !convertMp4 && !extractSubtitles && preserveOriginal,
+      remuxOutputSuffix,
       muxMatchingExternalSubtitles: muxExternal,
       manualSubtitleSelections: [],
       externalSubtitleLanguage: externalLanguage,
@@ -298,7 +302,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
               <h2 className="pt-1 text-sm font-semibold">Preservation Options</h2>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={preserveChapters} onChange={(event) => setPreserveChapters(event.target.checked)} /> Preserve chapters</label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={preserveAttachments} onChange={(event) => setPreserveAttachments(event.target.checked)} /> Preserve attachments/fonts</label>
-              <p className="text-xs leading-5 text-muted">Originals are always replaced through a safe temp file with automatic backup.</p>
+              <OutputOptions preserveOriginal={preserveOriginal} setPreserveOriginal={setPreserveOriginal} suffix={remuxOutputSuffix} setSuffix={setRemuxOutputSuffix} />
             </div>
           ) : null}
 
@@ -315,6 +319,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
               <h2 className="pt-1 text-sm font-semibold">Mux Options</h2>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={preserveSidecars} onChange={(event) => setPreserveSidecars(event.target.checked)} /> Preserve external subtitle files</label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={skipExistingSubtitle} onChange={(event) => setSkipExistingSubtitle(event.target.checked)} /> Skip if matching subtitle already exists</label>
+              <OutputOptions preserveOriginal={preserveOriginal} setPreserveOriginal={setPreserveOriginal} suffix={remuxOutputSuffix} setSuffix={setRemuxOutputSuffix} />
               <p className="text-xs leading-5 text-muted">Example: Episode 01.eng.Dialogue.ass. See Settings for detailed usage.</p>
               <h2 className="pt-1 text-sm font-semibold">Subtitle Extract</h2>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extractSubtitles} onChange={(event) => setExtractSubtitles(event.target.checked)} /> Extract subtitles</label>
@@ -591,6 +596,32 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
         </div>
       ) : null}
     </div>
+  );
+}
+
+function OutputOptions({ preserveOriginal, setPreserveOriginal, suffix, setSuffix }: {
+  preserveOriginal: boolean;
+  setPreserveOriginal: (value: boolean) => void;
+  suffix: string;
+  setSuffix: (value: string) => void;
+}) {
+  return (
+    <fieldset className="space-y-2 rounded-md border border-border bg-panel p-3">
+      <legend className="px-1 text-sm font-semibold">Output</legend>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="radio" name="remux-output" checked={preserveOriginal} onChange={() => setPreserveOriginal(true)} />
+        Create a new file and preserve the original
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="radio" name="remux-output" checked={!preserveOriginal} onChange={() => setPreserveOriginal(false)} />
+        Replace the original
+      </label>
+      {preserveOriginal ? (
+        <Field label="Output suffix" value={suffix} onChange={setSuffix} placeholder=".remuxed" />
+      ) : (
+        <p className="text-xs leading-5 text-muted">Replacement uses a validated temporary file with automatic rollback.</p>
+      )}
+    </fieldset>
   );
 }
 

@@ -33,6 +33,41 @@ beforeEach(() => {
 });
 
 describe("MKV Operations file selection", () => {
+  it("preserves originals by default and allows replacement", async () => {
+    const user = userEvent.setup();
+    const file = mediaFile("Episode 01.mkv");
+    const buildMuxPreview = vi.fn((_request: MuxPreviewRequest) => Promise.resolve({
+      actions: [], noChangeFiles: [], summary: "Preview ready", status: "Preview ready",
+      planId: null, planFingerprint: null, idempotencyKey: null
+    }));
+    renderWithBackend(
+      <MediaLibraryProvider><MuxRemuxPage workflow="remove" /></MediaLibraryProvider>,
+      {
+        getCurrentScanFiles: () => Promise.resolve({
+          updatedUtc: "2026-09-15T20:00:00Z", files: [file], selectedPaths: [file.path],
+          summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 0 }
+        }),
+        getWebSettings: () => Promise.resolve({ mkvMergeDefaultAudioLanguages: "eng", mkvMergeDefaultSubtitleLanguages: "eng" } as WebSettings),
+        buildMuxPreview
+      }
+    );
+
+    await screen.findByText("Episode 01.mkv");
+    expect(screen.getByRole("radio", { name: "Create a new file and preserve the original" })).toBeChecked();
+    expect(screen.getByLabelText("Output suffix")).toHaveValue(".remuxed");
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
+    expect(buildMuxPreview.mock.calls[0][0]).toMatchObject({
+      preserveOriginal: true,
+      remuxOutputSuffix: ".remuxed"
+    });
+
+    await user.click(screen.getByRole("radio", { name: "Replace the original" }));
+    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(buildMuxPreview).toHaveBeenCalledTimes(2));
+    expect(buildMuxPreview.mock.calls[1][0].preserveOriginal).toBe(false);
+  });
+
   it("removes manual subtitle browsing and does not skip existing subtitles by default", async () => {
     const user = userEvent.setup();
     const file = mediaFile("Episode 01.mkv");
