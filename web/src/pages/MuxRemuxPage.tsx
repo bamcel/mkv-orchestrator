@@ -606,11 +606,11 @@ function OutputOptions({ preserveOriginal, setPreserveOriginal, suffix, setSuffi
   setSuffix: (value: string) => void;
 }) {
   return (
-    <fieldset className="space-y-2 rounded-md border border-border bg-panel p-3">
-      <legend className="px-1 text-sm font-semibold">Output</legend>
+    <div className="space-y-3">
+      <h2 className="pt-1 text-sm font-semibold">Output</h2>
       <label className="flex items-center gap-2 text-sm">
         <input type="radio" name="remux-output" checked={preserveOriginal} onChange={() => setPreserveOriginal(true)} />
-        Create a new file and preserve the original
+        Create new file and preserve original
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="radio" name="remux-output" checked={!preserveOriginal} onChange={() => setPreserveOriginal(false)} />
@@ -621,7 +621,7 @@ function OutputOptions({ preserveOriginal, setPreserveOriginal, suffix, setSuffi
       ) : (
         <p className="text-xs leading-5 text-muted">Replacement uses a validated temporary file with automatic rollback.</p>
       )}
-    </fieldset>
+    </div>
   );
 }
 

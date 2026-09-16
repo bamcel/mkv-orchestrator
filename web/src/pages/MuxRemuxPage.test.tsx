@@ -53,7 +53,7 @@ describe("MKV Operations file selection", () => {
     );
 
     await screen.findByText("Episode 01.mkv");
-    expect(screen.getByRole("radio", { name: "Create a new file and preserve the original" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Create new file and preserve original" })).toBeChecked();
     expect(screen.getByLabelText("Output suffix")).toHaveValue(".remuxed");
     await user.click(screen.getByRole("button", { name: "Preview" }));
     await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
