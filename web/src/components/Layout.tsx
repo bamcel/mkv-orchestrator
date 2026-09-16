@@ -1,5 +1,5 @@
 import { Activity, Captions, Database, FileCog, FolderOpen, ListVideo, Logs, RefreshCw, Settings, Trash2 } from "lucide-react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getStatus } from "../api";
 import mkvoIcon from "../assets/mkvo-icon-purple.png";
@@ -20,6 +20,7 @@ const navItems = [
 ];
 
 export function Layout() {
+  const isSettingsPage = useLocation().pathname === "/settings";
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const missingTools = status.data?.tools.filter((tool) => !tool.available).length ?? 0;
   const { files, selectionError } = useMediaLibrary();
@@ -93,7 +94,7 @@ export function Layout() {
           </div>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden px-8 py-8">
+        <main className={`flex min-h-0 min-w-0 flex-col overflow-hidden py-8 ${isSettingsPage ? "px-4 md:px-6 lg:px-8" : "px-8"}`}>
           <header className="shrink-0 md:hidden"><SignOutButton className="mb-3" /></header>
           {selectionError ? (
             <div role="alert" className="mb-3 shrink-0 rounded-md border border-warning bg-panel px-4 py-2 text-sm text-warning">

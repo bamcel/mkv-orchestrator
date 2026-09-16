@@ -479,10 +479,10 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col">
       <SectionHeader title="Settings" description="Configure MKVO behavior, provider keys, presets, library paths, themes, and media tools." />
 
-      <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-border bg-card shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
+      <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-border bg-card shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border p-3">
           <div className="flex flex-wrap items-center gap-2">
             {settingsTabs.map((tab) => (
@@ -501,9 +501,9 @@ export function SettingsPage() {
           </div> : null}
         </div>
 
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-5">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4">
           {activeTab === "general" ? (
-            <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-2 xl:items-stretch">
+            <div className="grid min-h-full min-w-0 items-stretch gap-3 xl:grid-cols-2">
               <SettingsCard
                 className="flex min-h-0 flex-col xl:h-full"
                 contentClassName="flex min-h-0 flex-1 flex-col"
@@ -712,7 +712,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "providers" ? (
-            <div className="grid min-w-0 gap-3">
+            <div className="grid min-h-full min-w-0 gap-3">
               <SettingsCard title="API Providers" description="TVDB and TMDB lookup requires your own API keys. Leave saved key fields blank to keep existing values.">
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-lg border border-border bg-card p-3">
@@ -803,7 +803,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "rename" ? (
-            <div className="grid min-w-0 gap-3">
+            <div className="grid min-h-full min-w-0 gap-3">
               <SettingsCard title="Rename Templates" description="One template per line. The selected default template is always preserved when settings are saved." actions={
                   <button
                     type="button"
@@ -843,7 +843,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "presets" ? (
-            <div className="grid min-w-0 gap-3">
+            <div className="grid min-h-full min-w-0 gap-3">
               <SettingsCard title="Track Presets" description="These lists feed Rename language choices and Track Properties name/language selectors." actions={
                   <button
                     type="button"
@@ -895,7 +895,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "library" ? (
-            <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-[minmax(0,2fr)_minmax(18rem,0.8fr)] xl:items-stretch">
+            <div className="grid min-h-full min-w-0 items-stretch gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,0.8fr)]">
               <SettingsCard className="xl:col-start-2 xl:row-start-1 xl:h-full" title="Manual Watch Folders" description="Fallback paths available with or without a media server.">
                 <label className="block">
                   <span className="text-xs font-semibold text-muted">Watch folders</span>
@@ -1139,7 +1139,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "appearance" ? (
-            <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-2 xl:items-stretch">
+            <div className="grid min-h-full min-w-0 items-stretch gap-3 xl:grid-cols-2">
               <SettingsCard
                 title="Theme JSON"
                 description="Edit or paste the complete theme definition."
@@ -1245,7 +1245,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "about" ? (
-            <div className="grid min-w-0 items-start gap-3 xl:h-full xl:grid-cols-2 xl:items-stretch">
+            <div className="grid min-h-full min-w-0 items-stretch gap-3 xl:grid-cols-2">
               <div className="grid min-w-0 gap-3 xl:h-full xl:grid-rows-[auto_1fr]">
               <SettingsCard
                 title={isDesktop ? "About MKV Orchestrator Desktop" : "About MKV Orchestrator Server"}
@@ -1526,7 +1526,7 @@ function ProviderTestButton({
 
 function SettingsCard({ title, description, children, actions, compactHeader = false, className = "", contentClassName = "" }: { title: string; description?: string; children: React.ReactNode; actions?: React.ReactNode; compactHeader?: boolean; className?: string; contentClassName?: string }) {
   return (
-    <section className={`min-w-0 rounded-lg border border-border bg-panel p-4 ${className}`}>
+    <section className={`min-w-0 rounded-2xl border border-border bg-panel p-4 ${className}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-base font-semibold">{title}</h2>

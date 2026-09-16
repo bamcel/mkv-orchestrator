@@ -20,7 +20,7 @@ function SecurityForm({ initial }: { initial: SecuritySettings }) {
   const [error, setError] = useState("");
   const [remember, setRemember] = useState(remembersUsername);
 
-  return <form className="space-y-6 rounded-2xl border border-border bg-card p-4 sm:p-6" onSubmit={async (event) => {
+  return <form className="min-h-full space-y-6 rounded-2xl border border-border bg-panel p-4" onSubmit={async (event) => {
     event.preventDefault();
     setSaving(true); setMessage(""); setError("");
     try {
