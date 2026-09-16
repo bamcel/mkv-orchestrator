@@ -1135,25 +1135,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "appearance" ? (
-            <div className="grid min-h-full min-w-0 items-stretch gap-3 xl:grid-cols-2">
-              <SettingsCard
-                title="Theme JSON"
-                description="Edit or paste the complete theme definition."
-                className="flex min-h-0 flex-col xl:h-full"
-                contentClassName="flex min-h-0 flex-1 flex-col"
-              >
-                <label className="flex min-h-0 flex-1 flex-col">
-                  <span className="text-xs font-semibold text-muted">Theme JSON</span>
-                  <textarea
-                    value={themeJson}
-                    onChange={(event) => setThemeJson(event.target.value)}
-                    rows={16}
-                    className="mt-2 min-h-80 w-full flex-1 resize-none rounded-md border border-border bg-input p-3 font-mono text-xs leading-5 text-text outline-none placeholder:text-subtle focus:border-accent xl:min-h-0"
-                  />
-                </label>
-              </SettingsCard>
-
-              <div className="grid min-w-0 gap-3 xl:h-full xl:grid-rows-[auto_1fr]">
+            <div className="grid min-h-full min-w-0 grid-cols-1 gap-3">
               <SettingsCard title="Theme" description="Themes are shared by the desktop and browser interfaces.">
                 <div className="flex items-end gap-3">
                   <label className="block flex-1">
@@ -1181,7 +1163,10 @@ export function SettingsPage() {
                     Reload Theme
                   </button>
                 </div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              </SettingsCard>
+
+              <SettingsCard title="Custom" description="Customize individual theme colors.">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block">
                     <span className="text-xs font-semibold text-muted">Color label</span>
                     <select
@@ -1211,7 +1196,7 @@ export function SettingsPage() {
                 <p className="mt-2 text-xs text-subtle">Choose a label, then use the color picker to preview that theme color immediately. Save the edited theme below to keep it.</p>
               </SettingsCard>
 
-              <SettingsCard className="xl:h-full" title="Custom Theme" description="Save the edited JSON as a named theme or remove the selected custom theme.">
+              <SettingsCard title="Custom Theme" description="Save the edited JSON as a named theme or remove the selected custom theme.">
                 <label className="block">
                   <span className="text-xs font-semibold text-muted">Custom Theme Name</span>
                   <input
@@ -1236,7 +1221,17 @@ export function SettingsPage() {
                   Remove Custom Theme
                 </button>
               </SettingsCard>
-              </div>
+              <SettingsCard title="Theme JSON" description="Edit or paste the complete theme definition.">
+                <label className="block">
+                  <span className="text-xs font-semibold text-muted">Theme JSON</span>
+                  <textarea
+                    value={themeJson}
+                    onChange={(event) => setThemeJson(event.target.value)}
+                    rows={16}
+                    className="mt-2 min-h-80 w-full resize-none rounded-md border border-border bg-input p-3 font-mono text-xs leading-5 text-text outline-none placeholder:text-subtle focus:border-accent"
+                  />
+                </label>
+              </SettingsCard>
             </div>
           ) : null}
 

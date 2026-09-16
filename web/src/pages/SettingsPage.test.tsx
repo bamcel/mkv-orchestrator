@@ -170,6 +170,17 @@ describe("Settings providers", () => {
 });
 
 describe("Settings library folders", () => {
+  it("stacks Appearance cards in theme customization order", async () => {
+    const user = userEvent.setup();
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+    await user.click(await screen.findByRole("button", { name: /^appearance$/i }));
+    expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent))
+      .toEqual(["Theme", "Custom", "Custom Theme", "Theme JSON"]);
+  });
+
   it("opens and dismisses the compact Add Server form on demand", async () => {
     const user = userEvent.setup();
     renderWithBackend(<SettingsPage />, {
