@@ -170,6 +170,23 @@ describe("Settings providers", () => {
 });
 
 describe("Settings library folders", () => {
+  it("opens and dismisses the compact Add Server form on demand", async () => {
+    const user = userEvent.setup();
+    renderWithBackend(<SettingsPage />, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+    await user.click(await screen.findByRole("button", { name: /^library$/i }));
+    expect(screen.queryByRole("heading", { name: "Add a server" })).not.toBeInTheDocument();
+    const addButton = screen.getByRole("button", { name: "Add server" });
+    expect(addButton).toHaveAttribute("aria-expanded", "false");
+    await user.click(addButton);
+    expect(screen.getByRole("heading", { name: "Add a server" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute("aria-expanded", "true");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("heading", { name: "Add a server" })).not.toBeInTheDocument();
+  });
+
   it("uses the mounted server media path as an editable Home directory", async () => {
     const user = userEvent.setup();
     const saveWebSettings = vi.fn().mockResolvedValue(

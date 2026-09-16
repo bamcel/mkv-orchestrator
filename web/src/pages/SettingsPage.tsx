@@ -7,6 +7,8 @@ import {
   CheckCircle2,
   CircleAlert,
   Database,
+  ChevronDown,
+  Pencil,
   KeyRound,
   Palette,
   Plus,
@@ -155,6 +157,8 @@ export function SettingsPage() {
   const [watchFoldersText, setWatchFoldersText] = useState("");
   const [liveWatcherEnabled, setLiveWatcherEnabled] = useState(false);
   const [mediaServers, setMediaServers] = useState<EditableMediaServer[]>([]);
+  const [addingServer, setAddingServer] = useState(false);
+  const [editingServerId, setEditingServerId] = useState<string | null>(null);
   const [newServerName, setNewServerName] = useState("Media Server");
   const [newServerType, setNewServerType] = useState("Emby");
   const [newServerUrl, setNewServerUrl] = useState("");
@@ -338,6 +342,7 @@ export function SettingsPage() {
     setNewServerUrl("");
     setNewServerApiKey("");
     setMakeNewServerDefault(false);
+    setAddingServer(false);
     setSettingsStatus("Media server added. Save settings, then sync libraries.");
   }
 
@@ -916,13 +921,29 @@ export function SettingsPage() {
               </SettingsCard>
 
               <SettingsCard className="xl:col-start-1 xl:row-start-1 xl:h-full" title="Media Servers" description="Connect Emby, Jellyfin, or Plex. API keys and tokens are encrypted before they are stored.">
-                <div className="max-h-64 space-y-2 overflow-auto pr-1">
+                <div className="space-y-3">
                   {mediaServers.length === 0 ? (
                     <div className="rounded-md border border-border bg-input px-3 py-2 text-sm text-subtle">
                       No media servers configured. Manual watch folders remain the fallback.
                     </div>
                   ) : mediaServers.map((server) => (
-                    <div key={server.id} className="rounded-lg border border-border bg-input p-3">
+                    <div key={server.id} className="border-b border-border pb-3 last:border-b-0">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-sm font-semibold text-text">{server.name}</h3>
+                            <span className="text-xs text-subtle">{server.type}</span>
+                            {server.isDefault ? <span className="text-xs text-accent">★ default</span> : null}
+                          </div>
+                          <p className="mt-1 break-all text-xs text-subtle">{server.serverUrl}</p>
+                        </div>
+                        <div className="flex shrink-0 gap-2">
+                          <button type="button" aria-label={`Edit ${server.name}`} aria-expanded={editingServerId === server.id} onClick={() => setEditingServerId(editingServerId === server.id ? null : server.id)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted hover:bg-button-hover hover:text-text"><Pencil size={15} /></button>
+                          <button type="button" aria-label={`Sync libraries for ${server.name}`} onClick={() => void syncServer(server)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted hover:bg-button-hover hover:text-text"><RefreshCw size={15} /></button>
+                          <button type="button" aria-label={`Delete ${server.name}`} onClick={() => removeMediaServer(server.id)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted hover:bg-button-hover hover:text-text"><Trash2 size={15} /></button>
+                        </div>
+                      </div>
+                      {editingServerId === server.id ? <div className="mt-3 rounded-md border border-border bg-input p-3">
                       <div className="grid gap-2 lg:grid-cols-[minmax(9rem,1fr)_8rem_minmax(12rem,1.35fr)_minmax(10rem,1fr)_auto] lg:items-end">
                         <label className="block min-w-0">
                           <span className="text-[0.6875rem] font-semibold text-muted">Name</span>
@@ -1005,8 +1026,15 @@ export function SettingsPage() {
                           {server.isDefault ? <span className="rounded bg-accent/20 px-2 py-1 text-[0.6875rem] font-semibold text-accent">default</span> : null}
                           {server.lastSyncedUtc ? <span className="text-[0.6875rem] text-subtle">Last synced: {formatDateTime(server.lastSyncedUtc)}</span> : null}
                       </div>
+                      <button type="button" onClick={() => setEditingServerId(null)} className="mt-3 text-xs font-semibold text-muted hover:text-text">Done editing</button>
+                      </div> : null}
                       {server.libraries.length > 0 ? (
-                        <div className="mt-2 max-h-24 overflow-auto rounded-md border border-border bg-card">
+                        <details className="group mt-3 rounded-md border border-border">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
+                            <span><span className="block text-xs font-semibold text-text">Libraries enabled for MKVO</span><span className="mt-1 block text-xs text-subtle">{server.libraries.filter((library) => library.isEnabled).length} of {server.libraries.length} enabled</span></span>
+                            <ChevronDown size={15} className="shrink-0 text-subtle transition-transform group-open:rotate-180" />
+                          </summary>
+                          <div className="max-h-64 overflow-auto border-t border-border">
                           {server.libraries.map((library) => (
                             <label key={library.id} className="grid grid-cols-[1.5rem_minmax(7.5rem,11.25rem)_1fr] gap-2 border-b border-border px-3 py-2 text-xs last:border-b-0">
                               <input
@@ -1022,7 +1050,8 @@ export function SettingsPage() {
                               </span>
                             </label>
                           ))}
-                        </div>
+                          </div>
+                        </details>
                       ) : (
                         <div className="mt-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-subtle">
                           No synced libraries yet. Save settings, then click Sync.
@@ -1032,7 +1061,10 @@ export function SettingsPage() {
                   ))}
                 </div>
 
-                <div className="mt-3 rounded-lg border border-border bg-panel p-3">
+                <button type="button" aria-expanded={addingServer} aria-controls="add-media-server" onClick={() => setAddingServer(!addingServer)} className="mt-3 inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">
+                  {addingServer ? <X size={16} /> : <Plus size={16} />}{addingServer ? "Cancel" : "Add server"}
+                </button>
+                {addingServer ? <div id="add-media-server" className="mt-3 rounded-lg border border-border bg-input p-3">
                   <h3 className="text-sm font-semibold">Add a server</h3>
                   <div className="mt-2 grid gap-2 md:grid-cols-2">
                     <label className="block">
@@ -1101,7 +1133,7 @@ export function SettingsPage() {
                       Test connection
                     </button>
                   </div>
-                </div>
+                </div> : null}
 
               </SettingsCard>
             </div>
