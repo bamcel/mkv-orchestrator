@@ -233,6 +233,12 @@ pub struct PropEditPreviewResponse {
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryAuditRequest {
+    /// Compact references into the runtime-owned scan. The web and desktop
+    /// clients use these so a large library is not serialized and buffered a
+    /// second time merely to ask the backend to audit files it already owns.
+    #[serde(default)]
+    pub paths: Vec<String>,
+    /// Legacy full rows remain accepted for older clients.
     #[serde(default)]
     pub files: Vec<MediaFileRow>,
 }

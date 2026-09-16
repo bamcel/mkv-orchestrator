@@ -5,7 +5,14 @@ impl MkvoRuntime {
         &self,
         request: LibraryAuditRequest,
     ) -> RuntimeResult<LibraryAuditResponse> {
-        let files = self.resolve_rows(&request.files, &[]).await?;
+        let files = if request.paths.is_empty() {
+            self.resolve_rows(&request.files, &[]).await?
+        } else {
+            let requested: BTreeSet<_> = request.paths.iter().map(|path| path_key(path)).collect();
+            let mut files = self.current_domain_files().await;
+            files.retain(|file| requested.contains(&path_key(&display_path(&file.path))));
+            files
+        };
         let audit = LibraryAuditService.build(&self.config().media_root, &files, &[]);
         let items = audit
             .groups

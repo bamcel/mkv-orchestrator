@@ -413,7 +413,15 @@ fn apply_auth(request: RequestBuilder, server: &MediaServerConfig) -> RequestBui
         return request;
     }
     match server.kind {
-        MediaServerKind::Emby | MediaServerKind::Jellyfin => request
+        // Jellyfin 12 disables the legacy X-Emby-Token and
+        // X-MediaBrowser-Token mechanisms. The MediaBrowser authorization
+        // scheme works on supported older versions as well, so do not send
+        // multiple competing credentials and let the server choose one.
+        MediaServerKind::Jellyfin => request.header(
+            reqwest::header::AUTHORIZATION,
+            format!("MediaBrowser Token=\"{}\"", server.api_key.expose().trim()),
+        ),
+        MediaServerKind::Emby => request
             .header("X-Emby-Token", server.api_key.expose().trim())
             .header("X-MediaBrowser-Token", server.api_key.expose().trim()),
         MediaServerKind::Plex => request.header("X-Plex-Token", server.api_key.expose().trim()),

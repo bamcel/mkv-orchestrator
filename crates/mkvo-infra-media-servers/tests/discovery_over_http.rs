@@ -159,12 +159,21 @@ async fn jellyfin_connection_and_libraries_round_trip_over_http() {
         Some(std::path::PathBuf::from("/mnt/media").join("tv").as_path())
     );
 
-    // Jellyfin and Emby authenticate by token header, not query string, so the
-    // key must never appear in a URL that could be logged.
+    // Jellyfin 12 rejects the old X-Emby-Token and X-MediaBrowser-Token
+    // mechanisms when legacy authorization is disabled. The standard scheme
+    // keeps the key out of URLs and works across supported Jellyfin versions.
     assert_eq!(
-        seen.header_for("/Library/VirtualFolders", "x-emby-token")
+        seen.header_for("/Library/VirtualFolders", "authorization")
             .as_deref(),
-        Some("token-123")
+        Some("MediaBrowser Token=\"token-123\"")
+    );
+    assert_eq!(
+        seen.header_for("/Library/VirtualFolders", "x-emby-token"),
+        None
+    );
+    assert_eq!(
+        seen.header_for("/Library/VirtualFolders", "x-mediabrowser-token"),
+        None
     );
 
     let items = client
@@ -239,6 +248,46 @@ async fn plex_reads_xml_rather_than_json() {
     assert_eq!(
         seen.header_for("/identity", "x-plex-token").as_deref(),
         Some("token-123")
+    );
+    server.abort();
+}
+
+#[tokio::test]
+async fn emby_keeps_its_legacy_token_headers() {
+    let seen = Seen::default();
+    let router = Router::new()
+        .route(
+            "/Library/VirtualFolders",
+            get(|State(seen): State<Seen>, headers: HeaderMap| async move {
+                seen.record("/Library/VirtualFolders", &headers);
+                axum::Json(serde_json::json!([]))
+            }),
+        )
+        .with_state(seen.clone());
+    let (base, server) = start_stub(router).await;
+
+    MediaServerDiscoveryClient::new()
+        .discover_libraries(
+            &config(MediaServerKind::Emby, &base),
+            &[],
+            CancellationToken::new(),
+        )
+        .await
+        .expect("Emby libraries");
+
+    assert_eq!(
+        seen.header_for("/Library/VirtualFolders", "x-emby-token")
+            .as_deref(),
+        Some("token-123")
+    );
+    assert_eq!(
+        seen.header_for("/Library/VirtualFolders", "x-mediabrowser-token")
+            .as_deref(),
+        Some("token-123")
+    );
+    assert_eq!(
+        seen.header_for("/Library/VirtualFolders", "authorization"),
+        None
     );
     server.abort();
 }

@@ -205,7 +205,11 @@ export class TauriBackendClient implements BackendClient {
   }
 
   buildLibraryAudit(files: MediaFileRow[]): Promise<LibraryAuditResponse> {
-    return this.invoke<LibraryAuditResponse>("run_library_audit", { request: { files } }, "LibraryAuditResponse");
+    return this.invoke<LibraryAuditResponse>(
+      "run_library_audit",
+      { request: { paths: files.map((file) => file.path) } },
+      "LibraryAuditResponse"
+    );
   }
 
   getLibraryCatalog(request: LibraryCatalogRequest): Promise<LibraryCatalogResponse> {
