@@ -503,9 +503,9 @@ export function SettingsPage() {
 
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4">
           {activeTab === "general" ? (
-            <div className="grid min-h-full min-w-0 items-stretch gap-3 xl:grid-cols-2">
+            <div className="grid min-h-full min-w-0 grid-cols-1 items-stretch gap-3">
               <SettingsCard
-                className="flex min-h-0 flex-col xl:h-full"
+                className="flex min-h-0 flex-col"
                 contentClassName="flex min-h-0 flex-1 flex-col"
                 title={isDesktop ? "Dashboard" : "Default Directory"}
                 description={isDesktop
@@ -647,7 +647,6 @@ export function SettingsPage() {
               </SettingsCard>
 
               <SettingsCard
-                className="xl:h-full"
                 title="Media Tools"
                 description={isDesktop
                   ? "MKVO resolves installed MKVToolNix and FFmpeg commands for scan, remux, extraction, and property workflows."
@@ -895,32 +894,8 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "library" ? (
-            <div className="grid min-h-full min-w-0 items-stretch gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,0.8fr)]">
-              <SettingsCard className="xl:col-start-2 xl:row-start-1 xl:h-full" title="Manual Watch Folders" description="Fallback paths available with or without a media server.">
-                <label className="block">
-                  <span className="text-xs font-semibold text-muted">Watch folders</span>
-                  <textarea
-                    value={watchFoldersText}
-                    onChange={(event) => setWatchFoldersText(event.target.value)}
-                    rows={5}
-                    placeholder={"/media/anime\n/media/movies"}
-                    className="mt-2 w-full resize-none rounded-md border border-border bg-input p-3 font-mono text-xs leading-5 text-text outline-none placeholder:text-subtle focus:border-accent"
-                  />
-                </label>
-                <label className="mt-3 flex items-center gap-2 text-sm text-muted">
-                  <input
-                    type="checkbox"
-                    checked={liveWatcherEnabled}
-                    onChange={(event) => setLiveWatcherEnabled(event.target.checked)}
-                  />
-                  Enable live watch-folder monitoring
-                </label>
-                <div className="mt-3 rounded-md border border-border bg-input px-3 py-2 text-xs leading-5 text-subtle">
-                  Use container paths, usually under <span className="font-mono text-text">/media</span> or <span className="font-mono text-text">/downloads</span>.
-                </div>
-              </SettingsCard>
-
-              <SettingsCard className="xl:col-start-1 xl:row-start-1 xl:h-full" title="Media Servers" description="Connect Emby, Jellyfin, or Plex. API keys and tokens are encrypted before they are stored." compactHeader actions={
+            <div className="grid min-h-full min-w-0 grid-cols-1 gap-3">
+              <SettingsCard title="Media Servers" description="Connect Emby, Jellyfin, or Plex. API keys and tokens are encrypted before they are stored." compactHeader actions={
                 <button type="button" aria-expanded={addingServer} aria-controls="add-media-server" onClick={() => setAddingServer(!addingServer)} className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">
                   {addingServer ? <X size={16} /> : <Plus size={16} />}{addingServer ? "Cancel" : "Add server"}
                 </button>
@@ -1134,6 +1109,27 @@ export function SettingsPage() {
                   </div>
                 </div> : null}
 
+                <section className="mt-5 border-t border-border pt-4">
+                  <h3 className="text-base font-semibold text-text">Manual Watch Folders</h3>
+                  <p className="mt-1 text-sm text-muted">Fallback paths available with or without a media server.</p>
+                  <label className="mt-3 block">
+                    <span className="text-xs font-semibold text-muted">Watch folders</span>
+                    <textarea
+                      value={watchFoldersText}
+                      onChange={(event) => setWatchFoldersText(event.target.value)}
+                      rows={5}
+                      placeholder={"/media/anime\n/media/movies"}
+                      className="mt-2 w-full resize-none rounded-md border border-border bg-input p-3 font-mono text-xs leading-5 text-text outline-none placeholder:text-subtle focus:border-accent"
+                    />
+                  </label>
+                  <label className="mt-3 flex items-center gap-2 text-sm text-muted">
+                    <input type="checkbox" checked={liveWatcherEnabled} onChange={(event) => setLiveWatcherEnabled(event.target.checked)} />
+                    Enable live watch-folder monitoring
+                  </label>
+                  <div className="mt-3 rounded-md border border-border bg-input px-3 py-2 text-xs leading-5 text-subtle">
+                    Use container paths, usually under <span className="font-mono text-text">/media</span> or <span className="font-mono text-text">/downloads</span>.
+                  </div>
+                </section>
               </SettingsCard>
             </div>
           ) : null}
