@@ -920,7 +920,11 @@ export function SettingsPage() {
                 </div>
               </SettingsCard>
 
-              <SettingsCard className="xl:col-start-1 xl:row-start-1 xl:h-full" title="Media Servers" description="Connect Emby, Jellyfin, or Plex. API keys and tokens are encrypted before they are stored.">
+              <SettingsCard className="xl:col-start-1 xl:row-start-1 xl:h-full" title="Media Servers" description="Connect Emby, Jellyfin, or Plex. API keys and tokens are encrypted before they are stored." compactHeader actions={
+                <button type="button" aria-expanded={addingServer} aria-controls="add-media-server" onClick={() => setAddingServer(!addingServer)} className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">
+                  {addingServer ? <X size={16} /> : <Plus size={16} />}{addingServer ? "Cancel" : "Add server"}
+                </button>
+              }>
                 <div className="space-y-3">
                   {mediaServers.length === 0 ? (
                     <div className="rounded-md border border-border bg-input px-3 py-2 text-sm text-subtle">
@@ -1061,9 +1065,6 @@ export function SettingsPage() {
                   ))}
                 </div>
 
-                <button type="button" aria-expanded={addingServer} aria-controls="add-media-server" onClick={() => setAddingServer(!addingServer)} className="mt-3 inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">
-                  {addingServer ? <X size={16} /> : <Plus size={16} />}{addingServer ? "Cancel" : "Add server"}
-                </button>
                 {addingServer ? <div id="add-media-server" className="mt-3 rounded-lg border border-border bg-input p-3">
                   <h3 className="text-sm font-semibold">Add a server</h3>
                   <div className="mt-2 grid gap-2 md:grid-cols-2">
@@ -1525,14 +1526,17 @@ function ProviderTestButton({
   );
 }
 
-function SettingsCard({ title, description, children, actions, className = "", contentClassName = "" }: { title: string; description?: string; children: React.ReactNode; actions?: React.ReactNode; className?: string; contentClassName?: string }) {
+function SettingsCard({ title, description, children, actions, compactHeader = false, className = "", contentClassName = "" }: { title: string; description?: string; children: React.ReactNode; actions?: React.ReactNode; compactHeader?: boolean; className?: string; contentClassName?: string }) {
   return (
     <section className={`min-w-0 rounded-lg border border-border bg-panel p-4 ${className}`}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold">{title}</h2>
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold">{title}</h2>
+          {compactHeader && description ? <p className="mt-1 text-sm leading-5 text-muted">{description}</p> : null}
+        </div>
         {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
-      {description ? <p className="mt-2 text-sm leading-6 text-muted">{description}</p> : null}
+      {!compactHeader && description ? <p className="mt-2 text-sm leading-6 text-muted">{description}</p> : null}
       <div className={`mt-4 min-w-0 ${contentClassName}`}>{children}</div>
     </section>
   );
