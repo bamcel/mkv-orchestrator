@@ -669,15 +669,15 @@ export function SettingsPage() {
                     </p>
                   </div>
                 ) : null}
-                <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-panel">
+                <div className="min-w-0 overflow-x-auto">
                   <table className="w-full table-fixed border-collapse text-left text-sm">
                     <colgroup>
-                      <col className="w-[8.75rem]" />
-                      <col className="w-[8.5rem]" />
-                      <col />
-                      <col className="w-[9rem]" />
+                      <col className="w-[18%]" />
+                      <col className="w-[18%]" />
+                      <col className="w-[28%]" />
+                      <col className="w-[36%]" />
                     </colgroup>
-                    <thead className="bg-panel text-xs uppercase tracking-wide text-subtle">
+                    <thead className="text-xs font-semibold text-subtle">
                       <tr>
                         <th className="border-b border-border px-3 py-2">Tool</th>
                         <th className="border-b border-border px-3 py-2">Status</th>
@@ -687,7 +687,7 @@ export function SettingsPage() {
                     </thead>
                     <tbody>
                       {(status.data?.tools ?? []).map((tool) => (
-                        <tr key={tool.name} className="bg-card hover:bg-selected">
+                        <tr key={tool.name} className="align-top">
                           <td className="border-b border-border px-3 py-2 font-semibold">{tool.name}</td>
                           <td className="border-b border-border px-3 py-2">
                             <span className={tool.available ? "inline-flex items-center gap-2 text-success" : "inline-flex items-center gap-2 text-warning"}>
