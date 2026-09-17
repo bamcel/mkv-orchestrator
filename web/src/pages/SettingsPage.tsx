@@ -482,13 +482,12 @@ export function SettingsPage() {
     <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col">
       <SectionHeader title="Settings" description="Configure MKVO behavior, provider keys, presets, library paths, themes, and media tools." />
 
-      <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-border bg-card shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border p-3">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+          <nav aria-label="Settings sections" className="flex flex-wrap items-center gap-2">
             {settingsTabs.map((tab) => (
               <SettingsTabButton key={tab.id} tab={tab} active={activeTab === tab.id} onSelect={setActiveTab} />
             ))}
-          </div>
+          </nav>
           {activeTab !== "security" ? <div className="flex items-center gap-3">
             <span className="max-w-[22.5rem] truncate text-sm text-success" title={settingsStatus}>{settingsStatus}</span>
             <button
@@ -501,7 +500,7 @@ export function SettingsPage() {
           </div> : null}
         </div>
 
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4">
+        <div className="mt-4 min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           {activeTab === "general" ? (
             <div className="grid min-h-full min-w-0 grid-cols-1 items-stretch gap-3">
               <SettingsCard
@@ -1291,7 +1290,6 @@ export function SettingsPage() {
             </div>
           ) : null}
         </div>
-      </section>
 
       {browsingRow !== null ? (
         <FileBrowser

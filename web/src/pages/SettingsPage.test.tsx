@@ -75,6 +75,9 @@ describe("Settings providers", () => {
     const generalIndex = tabs.findIndex((button) => button.textContent === "General");
     const providersIndex = tabs.findIndex((button) => button.textContent === "API Providers");
     expect(providersIndex).toBe(generalIndex + 1);
+    const settingsNavigation = screen.getByRole("navigation", { name: "Settings sections" });
+    expect(settingsNavigation.closest("section")).toBeNull();
+    expect(settingsNavigation).toContainElement(screen.getByRole("button", { name: "General" }));
 
     await openProvidersTab(user);
     for (const heading of ["TVDB", "TMDB", "AniDB", "Provider Defaults"]) {
