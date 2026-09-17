@@ -843,6 +843,28 @@ export function SettingsPage() {
 
           {activeTab === "presets" ? (
             <div className="grid min-h-full min-w-0 gap-3">
+              <SettingsCard title="Track Defaults" description="Default keep-language values for track removal workflows.">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-xs font-semibold text-muted">Default audio languages to keep</span>
+                    <input
+                      value={muxAudioDefaults}
+                      onChange={(event) => setMuxAudioDefaults(event.target.value)}
+                      placeholder="eng,jpn"
+                      className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-semibold text-muted">Default subtitle languages to keep</span>
+                    <input
+                      value={muxSubtitleDefaults}
+                      onChange={(event) => setMuxSubtitleDefaults(event.target.value)}
+                      placeholder="eng"
+                      className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
+                    />
+                  </label>
+                </div>
+              </SettingsCard>
               <SettingsCard title="Track Presets" description="These lists feed Rename language choices and Track Properties name/language selectors." actions={
                   <button
                     type="button"
@@ -868,28 +890,6 @@ export function SettingsPage() {
                 </div>
               </SettingsCard>
 
-              <SettingsCard title="MKV Operations Defaults" description="Default keep-language values for track removal workflows.">
-                <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-xs font-semibold text-muted">Default audio languages to keep</span>
-                  <input
-                    value={muxAudioDefaults}
-                    onChange={(event) => setMuxAudioDefaults(event.target.value)}
-                    placeholder="eng,jpn"
-                    className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold text-muted">Default subtitle languages to keep</span>
-                  <input
-                    value={muxSubtitleDefaults}
-                    onChange={(event) => setMuxSubtitleDefaults(event.target.value)}
-                    placeholder="eng"
-                    className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
-                  />
-                </label>
-                </div>
-              </SettingsCard>
             </div>
           ) : null}
 
