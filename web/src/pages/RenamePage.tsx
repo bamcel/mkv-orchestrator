@@ -1,6 +1,7 @@
+import { FileName } from "../components/FileName";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, ExternalLink, RefreshCw, RotateCcw, Search, Trash2, Wand2, X } from "lucide-react";
+import { Copy, ExternalLink, RefreshCw, RotateCcw, Search, Trash2, X } from "lucide-react";
 import {
   applyRenamePreview,
   buildRenamePreview,
@@ -534,15 +535,18 @@ export function RenamePage() {
     setPreviewSummary(`${rows.filter((row) => row.canApply).length} movie rename(s) ready; ${rows.filter((row) => !row.canApply).length} need attention.`);
     setStatusText("Batch Movies preview ready.");
     setBatchBusy(false);
+    return { plans, rows };
   }
 
   async function applyBatchMovies() {
-    const selected = new Map(
-      previewRows.map((row) => [normalizeRenamePath(row.sourcePath), row.selected && row.canApply])
-    );
-    const plans = batchPlans.filter((plan) => selected.get(normalizeRenamePath(plan.sourcePath)));
+    setBatchApplying(true);
+    const fresh = await previewBatchMovies();
+    if (!fresh) { setBatchApplying(false); return; }
+    const selected = new Map((batchPlans.length ? previewRows : fresh.rows).map((row) => [normalizeRenamePath(row.sourcePath), row.selected && row.canApply]));
+    const plans = fresh.plans.filter((plan) => selected.get(normalizeRenamePath(plan.sourcePath)));
     if (plans.length === 0) {
-      setStatusText("No batch movie preview rows are selected.");
+      setBatchApplying(false);
+      setStatusText("No applicable movie renames are selected.");
       return;
     }
     setBatchApplying(true);
@@ -631,20 +635,17 @@ export function RenamePage() {
     });
   }
 
-  function runApply() {
-    if (selectedCount === 0) {
-      setStatusText("No preview rows selected.");
-      return;
-    }
-
-    const warnings = buildRenameApplyWarnings(previewRows);
-    if (warnings.length > 0) {
-      setApplyWarnings(warnings);
-      setIsApplyConfirmOpen(true);
-      return;
-    }
-
-    executeApply();
+  async function runApply() {
+    if (!selectedResult || selectedFiles.length === 0) return;
+    try {
+      const plan = await preview.mutateAsync({ files: selectedFiles, selectedResult, provider, language, scopeKeys, template, customSeriesTitle });
+      const rows = plan.items.map((row) => ({ ...row, selected: row.canApply && (preview.data ? previewRows.find((item) => item.sourcePath === row.sourcePath)?.selected ?? true : true) }));
+      setPreviewRows(rows);
+      if (!rows.some((row) => row.selected && row.canApply)) { setStatusText("No applicable renames are selected."); return; }
+      const warnings = buildRenameApplyWarnings(rows);
+      if (warnings.length) { setApplyWarnings(warnings); setIsApplyConfirmOpen(true); return; }
+      await apply.mutateAsync({ items: rows, provider, template, planId: plan.planId ?? undefined, planFingerprint: plan.planFingerprint ?? undefined, idempotencyKey: plan.idempotencyKey ?? crypto.randomUUID() });
+    } catch { /* Mutation handlers display the error. */ }
   }
 
   function executeApply() {
@@ -740,6 +741,12 @@ export function RenamePage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Rename Files" description="Match files to provider metadata and preview safe destination names." />
+      <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2" aria-label="Operation actions">
+        <button type="button" onClick={() => { setIsSummaryExpanded(true); if (renameMode === "batch-movies") void previewBatchMovies(); else runPreview(); }} disabled={preview.isPending || apply.isPending || batchBusy || batchApplying || (renameMode === "batch-movies" ? batchMatches.every((item) => !item.results[item.selectedIndex]) : !selectedResult || selectedFiles.length === 0)} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold disabled:text-disabled">Preview Summary</button>
+        <button type="button" onClick={() => { if (renameMode === "batch-movies") void applyBatchMovies(); else void runApply(); }} disabled={preview.isPending || apply.isPending || batchBusy || batchApplying || (renameMode === "batch-movies" ? batchMatches.every((item) => !item.results[item.selectedIndex]) : !selectedResult || selectedFiles.length === 0)} className="h-9 rounded-md bg-accent px-3 text-sm font-semibold disabled:bg-button disabled:text-disabled">Apply</button>
+        <span className="text-xs text-muted">{selectedFiles.length} files selected</span>
+        <span role="status" className="min-w-0 text-xs text-muted">{statusText}</span>
+      </div>
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
         <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <div className="flex items-center justify-between gap-3">
@@ -990,13 +997,6 @@ export function RenamePage() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setIsSummaryExpanded(true)}
-                className="inline-flex h-9 min-w-32 items-center justify-center whitespace-nowrap rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-              >
-                Preview Summary
-              </button>
-              <button
-                type="button"
                   onClick={toggleCompactPreview}
                 className="inline-flex h-9 min-w-32 items-center justify-center whitespace-nowrap rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
               >
@@ -1011,7 +1011,7 @@ export function RenamePage() {
               <div className="flex h-full min-h-[16.25rem] flex-col items-center justify-center text-center">
                 <div className="text-xl font-semibold">No preview built yet</div>
                 <div className="mt-2 text-sm text-subtle">
-                  {renameMode === "batch-movies" ? "Match the scanned movies, review each result, then click Preview." : "Search metadata, select a result, then click Preview."}
+                  {renameMode === "batch-movies" ? "Match the scanned movies, review each result, then choose an action." : "Search metadata, select a result, then choose an action."}
                 </div>
               </div>
             ) : (
@@ -1025,7 +1025,7 @@ export function RenamePage() {
                   toggleHighlightedPreviewSelection();
                 }}
               >
-                <table className={["w-full table-fixed border-collapse text-left text-sm", compactPreview ? "min-w-[47.5rem]" : "min-w-[73.75rem]"].join(" ")}>
+                <table className="file-info-table border-collapse text-left text-sm">
                   <thead className="sticky top-0 bg-panel text-xs uppercase tracking-wide text-subtle">
                     {compactPreview ? (
                       <tr>
@@ -1068,10 +1068,10 @@ export function RenamePage() {
                           <td className="truncate border-b border-border px-3 py-2" title={row.sourcePath}>
                             <div className="flex min-w-0 items-center gap-3">
                               <input type="checkbox" checked={row.selected} disabled={!row.canApply} onClick={(event) => event.stopPropagation()} onChange={() => toggleRow(row)} />
-                              <span className="truncate">{row.currentFileName}</span>
+                              <FileName value={row.currentFileName} />
                             </div>
                           </td>
-                          <td className={["truncate border-b border-border px-3 py-2", changedTextClass].join(" ")} title={row.newFileName}>{row.newFileName || "-"}</td>
+                          <td className={["truncate border-b border-border px-3 py-2", changedTextClass].join(" ")} title={row.newFileName}><FileName value={row.newFileName || "-"} /></td>
                         </tr>
                       ) : (
                         <tr
@@ -1090,12 +1090,12 @@ export function RenamePage() {
                           <td className="max-w-[17.5rem] truncate border-b border-border px-3 py-2" title={row.sourcePath}>
                             <div className="flex min-w-0 items-center gap-3">
                               <input type="checkbox" checked={row.selected} disabled={!row.canApply} onClick={(event) => event.stopPropagation()} onChange={() => toggleRow(row)} />
-                              <span className="truncate">{row.currentFileName}</span>
+                              <FileName value={row.currentFileName} />
                             </div>
                           </td>
                           <td className="truncate whitespace-nowrap border-b border-border px-3 py-2" title={row.detected}>{row.detected}</td>
                           <td className="max-w-[15rem] truncate border-b border-border px-3 py-2" title={row.episodeName}>{row.episodeName || "-"}</td>
-                          <td className={["max-w-[21.25rem] truncate border-b border-border px-3 py-2", changedTextClass].join(" ")} title={row.newFileName}>{row.newFileName || "-"}</td>
+                          <td className={["max-w-[21.25rem] truncate border-b border-border px-3 py-2", changedTextClass].join(" ")} title={row.newFileName}><FileName value={row.newFileName || "-"} /></td>
                           <td className="truncate whitespace-nowrap border-b border-border px-3 py-2" title={row.confidence}>{row.confidence}</td>
                           <td className={["truncate whitespace-nowrap border-b border-border px-3 py-2", changedTextClass || "text-muted"].join(" ")} title={row.status}>{statusDisplay}</td>
                         </tr>
@@ -1109,41 +1109,6 @@ export function RenamePage() {
         </section>
         </div>
       </div>
-      <footer aria-label="Batch actions" className="mt-3 shrink-0 rounded-lg border border-border bg-card px-4 pb-3">
-        <div className="mt-2 text-xs text-muted">{selectedCount} files selected for renaming</div>
-        {renameMode === "batch-movies" ? <>             <div className="mt-3 text-sm font-semibold">Execution</div>
-            <div className="mt-3 flex gap-2">
-              <button type="button" onClick={previewBatchMovies} disabled={batchBusy || batchMatches.every((item) => item.results.length === 0)} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
-                {batchBusy && batchMatches.length > 0 ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
-                Preview
-              </button>
-              <button type="button" onClick={applyBatchMovies} disabled={batchApplying || batchPlans.length === 0 || selectedCount === 0} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
-                {batchApplying ? "Applying..." : `Apply to ${selectedCount} files`}
-              </button>
-            </div>
-            <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div> </> : <>           <div className="mt-3 text-sm font-semibold">Execution</div>
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={runPreview}
-              disabled={preview.isPending || selectedFiles.length === 0 || !selectedResult}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
-            >
-              {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
-              Preview
-            </button>
-            <button
-              type="button"
-              onClick={runApply}
-              disabled={apply.isPending || previewRows.length === 0 || selectedCount === 0}
-              className="inline-flex h-9 flex-1 items-center justify-center rounded-md bg-accent px-3 text-sm font-semibold text-window transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled"
-            >
-              Apply to {selectedCount} files
-            </button>
-          </div>
-
-          <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div> </>}
-      </footer>
       {isUndoOpen ? (
         <RenameUndoBatchModal
           batches={renameBatches.data?.batches ?? []}

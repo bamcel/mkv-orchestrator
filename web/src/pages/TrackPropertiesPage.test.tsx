@@ -169,11 +169,11 @@ describe("Track Properties template synchronization", () => {
     expect(within(videoDefault).getByRole("option", { name: "None" })).toBeInTheDocument();
 
     await user.selectOptions(videoDefault, "Default");
-    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Summary" }));
     await waitFor(() => expect(buildPropEditPreview).toHaveBeenLastCalledWith(expect.objectContaining({ selectedDefaultVideo: "Default" })));
 
     await user.selectOptions(videoDefault, "None");
-    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Summary" }));
     await waitFor(() => expect(buildPropEditPreview).toHaveBeenLastCalledWith(expect.objectContaining({ selectedDefaultVideo: "None" })));
   });
 

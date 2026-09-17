@@ -55,7 +55,7 @@ describe("MKV Operations file selection", () => {
     await screen.findByText("Episode 01.mkv");
     expect(screen.getByRole("radio", { name: "Create new file and preserve original" })).toBeChecked();
     expect(screen.getByLabelText("Output suffix")).toHaveValue(".remuxed");
-    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Summary" }));
     await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
     expect(buildMuxPreview.mock.calls[0][0]).toMatchObject({
       preserveOriginal: true,
@@ -63,7 +63,7 @@ describe("MKV Operations file selection", () => {
     });
 
     await user.click(screen.getByRole("radio", { name: "Replace the original" }));
-    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Summary" }));
     await waitFor(() => expect(buildMuxPreview).toHaveBeenCalledTimes(2));
     expect(buildMuxPreview.mock.calls[1][0].preserveOriginal).toBe(false);
   });
@@ -100,7 +100,7 @@ describe("MKV Operations file selection", () => {
     expect(screen.queryByRole("button", { name: "Browse subtitle files" })).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Skip if matching subtitle already exists" })).not.toBeChecked();
 
-    await user.click(screen.getByRole("button", { name: "Preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Summary" }));
     await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
     expect(buildMuxPreview.mock.calls[0][0].manualSubtitleSelections).toEqual([]);
     expect(buildMuxPreview.mock.calls[0][0].muxMatchingExternalSubtitles).toBe(false);
@@ -286,4 +286,25 @@ describe("MKV Operations removed-track preview", () => {
       "• ID 3 · subtitle · eng · SubRip/SRT · SDH · forced"
     ]);
   });
+});
+
+
+it("builds a fresh plan and applies without a manual preview", async () => {
+  const user = userEvent.setup();
+  const file = mediaFile("Episode 01.mkv");
+  const buildMuxPreview = vi.fn(() => Promise.resolve({
+    actions: [{ filePath: file.path, fileName: file.fileName, index: 0, operation: "Remux", toolName: "mkvmerge", description: "Remux", command: "mkvmerge" }],
+    noChangeFiles: [], summary: "Ready", status: "Ready", planId: "fresh-plan", planFingerprint: "fresh-fingerprint", idempotencyKey: "fresh-key"
+  }));
+  const startMuxApply = vi.fn(() => Promise.reject(new Error("Test stops before tracking a job")));
+  renderWithBackend(<MediaLibraryProvider><MuxRemuxPage /></MediaLibraryProvider>, {
+    getCurrentScanFiles: () => Promise.resolve({ files: [file], selectedPaths: [file.path], templateFilePath: file.path, summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 0 }, updatedUtc: "2026-09-17" }),
+    buildMuxPreview, startMuxApply
+  });
+  const applyButton = screen.getByRole("button", { name: "Apply" });
+  await waitFor(() => expect(applyButton).toBeEnabled());
+  expect(screen.queryByRole("button", { name: "Preview" })).not.toBeInTheDocument();
+  await user.click(applyButton);
+  await waitFor(() => expect(startMuxApply).toHaveBeenCalledWith(expect.objectContaining({ planId: "fresh-plan", planFingerprint: "fresh-fingerprint", idempotencyKey: "fresh-key" })));
+  expect(buildMuxPreview).toHaveBeenCalledTimes(1);
 });

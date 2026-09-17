@@ -1,6 +1,7 @@
+import { FileName } from "../components/FileName";
 import { Fragment, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronUp, Copy, FileCheck, FileVideo, Folder, FolderOpen, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, ChevronUp, Copy, FileCheck, FileVideo, Folder, FolderOpen, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { authorizeBrowsedRoot, cancelScan, clearCurrentScanFiles, FileSystemEntry, getBackendTransport, getCurrentScanFiles, getScanJob, getStatus, getWebSettings, MediaFileRow, saveWebSettings, startScan } from "../api";
 import { SectionHeader } from "../components/SectionHeader";
 import { FileBrowser } from "../components/FileBrowser";
@@ -672,12 +673,23 @@ export function DashboardPage() {
             ) : null}
           </div>
           {selectedMismatchMessages.length > 0 ? (
-            <div className="mt-3 rounded-md border border-warning bg-input p-3 text-xs text-warning">
-              <div className="font-semibold">Selected file mismatches</div>
-              <ul className="mt-2 list-disc space-y-1 pl-4 leading-5">
-                {selectedMismatchMessages.map((message) => <li key={message}>{message}</li>)}
+            <section aria-label="Selected file comparison" className="mt-3 rounded-md border border-warning bg-input p-3 text-xs">
+              <h3 className="flex items-center gap-2 font-semibold text-warning"><AlertTriangle size={16} aria-hidden="true" />Differs from template</h3>
+              <p className="mt-2 leading-5 text-muted">{selectedMismatchMessages.length} difference{selectedMismatchMessages.length === 1 ? "" : "s"} found. Review these before applying template-based edits.</p>
+              <div className="mt-3 space-y-2 break-words text-muted [overflow-wrap:anywhere]">
+                <p><span className="block font-semibold text-subtle">Selected file</span>{selectedFile?.fileName}</p>
+                <p><span className="block font-semibold text-subtle">Template</span>{templateFile?.fileName}</p>
+              </div>
+              <ul className="mt-3 space-y-3">
+                {selectedMismatchMessages.map((difference, index) => <li key={`${difference.label}-${index}`} className="border-t border-border pt-2 break-words [overflow-wrap:anywhere]">
+                  <div className="font-semibold text-warning">{difference.label}</div>
+                  <dl className="mt-1 space-y-1 leading-5">
+                    <div><dt className="text-subtle">Selected file</dt><dd className="text-text">{difference.value}</dd></div>
+                    <div><dt className="text-subtle">Template</dt><dd className="text-muted">{difference.templateValue}</dd></div>
+                  </dl>
+                </li>)}
               </ul>
-            </div>
+            </section>
           ) : null}
           {currentScanJob?.currentSource && isScanning ? (
             <div className="mt-2 truncate text-xs text-subtle" title={currentScanJob.currentSource}>
@@ -741,7 +753,7 @@ export function DashboardPage() {
                   }
                 }}
               >
-                <table className="w-full min-w-[68.75rem] border-collapse text-left text-sm">
+                <table className="file-info-table border-collapse text-left text-sm">
                   <thead className="sticky top-0 bg-panel text-xs uppercase tracking-wide text-subtle">
                     <tr>
                       {(["file", "reader", "codec", "resolution", "audio", "subtitles", "status"] as DashboardSortKey[]).map((key) => (
@@ -774,7 +786,7 @@ export function DashboardPage() {
                             templateRow ? "text-template" : mismatchRow ? "text-warning" : "text-text"
                           ].join(" ")}
                         >
-                          <td className="max-w-[21.25rem] truncate border-b border-border px-3 py-2" title={file.path}>{file.fileName}</td>
+                          <td className="max-w-[21.25rem] truncate border-b border-border px-3 py-2" title={file.path}><FileName value={file.fileName} /></td>
                           <td className="border-b border-border px-3 py-2">{file.reader}</td>
                           <td className="border-b border-border px-3 py-2">{file.codec || "Unknown"}</td>
                           <td className="border-b border-border px-3 py-2">{file.resolution || "Unknown"}</td>
@@ -1043,10 +1055,12 @@ function hasTemplateMismatch(file: MediaFileRow, templateFile: MediaFileRow | nu
   return getTemplateMismatchMessages(file, templateFile).length > 0;
 }
 
+type TemplateDifference = { label: string; value: string; templateValue: string };
+
 function getTemplateMismatchMessages(file: MediaFileRow, templateFile: MediaFileRow | null) {
   if (!templateFile || file.path === templateFile.path) return [];
 
-  const messages: string[] = [];
+  const messages: TemplateDifference[] = [];
   addValueMismatch(messages, "Codec", file.codec, templateFile.codec);
   addValueMismatch(messages, "Resolution", file.resolution, templateFile.resolution);
   addValueMismatch(messages, "Bit depth", file.bitDepth, templateFile.bitDepth);
@@ -1059,16 +1073,16 @@ function getTemplateMismatchMessages(file: MediaFileRow, templateFile: MediaFile
     const templateTrack = templateFile.tracks[index];
 
     if (!track && templateTrack) {
-      messages.push(`Track ID ${templateTrack.id} is missing (template: ${formatCompareValue(templateTrack.type)}).`);
+      messages.push({ label: `Missing track · ID ${templateTrack.id}`, value: "Missing", templateValue: formatCompareValue(templateTrack.type) });
       continue;
     }
     if (track && !templateTrack) {
-      messages.push(`Track ID ${track.id} is extra (${formatCompareValue(track.type)}).`);
+      messages.push({ label: `Extra track · ID ${track.id}`, value: formatCompareValue(track.type), templateValue: "No corresponding track" });
       continue;
     }
     if (!track || !templateTrack) continue;
 
-    const label = `Track ID ${track.id}`;
+    const label = `${track.type.charAt(0).toUpperCase() + track.type.slice(1)} track · ID ${track.id}`;
     addValueMismatch(messages, `Track position ${index + 1} mkvmerge ID`, String(track.id), String(templateTrack.id));
     addValueMismatch(messages, `${label} property number`, String(track.trackNumber), String(templateTrack.trackNumber));
     addValueMismatch(messages, `${label} type`, track.type, templateTrack.type);
@@ -1076,16 +1090,16 @@ function getTemplateMismatchMessages(file: MediaFileRow, templateFile: MediaFile
     addValueMismatch(messages, `${label} language`, track.language, templateTrack.language);
     const isVideo = normalizeCompareValue(track.type) === "video" || normalizeCompareValue(templateTrack.type) === "video";
     if (!isVideo) addValueMismatch(messages, `${label} name`, track.name, templateTrack.name);
-    addValueMismatch(messages, `${label} default flag`, track.default ? "Yes" : "No", templateTrack.default ? "Yes" : "No");
-    addValueMismatch(messages, `${label} forced flag`, track.forced ? "Yes" : "No", templateTrack.forced ? "Yes" : "No");
+    addValueMismatch(messages, `${label} · Default track`, track.default ? "Yes" : "No", templateTrack.default ? "Yes" : "No");
+    addValueMismatch(messages, `${label} · Forced track`, track.forced ? "Yes" : "No", templateTrack.forced ? "Yes" : "No");
   }
 
   return messages;
 }
 
-function addValueMismatch(messages: string[], label: string, value: string, templateValue: string) {
+function addValueMismatch(messages: TemplateDifference[], label: string, value: string, templateValue: string) {
   if (normalizeCompareValue(value) === normalizeCompareValue(templateValue)) return;
-  messages.push(`${label}: ${formatCompareValue(value)} (template: ${formatCompareValue(templateValue)}).`);
+  messages.push({ label, value: formatCompareValue(value), templateValue: formatCompareValue(templateValue) });
 }
 
 function formatCompareValue(value: string | null | undefined) {

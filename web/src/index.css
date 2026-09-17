@@ -114,3 +114,16 @@ button[class*="bg-accent"]:not(:disabled):hover {
 ::selection {
   background: color-mix(in srgb, var(--color-accent) 28%, transparent);
 }
+
+/* Let file columns follow their content instead of filling the panel width. */
+.file-info-table {
+  width: max-content;
+  min-width: 0;
+  table-layout: auto;
+}
+.file-info-table th,
+.file-info-table td {
+  width: auto;
+  max-width: none;
+  white-space: nowrap;
+}

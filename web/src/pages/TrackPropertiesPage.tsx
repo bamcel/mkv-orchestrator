@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { RefreshCw, Wand2 } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import {
   buildPropEditPreview,
   cancelOperationJob,
@@ -279,18 +279,14 @@ export function TrackPropertiesPage() {
     preview.mutate(buildRequest());
   }
 
-  function runApply() {
-    if (!previewResult?.actions.length) {
-      setStatusText("Build a preview with planned property edits before applying.");
-      return;
-    }
-
-    apply.mutate({
-      ...buildRequest(),
-      planId: previewResult?.planId,
-      planFingerprint: previewResult?.planFingerprint,
-      idempotencyKey: previewResult?.idempotencyKey ?? crypto.randomUUID()
-    });
+  async function runApply() {
+    if (selectedMkvPaths.length === 0 || !template) return;
+    const request = buildRequest();
+    try {
+      const plan = await preview.mutateAsync(request);
+      if (!plan.actions.length) { setStatusText("No changes are needed for the selected files."); return; }
+      await apply.mutateAsync({ ...request, planId: plan.planId, planFingerprint: plan.planFingerprint, idempotencyKey: plan.idempotencyKey ?? crypto.randomUUID() });
+    } catch { /* Mutation handlers display the error. */ }
   }
 
   function cancelRunningApply() {
@@ -334,6 +330,12 @@ export function TrackPropertiesPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Edit Tracks" description="Edit container, track title, language, default, and forced flags." />
+      <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2" aria-label="Operation actions">
+        <button type="button" onClick={() => { setIsSummaryExpanded(true); runPreview(); }} disabled={isApplying || preview.isPending || (selectedMkvPaths.length === 0 || !template)} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold disabled:text-disabled">Preview Summary</button>
+        {isApplying ? <button type="button" onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-9 rounded-md border border-warning bg-button px-3 text-sm text-warning">Cancel</button> : <button type="button" onClick={runApply} disabled={apply.isPending || preview.isPending || (selectedMkvPaths.length === 0 || !template)} className="h-9 rounded-md bg-accent px-3 text-sm font-semibold disabled:bg-button disabled:text-disabled">Apply</button>}
+        <span className="text-xs text-muted">{selectedMkvPaths.length} files selected</span>
+        <span role="status" className="min-w-0 text-xs text-muted">{statusText}</span>
+      </div>
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
         <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex items-center justify-between">
@@ -413,13 +415,6 @@ export function TrackPropertiesPage() {
           <section className="flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex shrink-0 items-center justify-between gap-3">
               <h2 className="text-base font-semibold">Edit Tracks</h2>
-              <button
-                type="button"
-                onClick={() => setIsSummaryExpanded(true)}
-                className="inline-flex h-9 min-w-32 items-center justify-center whitespace-nowrap rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-              >
-                Preview Summary
-              </button>
             </div>
             <div className="mt-4 grid min-h-0 flex-1 auto-rows-[minmax(16.25rem,1fr)] gap-3 overflow-y-auto pr-1">
               <TrackEditor
@@ -456,26 +451,6 @@ export function TrackPropertiesPage() {
           </section>
         </div>
       </div>
-      <footer aria-label="Batch actions" className="mt-3 shrink-0 rounded-lg border border-border bg-card px-4 pb-3">
-            <div className="mt-3 text-xs font-semibold text-muted">Execution</div>
-            <div className="mt-2 flex gap-2">
-              <button onClick={runPreview} disabled={preview.isPending || selectedMkvPaths.length === 0 || !template} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
-                {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
-                Preview
-              </button>
-              {isApplying ? (
-                <button onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-9 flex-1 rounded-md border border-warning bg-button px-3 text-sm font-semibold text-warning hover:bg-button-hover disabled:text-disabled">
-                  Cancel
-                </button>
-              ) : (
-                <button onClick={runApply} disabled={selectedMkvPaths.length === 0 || !previewResult?.actions.length} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
-                  Apply to {selectedMkvPaths.length} files
-                </button>
-              )}
-            </div>
-            <div className="mt-2 text-xs text-muted">All {selectedMkvPaths.length} MKV file(s) are included in this batch.</div>
-            <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
-      </footer>
       {isSummaryExpanded ? (
         <PreviewSummaryModal
           title="Edit Tracks Preview Summary"

@@ -1,6 +1,7 @@
+import { FileName } from "../components/FileName";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { RefreshCw, Wand2 } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import {
   buildMuxPreview,
   cancelOperationJob,
@@ -51,7 +52,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
   const [deleteMp4AfterConvert, setDeleteMp4AfterConvert] = useState(false);
   const [previewResult, setPreviewResult] = useState<MuxPreviewResponse | null>(null);
   const [previewRemovedTracks, setPreviewRemovedTracks] = useState<Record<string, string[]>>({});
-  const [statusText, setStatusText] = useState("Load scanned files from Dashboard, then build a preview.");
+  const [statusText, setStatusText] = useState("Load scanned files from Dashboard, then choose an action.");
   const [settingsDefaultsApplied, setSettingsDefaultsApplied] = useState(false);
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
   const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number } | null>(null);
@@ -72,7 +73,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
     if (scan.files.length === 0) {
       setPreviewResult(null);
       setSelectedDetailPath("");
-      setStatusText("Load scanned files from Dashboard, then build a preview.");
+      setStatusText("Load scanned files from Dashboard, then choose an action.");
     } else if (initializedSelectionScope.current !== selectionScope) {
       // MKV Operations starts every newly loaded scan as a full batch. Record
       // the scan identity first so later user deselection is preserved for the
@@ -266,18 +267,14 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
     preview.mutate(buildRequest());
   }
 
-  function runApply() {
-    if (!previewResult?.actions.length) {
-      setStatusText("Build a preview with planned actions before applying.");
-      return;
-    }
-
-    apply.mutate({
-      ...buildRequest(),
-      planId: previewResult?.planId,
-      planFingerprint: previewResult?.planFingerprint,
-      idempotencyKey: previewResult?.idempotencyKey ?? crypto.randomUUID()
-    });
+  async function runApply() {
+    if (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0)) return;
+    const request = buildRequest();
+    try {
+      const plan = await preview.mutateAsync(request);
+      if (!plan.actions.length) { setStatusText("No changes are needed for the selected files."); return; }
+      await apply.mutateAsync({ ...request, planId: plan.planId, planFingerprint: plan.planFingerprint, idempotencyKey: plan.idempotencyKey ?? crypto.randomUUID() });
+    } catch { /* Mutation handlers display the error. */ }
   }
 
   function cancelRunningApply() {
@@ -289,6 +286,12 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title={pageTitle} description={pageDescription} />
+      <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2" aria-label="Operation actions">
+        <button type="button" onClick={() => { setIsSummaryExpanded(true); runPreview(); }} disabled={isApplying || preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0))} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold disabled:text-disabled">Preview Summary</button>
+        {isApplying ? <button type="button" onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-9 rounded-md border border-warning bg-button px-3 text-sm text-warning">Cancel</button> : <button type="button" onClick={runApply} disabled={apply.isPending || preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0))} className="h-9 rounded-md bg-accent px-3 text-sm font-semibold disabled:bg-button disabled:text-disabled">Apply</button>}
+        <span className="text-xs text-muted">{selectedMkvPaths.length + (convertMp4 ? selectedMp4Paths.length : 0)} files selected</span>
+        <span role="status" className="min-w-0 text-xs text-muted">{statusText}</span>
+      </div>
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(14rem,18.75rem)_minmax(0,1fr)] gap-3">
         <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           {workflow !== "subtitles" ? <div className="flex items-center justify-between">
@@ -353,13 +356,6 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
           <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex shrink-0 items-center justify-between gap-3">
               <h2 className="text-base font-semibold">File Info</h2>
-              <button
-                type="button"
-                onClick={() => setIsSummaryExpanded(true)}
-                className="inline-flex h-9 min-w-32 items-center justify-center whitespace-nowrap rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-              >
-                Preview Summary
-              </button>
             </div>
             <div
               className="mt-3 min-h-0 flex-1 overflow-auto"
@@ -371,7 +367,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
               }}
               aria-label="MKV Operations file selection"
             >
-              <table className="w-full min-w-[68.75rem] border-collapse text-left text-sm">
+              <table className="file-info-table border-collapse text-left text-sm">
                 <thead className="sticky top-0 bg-card text-xs text-text">
                   <tr>
                     {(["file", "reader", "codec", "resolution", "audio", "subtitles", "status"] as FileSortKey[]).map((key) => (
@@ -400,7 +396,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
                       <td className="border-b border-border px-3 py-2">
                         <div className="flex min-w-0 items-center gap-3">
                           <input type="checkbox" checked={selectedPaths.includes(file.path)} onClick={(event) => event.stopPropagation()} onChange={() => togglePath(file.path)} />
-                          <span className="truncate" title={file.path}>{file.fileName}</span>
+                          <FileName value={file.fileName} />
                         </div>
                       </td>
                       <td className="border-b border-border px-3 py-2">{file.reader}</td>
@@ -480,30 +476,6 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
 
         </div>
       </div>
-      <footer aria-label="Batch actions" className="mt-3 shrink-0 rounded-lg border border-border bg-card px-4 pb-3">
-          <div className="mt-2 flex gap-2">
-            <button onClick={runPreview} disabled={isApplying || preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0))} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
-              {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
-              Preview
-            </button>
-            {isApplying ? (
-              <button onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-9 flex-1 rounded-md border border-warning bg-button px-3 text-sm font-semibold text-warning hover:bg-button-hover disabled:text-disabled">
-                Cancel
-              </button>
-            ) : (
-              <button onClick={runApply} disabled={apply.isPending || preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0)) || !previewResult?.actions.length} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
-                Apply to {new Set(previewResult?.actions.map((action) => action.filePath) ?? []).size || (selectedMkvPaths.length + (convertMp4 ? selectedMp4Paths.length : 0))} files
-              </button>
-            )}
-          </div>
-          <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
-          <div className="mt-1 text-xs text-muted">
-            {selectedCount} selected | {selectedMkvPaths.length} selected MKV | {mkvFiles.length} MKV available
-          </div>
-          {selectedNonMkvCount > 0 && workflow !== "convert" ? (
-            <div className="mt-1 text-xs text-warning">{selectedNonMkvCount} selected non-MKV file(s) are visible for context and excluded from this operation.</div>
-          ) : null}
-      </footer>
       {isSummaryExpanded ? (
         <PreviewSummaryModal
           title={`${pageTitle} Preview Summary`}

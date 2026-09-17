@@ -800,7 +800,8 @@ describe("Dashboard template highlighting", () => {
     });
 
     await user.click(await screen.findByRole("row", { name: /Ep02\.mkv/i }));
-    expect(await screen.findByText("Track ID 3 is extra (subtitles).")).toBeInTheDocument();
+    expect(await screen.findByText("Extra track · ID 3")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Selected file comparison" })).toHaveTextContent("No corresponding track");
     expect(screen.queryByText(/Track 4 is extra/i)).not.toBeInTheDocument();
     expect(screen.getByText("1 warning file(s)")).toHaveClass("text-warning");
   });
