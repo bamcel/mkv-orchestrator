@@ -28,6 +28,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
   const operation = useOperationJob();
   const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
   const settings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
+  const [subtitleTab, setSubtitleTab] = useState<"mux" | "extract">("mux");
   const [detailTab, setDetailTab] = useState<"tracks" | "attachments">("tracks");
   const [selectedDetailPath, setSelectedDetailPath] = useState("");
   const [removeAudio, setRemoveAudio] = useState(false);
@@ -319,9 +320,24 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
           {workflow === "subtitles" ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold">Subtitle Mux</h2>
                 <button onClick={refreshFiles} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">Refresh</button>
               </div>
+              <div role="tablist" aria-label="Subtitle options" className="flex gap-3 border-b border-border">
+                {(["mux", "extract"] as const).map((tab) => <button
+                  key={tab} type="button" role="tab" id={`subtitle-${tab}-tab`} aria-controls={`subtitle-${tab}-panel`}
+                  aria-selected={subtitleTab === tab} tabIndex={subtitleTab === tab ? 0 : -1}
+                  onClick={() => setSubtitleTab(tab)}
+                  onKeyDown={(event) => {
+                    if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+                      event.preventDefault();
+                      const next = event.key === "Home" ? "mux" : event.key === "End" ? "extract" : tab === "mux" ? "extract" : "mux";
+                      setSubtitleTab(next); document.getElementById(`subtitle-${next}-tab`)?.focus();
+                    }
+                  }}
+                  className={`border-b-2 pb-2 text-sm font-semibold focus-visible:outline-accent ${subtitleTab === tab ? "border-accent text-text" : "border-transparent text-muted hover:text-text"}`}
+                >{tab === "mux" ? "Subtitle Mux" : "Subtitle Extract"}</button>)}
+              </div>
+              <div role="tabpanel" id="subtitle-mux-panel" aria-labelledby="subtitle-mux-tab" hidden={subtitleTab !== "mux"} className="space-y-3">
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={muxExternal} onChange={(event) => setMuxExternal(event.target.checked)} /> Mux matching external subtitles</label>
               <div className="text-sm text-muted">File Format: <span className="text-accent">file_name.language.tag.ext</span></div>
               <LanguageChips label="Fallback language" value={externalLanguage} onChange={setExternalLanguage} suggestions={languageSuggestions("subtitle")} single />
@@ -331,7 +347,8 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={skipExistingSubtitle} onChange={(event) => setSkipExistingSubtitle(event.target.checked)} /> Skip if matching subtitle already exists</label>
               <OutputOptions preserveOriginal={preserveOriginal} setPreserveOriginal={setPreserveOriginal} suffix={remuxOutputSuffix} setSuffix={setRemuxOutputSuffix} />
               <p className="text-xs leading-5 text-muted">Example: Episode 01.eng.Dialogue.ass. See Settings for detailed usage.</p>
-              <h2 className="pt-1 text-sm font-semibold">Subtitle Extract</h2>
+              </div>
+              <div role="tabpanel" id="subtitle-extract-panel" aria-labelledby="subtitle-extract-tab" hidden={subtitleTab !== "extract"} className="space-y-3">
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extractSubtitles} onChange={(event) => setExtractSubtitles(event.target.checked)} /> Extract subtitles</label>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={extractLanguages === "all"} onChange={(event) => {
@@ -343,6 +360,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
               {extractLanguages === "all" ? <p className="text-xs text-muted">Every subtitle track will be extracted, including tracks with an unknown language.</p> : null}
               <LanguageChips label="Subtitle languages" value={extractLanguages} onChange={setExtractLanguages} suggestions={languageSuggestions("subtitle")} allowAll />
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extractOverwrite} onChange={(event) => setExtractOverwrite(event.target.checked)} /> Overwrite existing extracted files</label>
+              </div>
             </div>
           ) : null}
 

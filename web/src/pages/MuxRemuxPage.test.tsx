@@ -105,6 +105,10 @@ describe("MKV Operations file selection", () => {
     expect(buildMuxPreview.mock.calls[0][0].manualSubtitleSelections).toEqual([]);
     expect(buildMuxPreview.mock.calls[0][0].muxMatchingExternalSubtitles).toBe(false);
     await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("checkbox", { name: /^Extract subtitles$/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Subtitle Extract" }));
+    expect(screen.getByRole("tab", { name: "Subtitle Extract" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("checkbox", { name: "Mux matching external subtitles" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: /^Extract subtitles$/ }));
     await user.click(screen.getByRole("checkbox", { name: "Extract all subtitles regardless of language" }));
     await user.click(screen.getByRole("button", { name: "Preview Summary" }));
