@@ -677,15 +677,15 @@ export function DashboardPage() {
               <h3 className="flex items-center gap-2 font-semibold text-warning"><AlertTriangle size={16} aria-hidden="true" />Differs from template</h3>
               <p className="mt-2 leading-5 text-muted">{selectedMismatchMessages.length} difference{selectedMismatchMessages.length === 1 ? "" : "s"} found. Review these before applying template-based edits.</p>
               <div className="mt-3 space-y-2 break-words text-muted [overflow-wrap:anywhere]">
-                <p><span className="block font-semibold text-subtle">Selected file</span>{selectedFile?.fileName}</p>
-                <p><span className="block font-semibold text-subtle">Template</span>{templateFile?.fileName}</p>
+                <p><span className="block font-semibold text-subtle">Template File</span>{templateFile?.fileName}</p>
+                <p><span className="block font-semibold text-subtle">Selected File</span>{selectedFile?.fileName}</p>
               </div>
               <ul className="mt-3 space-y-3">
                 {selectedMismatchMessages.map((difference, index) => <li key={`${difference.label}-${index}`} className="border-t border-border pt-2 break-words [overflow-wrap:anywhere]">
                   <div className="font-semibold text-warning">{difference.label}</div>
                   <dl className="mt-1 space-y-1 leading-5">
-                    <div><dt className="text-subtle">Selected file</dt><dd className="text-text">{difference.value}</dd></div>
-                    <div><dt className="text-subtle">Template</dt><dd className="text-muted">{difference.templateValue}</dd></div>
+                    <div><dt className="text-subtle">Template File</dt><dd className="text-muted">{difference.templateValue}</dd></div>
+                    <div><dt className="text-subtle">Selected File</dt><dd className="text-text">{difference.value}</dd></div>
                   </dl>
                 </li>)}
               </ul>
