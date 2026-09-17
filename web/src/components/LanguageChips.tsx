@@ -16,12 +16,15 @@ export function LanguageChips({ label, value, onChange, suggestions = [], single
   }
   return <div className="relative mt-2" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}>
     <label htmlFor={id} className="text-xs font-semibold text-muted">{label}</label>
-    <div className="mt-1 flex flex-wrap gap-1 rounded-md border border-border bg-input p-2 focus-within:border-accent">
+    <div className="mt-1 flex min-h-9 flex-wrap items-center gap-1 rounded-md border border-border bg-input p-2" aria-label={`${label} selected languages`}>
       {selected.map((code) => <span key={code} className="inline-flex items-center gap-1 rounded bg-selected px-2 py-1 text-xs">{names[code] ?? code} · {code}<button type="button" aria-label={`Remove ${names[code] ?? code}`} onClick={() => onChange(selected.filter((item) => item !== code).join(","))} className="px-1 text-muted hover:text-text">×</button></span>)}
+      {selected.length === 0 ? <span className="text-xs text-subtle">No languages selected</span> : null}
+    </div>
+    <div className="mt-2 rounded-md border border-border bg-input px-2 focus-within:border-accent">
       <input id={id} value={query} placeholder="Search languages…" autoComplete="off" onFocus={() => setFocused(true)} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === ",") { event.preventDefault(); add(options[0] ?? query); }
         if (event.key === "Escape") setFocused(false);
-      }} className="min-w-0 w-full bg-transparent py-1 text-sm outline-none" aria-describedby={error ? `${id}-error` : undefined} />
+      }} className="min-w-0 w-full bg-transparent py-2 text-sm outline-none" aria-describedby={error ? `${id}-error` : undefined} />
     </div>
     {error ? <p id={`${id}-error`} role="alert" className="text-xs text-warning">{error}</p> : null}
     {focused ? <div className="mt-1 max-h-40 overflow-auto rounded-md border border-border bg-panel p-1" aria-label={`${label} suggestions`}>
