@@ -292,18 +292,18 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
           </div> : null}
 
           {workflow === "remove" ? (
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 space-y-2">
               <h2 className="text-sm font-semibold">Track Removal</h2>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={removeAudio} onChange={(event) => setRemoveAudio(event.target.checked)} /> Remove unwanted audio languages</label>
-              <Field label="Audio languages to keep" value={audioLanguages} onChange={setAudioLanguages} placeholder="eng,jpn" />
+              <Field compact label="Audio languages to keep" value={audioLanguages} onChange={setAudioLanguages} placeholder="eng,jpn" />
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={removeSubtitles} onChange={(event) => setRemoveSubtitles(event.target.checked)} /> Remove unwanted subtitle languages</label>
-              <Field label="Subtitle languages to keep" value={subtitleLanguages} onChange={setSubtitleLanguages} placeholder="eng" />
+              <Field compact label="Subtitle languages to keep" value={subtitleLanguages} onChange={setSubtitleLanguages} placeholder="eng" />
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={removeTrackIds} onChange={(event) => setRemoveTrackIds(event.target.checked)} /> Remove unwanted track IDs</label>
-              <Field label="Track IDs to remove" value={trackIds} onChange={setTrackIds} placeholder="1 or 1, 3" />
+              <Field compact label="Track IDs to remove" value={trackIds} onChange={setTrackIds} placeholder="1 or 1, 3" />
               <h2 className="pt-1 text-sm font-semibold">Preservation Options</h2>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={preserveChapters} onChange={(event) => setPreserveChapters(event.target.checked)} /> Preserve chapters</label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={preserveAttachments} onChange={(event) => setPreserveAttachments(event.target.checked)} /> Preserve attachments/fonts</label>
-              <OutputOptions preserveOriginal={preserveOriginal} setPreserveOriginal={setPreserveOriginal} suffix={remuxOutputSuffix} setSuffix={setRemuxOutputSuffix} />
+              <OutputOptions compact preserveOriginal={preserveOriginal} setPreserveOriginal={setPreserveOriginal} suffix={remuxOutputSuffix} setSuffix={setRemuxOutputSuffix} />
             </div>
           ) : null}
 
@@ -341,7 +341,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
             </div>
           ) : null}
 
-          <h2 className="mt-4 text-sm font-semibold">Execution</h2>
+          <h2 className={`${workflow === "remove" ? "mt-3" : "mt-4"} text-sm font-semibold`}>Execution</h2>
           <div className="mt-2 flex gap-2">
             <button onClick={runPreview} disabled={preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0))} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
               {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
@@ -600,14 +600,15 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
   );
 }
 
-function OutputOptions({ preserveOriginal, setPreserveOriginal, suffix, setSuffix }: {
+function OutputOptions({ preserveOriginal, setPreserveOriginal, suffix, setSuffix, compact = false }: {
+  compact?: boolean;
   preserveOriginal: boolean;
   setPreserveOriginal: (value: boolean) => void;
   suffix: string;
   setSuffix: (value: string) => void;
 }) {
   return (
-    <div className="space-y-3">
+    <div className={compact ? "space-y-2" : "space-y-3"}>
       <h2 className="pt-1 text-sm font-semibold">Output</h2>
       <label className="flex items-center gap-2 text-sm">
         <input type="radio" name="remux-output" checked={preserveOriginal} onChange={() => setPreserveOriginal(true)} />
@@ -618,7 +619,7 @@ function OutputOptions({ preserveOriginal, setPreserveOriginal, suffix, setSuffi
         Replace the original
       </label>
       {preserveOriginal ? (
-        <Field label="Output suffix" value={suffix} onChange={setSuffix} placeholder=".remuxed" />
+        <Field compact={compact} label="Output suffix" value={suffix} onChange={setSuffix} placeholder=".remuxed" />
       ) : (
         <p className="text-xs leading-5 text-muted">Replacement uses a validated temporary file with automatic rollback.</p>
       )}
@@ -728,7 +729,7 @@ function parseLanguageSet(value: string) {
   return new Set(value.split(/[\s,;]+/).map((part) => part.trim().toLowerCase()).filter(Boolean));
 }
 
-function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
+function Field({ label, value, onChange, placeholder, compact = false }: { label: string; value: string; onChange: (value: string) => void; placeholder: string; compact?: boolean }) {
   return (
     <label className="block">
       <span className="text-xs font-semibold text-muted">{label}</span>
@@ -736,7 +737,7 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent"
+        className={`${compact ? "mt-1 h-8" : "mt-1.5 h-9"} w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent`}
       />
     </label>
   );
