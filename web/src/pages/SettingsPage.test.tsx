@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useLocation } from "react-router-dom";
 
 import { SettingsPage } from "./SettingsPage";
 import { renderWithBackend } from "../test/render";
@@ -59,11 +60,28 @@ async function openRenameTab(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole("button", { name: /^rename$/i }));
 }
 
+function SettingsLocation() {
+  return <output data-testid="settings-location">{useLocation().search}</output>;
+}
+
 async function openProvidersTab(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole("button", { name: /^api providers$/i }));
 }
 
 describe("Settings providers", () => {
+  it("preserves tab selection in the URL and keeps tabs outside the active card", async () => {
+    const user = userEvent.setup();
+    renderWithBackend(<><SettingsPage /><SettingsLocation /></>, {
+      getStatus: () => Promise.resolve(status),
+      getWebSettings: () => Promise.resolve(settings())
+    });
+    await user.click(await screen.findByRole("button", { name: "Appearance" }));
+    expect(screen.getByTestId("settings-location")).toHaveTextContent("?tab=appearance");
+    expect(screen.getByRole("navigation", { name: "Settings sections" }).closest("section")).toBeNull();
+    expect(screen.getByRole("region", { name: "Appearance" })).toContainElement(screen.getByRole("heading", { name: "Custom Theme" }));
+    expect(screen.queryByRole("button", { name: "Save Settings" })).not.toBeInTheDocument();
+  });
+
   it("places API Providers directly after General and keeps providers out of Rename", async () => {
     const user = userEvent.setup();
     renderWithBackend(<SettingsPage />, {
@@ -118,7 +136,6 @@ describe("Settings providers", () => {
     await openProvidersTab(user);
     const field = await screen.findByLabelText(/anidb client/i);
     await user.type(field, "mkvo/1");
-    await user.click(screen.getByRole("button", { name: /save settings/i }));
 
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
     expect(saveWebSettings.mock.calls[0][0].anidbClient).toBe("mkvo/1");
@@ -141,7 +158,7 @@ describe("Settings providers", () => {
     expect(field).toHaveAttribute("placeholder", "••••••••••••");
     expect(field).toHaveValue("");
 
-    await user.click(screen.getByRole("button", { name: /save settings/i }));
+    fireEvent.change(screen.getByLabelText("Metadata Language"), { target: { value: "jpn" } });
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
     expect(saveWebSettings.mock.calls[0][0].tvdbApiKey).toBeUndefined();
   });
@@ -181,7 +198,7 @@ describe("Settings library folders", () => {
     });
     await user.click(await screen.findByRole("button", { name: /^appearance$/i }));
     expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent))
-      .toEqual(["Theme", "Custom Theme", "Theme JSON"]);
+      .toEqual(["Appearance", "Theme", "Custom Theme", "Theme JSON"]);
     const customTheme = screen.getByRole("heading", { name: "Custom Theme" }).closest("section")!;
     expect(customTheme).toContainElement(screen.getByRole("combobox", { name: "Theme color label" }));
     expect(customTheme).toContainElement(screen.getByRole("button", { name: "Save Custom Theme" }));
@@ -275,7 +292,6 @@ describe("Settings library folders", () => {
     await user.click(await screen.findByRole("button", { name: /^general$/i }));
     const directory = await screen.findByRole("textbox", { name: /^default directory$/i });
     await user.type(directory, "D:\\Media");
-    await user.click(screen.getByRole("button", { name: /save settings/i }));
 
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
     expect(saveWebSettings.mock.calls[0][0].defaultRoot).toBe("D:\\Media");
@@ -309,8 +325,6 @@ describe("Settings library folders", () => {
     await user.type(screen.getByLabelText(/quick access folder 2 name/i), "TV");
     await user.type(screen.getByLabelText(/quick access folder 2 path/i), "/mnt/user/tv");
 
-    await user.click(screen.getByRole("button", { name: /save settings/i }));
-
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
     expect(saveWebSettings.mock.calls[0][0].libraryRoots).toEqual([
       { name: "Anime", path: "/mnt/user/anime" },
@@ -343,7 +357,6 @@ describe("Settings library folders", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /remove quick access folder 1/i }));
-    await user.click(screen.getByRole("button", { name: /save settings/i }));
 
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
     expect(saveWebSettings.mock.calls[0][0].libraryRoots).toEqual([
@@ -421,7 +434,7 @@ describe("Settings library folders", () => {
 
     await user.click(await screen.findByRole("button", { name: /^general$/i }));
     await user.click(await screen.findByRole("button", { name: /add folder/i }));
-    await user.click(screen.getByRole("button", { name: /save settings/i }));
+    await user.type(screen.getByLabelText("Default Directory Name"), " updated");
 
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
     expect(saveWebSettings.mock.calls[0][0].libraryRoots).toEqual([]);

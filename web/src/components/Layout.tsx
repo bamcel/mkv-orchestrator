@@ -94,7 +94,7 @@ export function Layout() {
           </div>
         </aside>
 
-        <main className={`flex min-h-0 min-w-0 flex-col overflow-hidden py-8 ${isSettingsPage ? "px-4 md:px-6 lg:px-8" : "px-8"}`}>
+        <main className={`flex min-h-0 min-w-0 flex-col overflow-hidden ${isSettingsPage ? "px-4 py-4 sm:px-6 lg:px-8" : "px-8 py-8"}`}>
           <header className="shrink-0 md:hidden"><SignOutButton className="mb-3" /></header>
           {selectionError ? (
             <div role="alert" className="mb-3 shrink-0 rounded-md border border-warning bg-panel px-4 py-2 text-sm text-warning">

@@ -3,14 +3,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type SecuritySettings } from "../auth/api";
 import { remembersUsername, setRememberUsername } from "../lib/rememberUsername";
 
-export default function SecuritySection() {
+export default function SecuritySection({ embedded = false }: { embedded?: boolean }) {
   const query = useQuery({ queryKey: ["security-settings"], queryFn: api.securitySettings });
   if (query.isPending) return <p role="status">Loading security settings…</p>;
   if (query.isError) return <p role="alert">Could not load security settings. <button onClick={() => void query.refetch()}>Retry</button></p>;
-  return <SecurityForm initial={query.data} />;
+  return <SecurityForm initial={query.data} embedded={embedded} />;
 }
 
-function SecurityForm({ initial }: { initial: SecuritySettings }) {
+function SecurityForm({ initial, embedded }: { initial: SecuritySettings; embedded: boolean }) {
   const client = useQueryClient();
   const [autoSignOut, setAutoSignOut] = useState(initial.idle_timeout_minutes !== null);
   const [minutes, setMinutes] = useState(String(initial.idle_timeout_minutes ?? 30));
@@ -21,7 +21,7 @@ function SecurityForm({ initial }: { initial: SecuritySettings }) {
   const [remember, setRemember] = useState(remembersUsername);
   const [showWarning, setShowWarning] = useState(true);
 
-  return <form className="min-h-full space-y-3 rounded-2xl border border-border bg-card p-4" onSubmit={async (event) => {
+  return <form className={embedded ? "space-y-3" : "min-h-full space-y-3 rounded-2xl border border-border bg-card p-4"} onSubmit={async (event) => {
     event.preventDefault();
     setSaving(true); setMessage(""); setError("");
     try {
@@ -32,7 +32,7 @@ function SecurityForm({ initial }: { initial: SecuritySettings }) {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save settings."); }
     finally { setSaving(false); }
   }}>
-    <div><h2 className="text-lg font-semibold">Privacy / Security</h2>
+    <div>{!embedded && <h2 className="text-lg font-semibold">Privacy / Security</h2>}
       <p className="mt-1 text-xs leading-5 text-subtle">Session and network settings apply to all users and persist after container restarts. The container’s Require Login option overrides these controls: when false, all connections have password-free access and auto sign-out cannot lock the application.</p></div>
     <div className="overflow-hidden rounded-xl border border-border bg-panel">
     <fieldset className="space-y-1.5 p-3">

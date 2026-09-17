@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import {
   ArrowDown,
   ArrowUp,
@@ -30,7 +31,6 @@ import {
 } from "../api";
 import type { SourceRoot, WebMediaServer, WebSettings, WebSettingsRequest } from "../api";
 import { FileBrowser } from "../components/FileBrowser";
-import { SectionHeader } from "../components/SectionHeader";
 import SecuritySection from "../components/SecuritySection";
 import ffmpegLogo from "../assets/logos/ffmpeg.png";
 import mkvtoolnixLogo from "../assets/logos/mkvtoolnix.png";
@@ -131,7 +131,24 @@ export function SettingsPage() {
   const isDesktop = backendTransport === "tauri";
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const webSettings = useQuery({ queryKey: ["web-settings"], queryFn: getWebSettings });
-  const [activeTab, setActiveTab] = useState<SettingsTabId>(() => readStoredSettingsTab());
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const activeTab: SettingsTabId = requestedTab && isSettingsTab(requestedTab) ? requestedTab : readStoredSettingsTab();
+  function setActiveTab(tab: SettingsTabId) {
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.set("tab", tab); return next; });
+  }
+  const activePage = settingsTabs.find((tab) => tab.id === activeTab)!;
+  const ActivePageIcon = activePage.Icon;
+  const pageDescriptions: Record<SettingsTabId, string> = {
+    general: "Configure default folders, quick access, and media tools.",
+    providers: "Configure credentials and defaults for metadata searches.",
+    rename: "Customize the templates used to rename media files.",
+    presets: "Configure track defaults and reusable presets.",
+    library: "Connect media servers and configure library monitoring.",
+    appearance: "Choose a theme and customize its colors.",
+    security: "Configure browser privacy, sessions, and local-network access.",
+    about: "Application information, configuration safety, and acknowledgements."
+  };
   const [tvdbApiKey, setTvdbApiKey] = useState("");
   const [tvdbPin, setTvdbPin] = useState("");
   const [tmdbApiKey, setTmdbApiKey] = useState("");
@@ -176,7 +193,10 @@ export function SettingsPage() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(settingsTabStorageKey, activeTab);
     }
-  }, [activeTab]);
+    if (!requestedTab || !isSettingsTab(requestedTab)) {
+      setSearchParams((current) => { const next = new URLSearchParams(current); next.set("tab", activeTab); return next; }, { replace: true });
+    }
+  }, [activeTab, requestedTab, setSearchParams]);
 
   useEffect(() => {
     if (!webSettings.data) return;
@@ -257,7 +277,7 @@ export function SettingsPage() {
     automatic = false
   ): Promise<WebSettings | null> {
     try {
-      if (automatic) setSettingsStatus("Saving changes...");
+      if (automatic) setSettingsStatus("Saving settings…");
       const saved = await saveWebSettings(request);
       lastSavedFingerprint.current = settingsFingerprint(request);
       queryClient.setQueryData(["web-settings"], saved);
@@ -479,30 +499,25 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col">
-      <SectionHeader title="Settings" description="Configure MKVO behavior, provider keys, presets, library paths, themes, and media tools." />
+    <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col gap-4 xl:h-full xl:min-h-0">
+      <h1 className="text-2xl font-semibold tracking-tight text-text">Settings</h1>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-          <nav aria-label="Settings sections" className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-col gap-3 border-b border-border pb-3 lg:flex-row lg:items-center">
+          <nav aria-label="Settings sections" className="flex min-w-0 flex-1 gap-3 overflow-x-auto pb-3">
             {settingsTabs.map((tab) => (
               <SettingsTabButton key={tab.id} tab={tab} active={activeTab === tab.id} onSelect={setActiveTab} />
             ))}
           </nav>
-          {activeTab !== "security" ? <div className="flex items-center gap-3">
-            <span className="max-w-[22.5rem] truncate text-sm text-success" title={settingsStatus}>{settingsStatus}</span>
-            <button
-              type="button"
-              onClick={() => void saveSettings()}
-              className="h-9 rounded-md bg-accent px-4 text-sm font-semibold text-window transition hover:bg-accent-hover"
-            >
-              Save Settings
-            </button>
-          </div> : null}
+          {activeTab !== "security" ? <p role="status" className="text-right text-xs text-accent lg:max-w-48" title={settingsStatus}>{settingsStatus}</p> : null}
         </div>
 
-        <div className="mt-4 min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <section aria-labelledby="settings-page-heading" className="min-w-0 flex-1 rounded-2xl border border-border bg-card p-4 xl:min-h-0 xl:overflow-y-auto">
+          <header className="mb-3">
+            <h2 id="settings-page-heading" className="flex items-center gap-2 text-lg font-semibold text-text"><ActivePageIcon size={20} className="text-accent" />{activePage.label}</h2>
+            {activeTab !== "security" ? <p className="mt-1 text-xs leading-5 text-subtle">{pageDescriptions[activeTab]}</p> : null}
+          </header>
           {activeTab === "general" ? (
-            <div className="grid min-h-full min-w-0 grid-cols-1 items-stretch gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-3">
               <SettingsCard
                 className="flex min-h-0 flex-col"
                 contentClassName="flex min-h-0 flex-1 flex-col"
@@ -710,12 +725,12 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "providers" ? (
-            <div className="grid min-h-full min-w-0 gap-3">
+            <div className="grid min-w-0 gap-3">
               <SettingsCard title="API Providers" description="TVDB and TMDB lookup requires your own API keys. Leave saved key fields blank to keep existing values.">
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                   <div className="rounded-lg border border-border bg-card p-3">
                     <h3 className="mb-3 text-sm font-semibold text-text">TVDB</h3>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2">
                     <label className="block">
                       <span className="text-xs font-semibold text-muted">TVDB API Key</span>
                       <input
@@ -768,8 +783,8 @@ export function SettingsPage() {
                       AniDB identifies callers by a registered client name and version rather than an API key. Searching works without it; loading episodes requires it.
                     </p>
                   </div>
-                  <div className="col-span-3 grid grid-cols-2 gap-3 rounded-lg border border-border bg-card p-3">
-                  <div className="col-span-2">
+                  <div className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-card p-3 sm:grid-cols-2 lg:col-span-2">
+                  <div className="sm:col-span-2">
                     <h3 className="text-sm font-semibold text-text">Provider Defaults</h3>
                     <p className="mt-1 text-xs text-subtle">Choose the language and provider used for new metadata searches.</p>
                   </div>
@@ -801,7 +816,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "rename" ? (
-            <div className="grid min-h-full min-w-0 gap-3">
+            <div className="grid min-w-0 gap-3">
               <SettingsCard title="Rename Templates" description="One template per line. The selected default template is always preserved when settings are saved." actions={
                   <button
                     type="button"
@@ -837,13 +852,13 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "security" ? (
-            isDesktop ? <p className="text-sm text-muted">Login and session settings apply to the container web server. The native desktop app uses your operating-system account.</p> : <SecuritySection />
+            isDesktop ? <p className="text-sm text-muted">Login and session settings apply to the container web server. The native desktop app uses your operating-system account.</p> : <SecuritySection embedded />
           ) : null}
 
           {activeTab === "presets" ? (
-            <div className="grid min-h-full min-w-0 gap-3">
+            <div className="grid min-w-0 gap-3">
               <SettingsCard title="Track Defaults" description="Default keep-language values for track removal workflows.">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2">
                   <label className="block">
                     <span className="text-xs font-semibold text-muted">Default audio languages to keep</span>
                     <input
@@ -881,7 +896,7 @@ export function SettingsPage() {
                     Reset All Presets
                   </button>
               }>
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <PresetEditor label="Audio Name Presets" value={audioNamePresetsText} onChange={setAudioNamePresetsText} />
                   <PresetEditor label="Subtitle Name Presets" value={subtitleNamePresetsText} onChange={setSubtitleNamePresetsText} />
                   <PresetEditor label="Language Presets" value={languagePresetsText} onChange={setLanguagePresetsText} />
@@ -893,7 +908,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "library" ? (
-            <div className="grid min-h-full min-w-0 grid-cols-1 gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-3">
               <SettingsCard title="Media Servers" description="Connect Emby, Jellyfin, or Plex. API keys and tokens are encrypted before they are stored." compactHeader actions={
                 <button type="button" aria-expanded={addingServer} aria-controls="add-media-server" onClick={() => setAddingServer(!addingServer)} className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-4 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">
                   {addingServer ? <X size={16} /> : <Plus size={16} />}{addingServer ? "Cancel" : "Add server"}
@@ -905,7 +920,7 @@ export function SettingsPage() {
                       No media servers configured. Manual watch folders remain the fallback.
                     </div>
                   ) : mediaServers.map((server) => (
-                    <div key={server.id} className="rounded-xl border border-border bg-input px-6 py-4">
+                    <div key={server.id} className="rounded-xl border border-border bg-card p-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
@@ -922,7 +937,7 @@ export function SettingsPage() {
                         </div>
                       </div>
                       {editingServerId === server.id ? <div className="mt-3 rounded-md border border-border bg-input p-3">
-                      <div className="grid gap-2 lg:grid-cols-[minmax(9rem,1fr)_8rem_minmax(12rem,1.35fr)_minmax(10rem,1fr)_auto] lg:items-end">
+                      <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2">
                         <label className="block min-w-0">
                           <span className="text-[0.6875rem] font-semibold text-muted">Name</span>
                             <input
@@ -1012,7 +1027,7 @@ export function SettingsPage() {
                             <span><span className="block text-sm font-semibold text-text">Show Libraries</span><span className="mt-1 block text-xs text-subtle">{server.libraries.filter((library) => library.isEnabled).length} of {server.libraries.length} shown</span></span>
                             <ChevronDown size={15} className="shrink-0 text-subtle transition-transform group-open:rotate-180" />
                           </summary>
-                          <div className="mt-3 grid max-h-64 grid-cols-1 gap-x-6 gap-y-2 overflow-auto sm:grid-cols-2 lg:grid-cols-3">
+                          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                           {server.libraries.map((library) => (
                             <label key={library.id} className="flex min-w-0 cursor-pointer items-center gap-2 text-sm text-text" title={`${library.serverPath} -> ${library.containerPath}`}>
                               <input
@@ -1039,7 +1054,7 @@ export function SettingsPage() {
 
                 {addingServer ? <div id="add-media-server" className="mt-3 rounded-lg border border-border bg-input p-3">
                   <h3 className="text-sm font-semibold">Add a server</h3>
-                  <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  <div className="mt-2 grid items-end gap-3 sm:grid-cols-2">
                     <label className="block">
                       <span className="text-xs font-semibold text-muted">Name</span>
                       <input
@@ -1134,7 +1149,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "appearance" ? (
-            <div className="grid min-h-full min-w-0 grid-cols-1 gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-3">
               <SettingsCard title="Theme" description="Themes are shared by the desktop and browser interfaces.">
                 <div className="flex items-end gap-3">
                   <label className="block flex-1">
@@ -1232,7 +1247,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === "about" ? (
-            <div className="grid min-h-full min-w-0 items-stretch gap-3 xl:grid-cols-2">
+            <div className="grid min-w-0 gap-3 xl:grid-cols-2">
               <div className="grid min-w-0 gap-3 xl:h-full xl:grid-rows-[auto_1fr]">
               <SettingsCard
                 title={isDesktop ? "About MKV Orchestrator Desktop" : "About MKV Orchestrator Server"}
@@ -1289,7 +1304,7 @@ export function SettingsPage() {
               </SettingsCard>
             </div>
           ) : null}
-        </div>
+        </section>
 
       {browsingRow !== null ? (
         <FileBrowser
@@ -1475,10 +1490,10 @@ function SettingsTabButton({ tab, active, onSelect }: { tab: SettingsTabDefiniti
     <button
       type="button"
       onClick={() => onSelect(tab.id)}
-      className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-semibold transition ${
+      className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border px-4 py-2 text-sm transition ${
         active
-          ? "border-accent bg-selected text-text"
-          : "border-transparent bg-transparent text-muted hover:border-border hover:bg-button-hover hover:text-text"
+          ? "border-accent bg-panel text-text"
+          : "border-transparent bg-transparent text-muted hover:text-text"
       }`}
     >
       <Icon size={16} />
@@ -1512,16 +1527,16 @@ function ProviderTestButton({
 
 function SettingsCard({ title, description, children, actions, compactHeader = false, className = "", contentClassName = "" }: { title: string; description?: string; children: React.ReactNode; actions?: React.ReactNode; compactHeader?: boolean; className?: string; contentClassName?: string }) {
   return (
-    <section className={`min-w-0 rounded-2xl border border-border bg-panel p-4 ${className}`}>
+    <section className={`min-w-0 rounded-xl border border-border bg-panel p-3 ${className}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold">{title}</h2>
-          {compactHeader && description ? <p className="mt-1 text-sm leading-5 text-muted">{description}</p> : null}
+          <h2 className="text-sm font-semibold text-text">{title}</h2>
+          {compactHeader && description ? <p className="mt-1 text-xs leading-5 text-subtle">{description}</p> : null}
         </div>
         {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
-      {!compactHeader && description ? <p className="mt-2 text-sm leading-6 text-muted">{description}</p> : null}
-      <div className={`mt-4 min-w-0 ${contentClassName}`}>{children}</div>
+      {!compactHeader && description ? <p className="mt-1 text-xs leading-5 text-subtle">{description}</p> : null}
+      <div className={`mt-3 min-w-0 ${contentClassName}`}>{children}</div>
     </section>
   );
 }
