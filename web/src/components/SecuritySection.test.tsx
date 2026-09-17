@@ -17,6 +17,16 @@ it("saves timeout and local bypass with a reverse-proxy warning", async () => {
   fireEvent.change(screen.getByLabelText("Minutes of inactivity"), { target: { value: "10" } });
   fireEvent.click(screen.getByLabelText("Skip password authentication on local networks"));
   expect(screen.getByText(/A reverse proxy or Docker networking/)).toBeTruthy();
+  const warning = screen.getByText(/A reverse proxy or Docker networking/);
+  fireEvent.click(screen.getByRole("button", { name: "Hide warning" }));
+  expect(warning).not.toBeVisible();
+  expect(screen.getByLabelText("Skip password authentication on local networks")).toBeChecked();
+  fireEvent.click(screen.getByRole("button", { name: "Show warning" }));
+  expect(warning).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Hide warning" }));
+  fireEvent.click(screen.getByLabelText("Skip password authentication on local networks"));
+  fireEvent.click(screen.getByLabelText("Skip password authentication on local networks"));
+  expect(warning).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Save security settings" }));
   await waitFor(() => expect(api.saveSecuritySettings).toHaveBeenCalledWith({ idle_timeout_minutes: 10, local_network_bypass: true }));
   expect(await screen.findByText("Security settings saved.")).toBeTruthy();
