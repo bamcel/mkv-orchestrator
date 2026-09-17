@@ -337,7 +337,7 @@ export function TrackPropertiesPage() {
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
         <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold">Properties Configuration</h2>
+              <h2 className="text-base font-semibold">Track Options</h2>
               <button onClick={refreshFiles} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">Refresh</button>
             </div>
             <p className="mt-3 text-xs leading-5 text-muted">Configure container title, video track name, and property edit behavior.</p>

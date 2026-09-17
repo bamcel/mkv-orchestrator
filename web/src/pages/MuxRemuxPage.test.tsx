@@ -205,6 +205,7 @@ describe("MKV Operations file selection", () => {
     expect(screen.getByRole("button", { name: "Sort by Resolution" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sort by Status" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Track Removal" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Track Options" })).toBeInTheDocument();
     const selection = screen.getByLabelText("MKV Operations file selection");
     const checkboxes = within(selection).getAllByRole("checkbox");
     await waitFor(() => checkboxes.forEach((checkbox) => expect(checkbox).toBeChecked()));
