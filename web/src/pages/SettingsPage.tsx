@@ -1165,7 +1165,7 @@ export function SettingsPage() {
                 </div>
               </SettingsCard>
 
-              <SettingsCard title="Custom" description="Customize individual theme colors.">
+              <SettingsCard title="Custom Theme" description="Customize individual theme colors, save them as a named theme, or remove the selected custom theme.">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block">
                     <span className="text-xs font-semibold text-muted">Color label</span>
@@ -1194,10 +1194,7 @@ export function SettingsPage() {
                   />
                 </div>
                 <p className="mt-2 text-xs text-subtle">Choose a label, then use the color picker to preview that theme color immediately. Save the edited theme below to keep it.</p>
-              </SettingsCard>
-
-              <SettingsCard title="Custom Theme" description="Save the edited JSON as a named theme or remove the selected custom theme.">
-                <label className="block">
+                <label className="mt-4 block">
                   <span className="text-xs font-semibold text-muted">Custom Theme Name</span>
                   <input
                     value={customThemeName}

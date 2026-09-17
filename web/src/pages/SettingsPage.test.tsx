@@ -178,7 +178,10 @@ describe("Settings library folders", () => {
     });
     await user.click(await screen.findByRole("button", { name: /^appearance$/i }));
     expect(screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent))
-      .toEqual(["Theme", "Custom", "Custom Theme", "Theme JSON"]);
+      .toEqual(["Theme", "Custom Theme", "Theme JSON"]);
+    const customTheme = screen.getByRole("heading", { name: "Custom Theme" }).closest("section")!;
+    expect(customTheme).toContainElement(screen.getByRole("combobox", { name: "Theme color label" }));
+    expect(customTheme).toContainElement(screen.getByRole("button", { name: "Save Custom Theme" }));
   });
 
   it("opens and dismisses the compact Add Server form on demand", async () => {
