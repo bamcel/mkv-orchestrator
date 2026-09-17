@@ -189,6 +189,9 @@ export function SettingsPage() {
   const [settingsStatus, setSettingsStatus] = useState("");
   const [statusPopupVisible, setStatusPopupVisible] = useState(false);
   const lastSavedFingerprint = useRef("");
+  const [hydrationRevision, setHydrationRevision] = useState<object | null>(null);
+  const hydrationTarget = useRef<object | null>(null);
+  const needsHydratedBaseline = useRef(false);
 
   useEffect(() => {
     setStatusPopupVisible(Boolean(settingsStatus));
@@ -208,6 +211,10 @@ export function SettingsPage() {
 
   useEffect(() => {
     if (!webSettings.data) return;
+    const revision = {};
+    hydrationTarget.current = revision;
+    needsHydratedBaseline.current = true;
+    setHydrationRevision(revision);
     setLanguage(webSettings.data.tvdbLanguage || "eng");
     setProvider(webSettings.data.renameLookupProvider || "TVDB");
     setTemplate(webSettings.data.renameTemplate || defaultRenameTemplate);
@@ -334,13 +341,20 @@ export function SettingsPage() {
   }
 
   useEffect(() => {
-    if (!webSettings.data || pendingSettingsFingerprint === lastSavedFingerprint.current) return;
+    if (!webSettings.data || hydrationRevision !== hydrationTarget.current) return;
+    if (needsHydratedBaseline.current) {
+      // Compare edits against the populated, normalized form, not raw server data.
+      lastSavedFingerprint.current = pendingSettingsFingerprint;
+      needsHydratedBaseline.current = false;
+      return;
+    }
+    if (pendingSettingsFingerprint === lastSavedFingerprint.current) return;
     setSettingsStatus("Changes pending...");
     const timer = window.setTimeout(() => {
       void saveSettings(pendingSettingsRequest, true);
     }, autoSaveDelayMillis);
     return () => window.clearTimeout(timer);
-  }, [pendingSettingsFingerprint, webSettings.data]);
+  }, [pendingSettingsFingerprint, webSettings.data, hydrationRevision]);
 
   function addMediaServer() {
     if (!newServerUrl.trim()) {

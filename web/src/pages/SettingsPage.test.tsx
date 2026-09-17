@@ -400,7 +400,8 @@ describe("Settings library folders", () => {
     }, { timeout: 2500 });
   });
 
-  it("promotes the first legacy shortcut to Home", async () => {
+  it("promotes the first legacy shortcut to Home without saving until edited", async () => {
+    const user = userEvent.setup();
     const saveWebSettings = vi.fn().mockResolvedValue(
       settings({
         defaultRoot: "/mnt/user/anime",
@@ -420,6 +421,12 @@ describe("Settings library folders", () => {
       saveWebSettings
     });
 
+    await user.click(await screen.findByRole("button", { name: "General" }));
+    expect(await screen.findByLabelText("Default Directory")).toHaveValue("/mnt/user/anime");
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    expect(saveWebSettings).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Dismiss settings notification" })).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("Default Directory Name"), " updated");
     await waitFor(() => expect(saveWebSettings).toHaveBeenCalled(), { timeout: 2500 });
     const request = saveWebSettings.mock.calls.at(-1)?.[0];
     expect(request.defaultRoot).toBe("/mnt/user/anime");
