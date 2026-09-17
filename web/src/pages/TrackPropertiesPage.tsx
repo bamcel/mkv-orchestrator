@@ -406,24 +406,7 @@ export function TrackPropertiesPage() {
               ))}
             </select>
 
-            <div className="mt-3 text-xs font-semibold text-muted">Execution</div>
-            <div className="mt-2 flex gap-2">
-              <button onClick={runPreview} disabled={preview.isPending || selectedMkvPaths.length === 0 || !template} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
-                {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
-                Preview
-              </button>
-              {isApplying ? (
-                <button onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-9 flex-1 rounded-md border border-warning bg-button px-3 text-sm font-semibold text-warning hover:bg-button-hover disabled:text-disabled">
-                  Cancel
-                </button>
-              ) : (
-                <button onClick={runApply} disabled={selectedMkvPaths.length === 0 || !previewResult?.actions.length} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
-                  Apply
-                </button>
-              )}
-            </div>
-            <div className="mt-2 text-xs text-muted">All {selectedMkvPaths.length} MKV file(s) are included in this batch.</div>
-            <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
+
         </section>
 
         <div className="min-h-0 min-w-0">
@@ -473,6 +456,26 @@ export function TrackPropertiesPage() {
           </section>
         </div>
       </div>
+      <footer aria-label="Batch actions" className="mt-3 shrink-0 rounded-lg border border-border bg-card px-4 pb-3">
+            <div className="mt-3 text-xs font-semibold text-muted">Execution</div>
+            <div className="mt-2 flex gap-2">
+              <button onClick={runPreview} disabled={preview.isPending || selectedMkvPaths.length === 0 || !template} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
+                {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
+                Preview
+              </button>
+              {isApplying ? (
+                <button onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-9 flex-1 rounded-md border border-warning bg-button px-3 text-sm font-semibold text-warning hover:bg-button-hover disabled:text-disabled">
+                  Cancel
+                </button>
+              ) : (
+                <button onClick={runApply} disabled={selectedMkvPaths.length === 0 || !previewResult?.actions.length} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
+                  Apply to {selectedMkvPaths.length} files
+                </button>
+              )}
+            </div>
+            <div className="mt-2 text-xs text-muted">All {selectedMkvPaths.length} MKV file(s) are included in this batch.</div>
+            <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
+      </footer>
       {isSummaryExpanded ? (
         <PreviewSummaryModal
           title="Edit Tracks Preview Summary"

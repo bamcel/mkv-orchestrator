@@ -1,4 +1,5 @@
-import { Activity, Captions, Database, FileCog, FolderOpen, ListVideo, Logs, RefreshCw, Settings, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { PanelLeftClose, PanelLeftOpen, Activity, Captions, Database, FileCog, FolderOpen, ListVideo, Logs, RefreshCw, Settings, Trash2 } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getStatus } from "../api";
@@ -20,6 +21,7 @@ const navItems = [
 ];
 
 export function Layout() {
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("mkvo.sidebar.collapsed") === null ? window.innerWidth < 1100 : localStorage.getItem("mkvo.sidebar.collapsed") === "true");
   const isSettingsPage = useLocation().pathname === "/settings";
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const missingTools = status.data?.tools.filter((tool) => !tool.available).length ?? 0;
@@ -29,8 +31,9 @@ export function Layout() {
 
   return (
     <div className="h-screen overflow-hidden bg-window text-text">
-      <div className="grid h-screen grid-cols-[14.75rem_1fr]">
+      <div className={`grid h-screen ${collapsed ? "grid-cols-[4.5rem_minmax(0,1fr)]" : "grid-cols-[14.75rem_minmax(0,1fr)]"}`}>
         <aside className="flex h-screen min-h-0 flex-col border-r border-border bg-sidebar px-3 py-5">
+          <button type="button" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => { localStorage.setItem("mkvo.sidebar.collapsed", String(!value)); return !value; })} className="mb-3 flex h-8 items-center justify-center rounded-md text-muted hover:bg-input-hover focus-visible:outline-accent">{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button>
           <div className="mb-8 flex items-center gap-3 px-1">
             <div className="flex h-9 w-9 items-center justify-center">
               <span
@@ -50,18 +53,20 @@ export function Layout() {
                 aria-hidden="true"
               />
             </div>
-            <div>
+            <div className={collapsed ? "hidden" : ""}>
               <div className="text-base font-bold text-app-title">MKV Orchestrator</div>
               <div className="mt-0.5 text-xs text-subtle">Media operations console</div>
             </div>
           </div>
 
-          <nav className="space-y-1.5">
+          <nav className="min-h-0 flex-1 overflow-y-auto space-y-1.5">
             {navItems.filter((item) => !item.requiresMp4 || hasMp4Files).map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink
                   key={item.to}
+                  title={collapsed ? item.label : undefined}
+                  aria-label={item.label}
                   to={item.to}
                   className={({ isActive }) =>
                     [
@@ -73,13 +78,13 @@ export function Layout() {
                   }
                 >
                   <Icon size={16} />
-                  <span>{item.label}</span>
+                  <span className={collapsed ? "sr-only" : ""}>{item.label}</span>
                 </NavLink>
               );
             })}
           </nav>
 
-          <div className="mt-auto">
+          <div className={`mt-auto ${collapsed ? "hidden" : ""}`}>
           <SignOutButton className="mb-3 hidden md:block" />
           <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-panel p-3">
             <div className="text-[0.6875rem] font-semibold uppercase tracking-wide text-subtle">Status</div>
@@ -94,8 +99,8 @@ export function Layout() {
           </div>
         </aside>
 
-        <main className={`flex min-h-0 min-w-0 flex-col overflow-hidden ${isSettingsPage ? "px-4 py-4 sm:px-6 lg:px-8" : "px-8 py-8"}`}>
-          <header className="shrink-0 md:hidden"><SignOutButton className="mb-3" /></header>
+        <main className={`flex min-h-0 min-w-0 flex-col overflow-hidden ${isSettingsPage ? "px-4 py-4 sm:px-6 lg:px-8" : "px-4 py-4 lg:px-8 lg:py-8"}`}>
+          <header className={`shrink-0 ${collapsed ? "" : "md:hidden"}`}><SignOutButton className="mb-3" /></header>
           {selectionError ? (
             <div role="alert" className="mb-3 shrink-0 rounded-md border border-warning bg-panel px-4 py-2 text-sm text-warning">
               Selection sync failed: {selectionError}

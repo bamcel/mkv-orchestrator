@@ -931,28 +931,7 @@ export function RenamePage() {
             className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none placeholder:text-subtle focus:border-accent disabled:text-disabled"
           />
 
-          <div className="mt-3 text-sm font-semibold">Execution</div>
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={runPreview}
-              disabled={preview.isPending || selectedFiles.length === 0 || !selectedResult}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
-            >
-              {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
-              Preview
-            </button>
-            <button
-              type="button"
-              onClick={runApply}
-              disabled={apply.isPending || previewRows.length === 0 || selectedCount === 0}
-              className="inline-flex h-9 flex-1 items-center justify-center rounded-md bg-accent px-3 text-sm font-semibold text-window transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled"
-            >
-              Apply
-            </button>
-          </div>
 
-          <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
           </div>
 
           <div className={renameMode === "batch-movies" ? "" : "hidden"}>
@@ -1000,17 +979,7 @@ export function RenamePage() {
               {renameTemplates.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
 
-            <div className="mt-3 text-sm font-semibold">Execution</div>
-            <div className="mt-3 flex gap-2">
-              <button type="button" onClick={previewBatchMovies} disabled={batchBusy || batchMatches.every((item) => item.results.length === 0)} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
-                {batchBusy && batchMatches.length > 0 ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
-                Preview
-              </button>
-              <button type="button" onClick={applyBatchMovies} disabled={batchApplying || batchPlans.length === 0 || selectedCount === 0} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
-                {batchApplying ? "Applying..." : "Apply"}
-              </button>
-            </div>
-            <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
+
           </div>
         </section>
 
@@ -1140,6 +1109,41 @@ export function RenamePage() {
         </section>
         </div>
       </div>
+      <footer aria-label="Batch actions" className="mt-3 shrink-0 rounded-lg border border-border bg-card px-4 pb-3">
+        <div className="mt-2 text-xs text-muted">{selectedCount} files selected for renaming</div>
+        {renameMode === "batch-movies" ? <>             <div className="mt-3 text-sm font-semibold">Execution</div>
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={previewBatchMovies} disabled={batchBusy || batchMatches.every((item) => item.results.length === 0)} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
+                {batchBusy && batchMatches.length > 0 ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
+                Preview
+              </button>
+              <button type="button" onClick={applyBatchMovies} disabled={batchApplying || batchPlans.length === 0 || selectedCount === 0} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
+                {batchApplying ? "Applying..." : `Apply to ${selectedCount} files`}
+              </button>
+            </div>
+            <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div> </> : <>           <div className="mt-3 text-sm font-semibold">Execution</div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={runPreview}
+              disabled={preview.isPending || selectedFiles.length === 0 || !selectedResult}
+              className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text disabled:cursor-not-allowed disabled:text-disabled"
+            >
+              {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
+              Preview
+            </button>
+            <button
+              type="button"
+              onClick={runApply}
+              disabled={apply.isPending || previewRows.length === 0 || selectedCount === 0}
+              className="inline-flex h-9 flex-1 items-center justify-center rounded-md bg-accent px-3 text-sm font-semibold text-window transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled"
+            >
+              Apply to {selectedCount} files
+            </button>
+          </div>
+
+          <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div> </>}
+      </footer>
       {isUndoOpen ? (
         <RenameUndoBatchModal
           batches={renameBatches.data?.batches ?? []}

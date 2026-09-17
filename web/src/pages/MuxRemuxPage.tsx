@@ -10,6 +10,8 @@ import {
   MuxPreviewResponse,
   startMuxApply
 } from "../api";
+import { LanguageChips } from "../components/LanguageChips";
+import { PanelDivider } from "../components/PanelDivider";
 import { PreviewSummaryModal } from "../components/PreviewSummaryModal";
 import { SectionHeader } from "../components/SectionHeader";
 import { SortableColumnHeader, type SortDirection } from "../components/SortableColumnHeader";
@@ -56,6 +58,9 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
   const [highlightedPaths, setHighlightedPaths] = useState<string[]>([]);
   const [selectionAnchorPath, setSelectionAnchorPath] = useState("");
   const [fileSort, setFileSort] = useState<{ key: FileSortKey; direction: SortDirection }>({ key: "file", direction: "asc" });
+  const [filePanelPercent, setFilePanelPercent] = useState(56);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const languageSuggestions = (type: string) => [...new Set(files.flatMap((file) => file.tracks.filter((track) => type === "subtitle" ? ["subtitle", "subtitles"].includes(track.type.toLowerCase()) : track.type.toLowerCase() === type).map((track) => track.language || "und")))];
   const initializedSelectionScope = useRef("");
 
   useEffect(() => {
@@ -284,7 +289,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title={pageTitle} description={pageDescription} />
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(14rem,18.75rem)_minmax(0,1fr)] gap-3">
         <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           {workflow !== "subtitles" ? <div className="flex items-center justify-between">
             {workflow === "remove" ? <h2 className="text-base font-semibold">Track Options</h2> : <span />}
@@ -295,9 +300,9 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
             <div className="mt-3 space-y-2">
               <h2 className="text-sm font-semibold">Track Removal</h2>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={removeAudio} onChange={(event) => setRemoveAudio(event.target.checked)} /> Remove unwanted audio languages</label>
-              <Field compact label="Audio languages to keep" value={audioLanguages} onChange={setAudioLanguages} placeholder="eng,jpn" />
+              <LanguageChips label="Audio languages to keep" value={audioLanguages} onChange={setAudioLanguages} suggestions={languageSuggestions("audio")} />
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={removeSubtitles} onChange={(event) => setRemoveSubtitles(event.target.checked)} /> Remove unwanted subtitle languages</label>
-              <Field compact label="Subtitle languages to keep" value={subtitleLanguages} onChange={setSubtitleLanguages} placeholder="eng" />
+              <LanguageChips label="Subtitle languages to keep" value={subtitleLanguages} onChange={setSubtitleLanguages} suggestions={languageSuggestions("subtitle")} />
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={removeTrackIds} onChange={(event) => setRemoveTrackIds(event.target.checked)} /> Remove unwanted track IDs</label>
               <Field compact label="Track IDs to remove" value={trackIds} onChange={setTrackIds} placeholder="1 or 1, 3" />
               <h2 className="pt-1 text-sm font-semibold">Preservation Options</h2>
@@ -315,7 +320,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
               </div>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={muxExternal} onChange={(event) => setMuxExternal(event.target.checked)} /> Mux matching external subtitles</label>
               <div className="text-sm text-muted">File Format: <span className="text-accent">file_name.language.tag.ext</span></div>
-              <Field label="Fallback language" value={externalLanguage} onChange={setExternalLanguage} placeholder="eng" />
+              <LanguageChips label="Fallback language" value={externalLanguage} onChange={setExternalLanguage} suggestions={languageSuggestions("subtitle")} single />
               <Field label="Subtitle formats" value={externalFormats} onChange={setExternalFormats} placeholder="srt,ass,ssa,sub,idx" />
               <h2 className="pt-1 text-sm font-semibold">Mux Options</h2>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={preserveSidecars} onChange={(event) => setPreserveSidecars(event.target.checked)} /> Preserve external subtitle files</label>
@@ -324,7 +329,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
               <p className="text-xs leading-5 text-muted">Example: Episode 01.eng.Dialogue.ass. See Settings for detailed usage.</p>
               <h2 className="pt-1 text-sm font-semibold">Subtitle Extract</h2>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extractSubtitles} onChange={(event) => setExtractSubtitles(event.target.checked)} /> Extract subtitles</label>
-              <Field label="Subtitle languages" value={extractLanguages} onChange={setExtractLanguages} placeholder="eng or all" />
+              <LanguageChips label="Subtitle languages" value={extractLanguages} onChange={setExtractLanguages} suggestions={languageSuggestions("subtitle")} allowAll />
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extractOverwrite} onChange={(event) => setExtractOverwrite(event.target.checked)} /> Overwrite existing extracted files</label>
             </div>
           ) : null}
@@ -341,32 +346,10 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
             </div>
           ) : null}
 
-          <h2 className={`${workflow === "remove" ? "mt-3" : "mt-4"} text-sm font-semibold`}>Execution</h2>
-          <div className="mt-2 flex gap-2">
-            <button onClick={runPreview} disabled={preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0))} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
-              {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
-              Preview
-            </button>
-            {isApplying ? (
-              <button onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-9 flex-1 rounded-md border border-warning bg-button px-3 text-sm font-semibold text-warning hover:bg-button-hover disabled:text-disabled">
-                Cancel
-              </button>
-            ) : (
-              <button onClick={runApply} disabled={(selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0)) || !previewResult?.actions.length} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
-                Apply
-              </button>
-            )}
-          </div>
-          <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
-          <div className="mt-1 text-xs text-muted">
-            {selectedCount} selected | {selectedMkvPaths.length} selected MKV | {mkvFiles.length} MKV available
-          </div>
-          {selectedNonMkvCount > 0 && workflow !== "convert" ? (
-            <div className="mt-1 text-xs text-warning">{selectedNonMkvCount} selected non-MKV file(s) are visible for context and excluded from this operation.</div>
-          ) : null}
+
         </section>
 
-        <div className="grid min-h-0 min-w-0 grid-rows-[1.3fr_1fr] gap-3">
+        <div ref={panelRef} className="grid min-h-0 min-w-0" style={{ gridTemplateRows: `minmax(0,${filePanelPercent}fr) 12px minmax(0,${100 - filePanelPercent}fr)` }}>
           <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex shrink-0 items-center justify-between gap-3">
               <h2 className="text-base font-semibold">File Info</h2>
@@ -434,6 +417,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
             </div>
           </section>
 
+          <PanelDivider containerRef={panelRef} value={filePanelPercent} onChange={setFilePanelPercent} />
           <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex shrink-0 gap-6 text-sm">
               <button onClick={() => setDetailTab("tracks")} className={detailTab === "tracks" ? "border-b border-accent pb-1 font-semibold text-text" : "pb-1 font-semibold text-muted"}>File Details: Tracks</button>
@@ -496,6 +480,30 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
 
         </div>
       </div>
+      <footer aria-label="Batch actions" className="mt-3 shrink-0 rounded-lg border border-border bg-card px-4 pb-3">
+          <div className="mt-2 flex gap-2">
+            <button onClick={runPreview} disabled={isApplying || preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0))} className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text disabled:text-disabled">
+              {preview.isPending ? <RefreshCw size={15} className="animate-spin" /> : <Wand2 size={15} />}
+              Preview
+            </button>
+            {isApplying ? (
+              <button onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-9 flex-1 rounded-md border border-warning bg-button px-3 text-sm font-semibold text-warning hover:bg-button-hover disabled:text-disabled">
+                Cancel
+              </button>
+            ) : (
+              <button onClick={runApply} disabled={apply.isPending || preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0)) || !previewResult?.actions.length} className="h-9 flex-1 rounded-md bg-accent px-3 text-sm font-semibold text-window hover:bg-accent-hover disabled:bg-button disabled:text-disabled">
+                Apply to {new Set(previewResult?.actions.map((action) => action.filePath) ?? []).size || (selectedMkvPaths.length + (convertMp4 ? selectedMp4Paths.length : 0))} files
+              </button>
+            )}
+          </div>
+          <div className="mt-3 line-clamp-2 text-sm text-success">{statusText}</div>
+          <div className="mt-1 text-xs text-muted">
+            {selectedCount} selected | {selectedMkvPaths.length} selected MKV | {mkvFiles.length} MKV available
+          </div>
+          {selectedNonMkvCount > 0 && workflow !== "convert" ? (
+            <div className="mt-1 text-xs text-warning">{selectedNonMkvCount} selected non-MKV file(s) are visible for context and excluded from this operation.</div>
+          ) : null}
+      </footer>
       {isSummaryExpanded ? (
         <PreviewSummaryModal
           title={`${pageTitle} Preview Summary`}
