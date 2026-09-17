@@ -1,5 +1,5 @@
-import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { createContext, type ReactNode, useContext, useEffect, useRef, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getOperationJob, type OperationJobResponse } from "../api";
 
 const storageKey = "mkvo.web.activeOperationJob";
@@ -38,7 +38,15 @@ export function OperationJobProvider({ children }: { children: ReactNode }) {
       return job && terminalStatuses.has(job.status) ? false : 1000;
     }
   });
+  const queryClient = useQueryClient();
+  const refreshedJob = useRef<string | null>(null);
   const job = jobQuery.data;
+  useEffect(() => {
+    if (!job || !terminalStatuses.has(job.status) || refreshedJob.current === job.id) return;
+    refreshedJob.current = job.id;
+    void queryClient.invalidateQueries({ queryKey: ["current-scan-files"] });
+    void queryClient.invalidateQueries({ queryKey: ["propedit-template"] });
+  }, [job, queryClient]);
   const isRunning = Boolean(activeOperation && (!job || !terminalStatuses.has(job.status)));
   const statusText = useMemo(() => {
     if (!activeOperation) return null;

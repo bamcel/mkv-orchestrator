@@ -9,7 +9,7 @@ import { MuxRemuxPage } from "./pages/MuxRemuxPage";
 import { RenamePage } from "./pages/RenamePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TrackPropertiesPage } from "./pages/TrackPropertiesPage";
-import { MediaLibraryProvider } from "./state/MediaLibraryContext";
+import { MediaLibraryProvider, MediaLibrarySynchronizer } from "./state/MediaLibraryContext";
 import { PropEditTemplateWarmer } from "./state/propEditTemplate";
 import { OperationJobProvider } from "./state/OperationJobContext";
 
@@ -24,6 +24,7 @@ function ProtectedApp() {
       <OperationJobProvider>
       {/* Reads the track layout as soon as a scan lands, so Edit Tracks
           opens with it rather than starting the read on arrival. */}
+      <MediaLibrarySynchronizer />
       <PropEditTemplateWarmer />
       <Routes>
         <Route element={<Layout />}>

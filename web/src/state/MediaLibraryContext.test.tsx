@@ -306,3 +306,16 @@ describe("adopting the backend working set", () => {
     expect(result.current.templateFilePath).toBe("");
   });
 });
+
+
+it("keeps manually removed files excluded when newer operation results arrive", () => {
+  localStorage.clear(); sessionStorage.clear();
+  const { result } = library();
+  const first = file("/media/first.mkv");
+  const removed = file("/media/removed.mkv");
+  act(() => result.current.syncFromBackend({ files: [first, removed], selectedPaths: [first.path], summary: emptySummary, updatedUtc: "2026-09-17T01:00:00Z" }));
+  act(() => result.current.removeFilesFromView([removed.path]));
+  act(() => result.current.syncFromBackend({ files: [{ ...first, codec: "HEVC" }, removed], selectedPaths: [first.path, removed.path], summary: emptySummary, updatedUtc: "2026-09-17T02:00:00Z" }));
+  expect(result.current.files).toEqual([{ ...first, codec: "HEVC" }]);
+  expect(result.current.selectedPaths).toEqual([first.path]);
+});

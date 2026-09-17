@@ -18,6 +18,7 @@ export function DashboardPage() {
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const {
     files,
+    removeFilesFromView,
     setFiles,
     selectedPaths,
     setSelectedPaths,
@@ -493,7 +494,7 @@ export function DashboardPage() {
   function removeFilesFromList(paths: string[]) {
     const selectedKeys = new Set(paths.map(normalizeCompareValue));
     const remaining = files.filter((item) => !selectedKeys.has(normalizeCompareValue(item.path)));
-    setFiles(remaining);
+    removeFilesFromView(paths);
     setSelectedPaths([]);
     setSelectionAnchorPath("");
     setSelectedFilePath(remaining[0]?.path ?? "");

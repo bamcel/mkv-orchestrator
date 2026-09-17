@@ -208,15 +208,6 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
     };
   }
 
-  async function refreshFiles() {
-    const result = await currentScan.refetch();
-    if (result.data?.files.length) {
-      syncFromBackend(result.data);
-      setStatusText(`Loaded ${result.data.files.length} scanned file(s).`);
-    } else {
-      setStatusText("No Dashboard scan is available yet.");
-    }
-  }
 
   function togglePath(path: string) {
     toggleSelectedPath(path);
@@ -298,7 +289,6 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
         <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           {workflow !== "subtitles" ? <div className="flex items-center justify-between">
             {workflow === "remove" ? <h2 className="text-base font-semibold">Track Options</h2> : <span />}
-            <button onClick={refreshFiles} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">Refresh</button>
           </div> : null}
 
           {workflow === "remove" ? (
@@ -320,7 +310,6 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
           {workflow === "subtitles" ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <button onClick={refreshFiles} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted hover:bg-button-hover hover:text-text">Refresh</button>
               </div>
               <div role="tablist" aria-label="Subtitle options" className="flex gap-3 border-b border-border">
                 {(["mux", "extract"] as const).map((tab) => <button

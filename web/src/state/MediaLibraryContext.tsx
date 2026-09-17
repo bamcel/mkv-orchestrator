@@ -1,8 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { CurrentScanResponse, getCurrentScanFiles, MediaFileRow, setFileSelection } from "../api";
 
 type MediaLibraryContextValue = {
   files: MediaFileRow[];
+  removeFilesFromView: (paths: string[]) => void;
   setFiles: (files: MediaFileRow[]) => void;
   /** Replace the visible operation scope without replacing the backend scan. */
   setWorkingView: (files: MediaFileRow[], selectedPaths: string[], templatePath: string) => void;
@@ -91,6 +93,7 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
   // ref also lets syncFromBackend remain stable: Dashboard depends on that
   // callback, and recreating it whenever files changed caused the cached empty
   // scan response to overwrite a newly completed scan after Clear UI Cache.
+  const removedPaths = useRef(new Set(readStored<string[]>(sessionStorage, "mkvo.web.removedPaths", [])));
   const adoptedUpdatedUtc = useRef<string | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const selectionPush = useRef<Promise<void>>(Promise.resolve());
@@ -146,11 +149,12 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
     const scopedFiles = sourcePaths?.length
       ? scan.files.filter((file) => sourcePaths.some((source) => isPathWithinSource(file.path, source)))
       : scan.files;
+    const visibleFiles = scopedFiles.filter((file) => !removedPaths.current.has(pathKey(file.path)));
     const nextFiles = viewPaths
-      ? scopedFiles.filter((file) => viewPaths.has(pathKey(file.path)))
-      : scopedFiles;
+      ? visibleFiles.filter((file) => viewPaths.has(pathKey(file.path)))
+      : visibleFiles;
     setFilesState(nextFiles);
-    if (viewPaths || sourcePaths?.length) {
+    if (viewPaths || sourcePaths?.length || removedPaths.current.size) {
       const available = new Set(nextFiles.map((file) => pathKey(file.path)));
       setSelectedPathsState(scan.selectedPaths.filter((path) => available.has(pathKey(path))));
     } else {
@@ -163,6 +167,8 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearLibraryCache = useCallback(() => {
+    removedPaths.current.clear();
+    sessionStorage.removeItem("mkvo.web.removedPaths");
     workingViewPaths.current = null;
     setIsWorkingView(false);
     adoptedUpdatedUtc.current = null;
@@ -181,11 +187,18 @@ export function MediaLibraryProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<MediaLibraryContextValue>(() => ({
     files,
+    removeFilesFromView: (paths) => {
+      for (const path of paths) removedPaths.current.add(pathKey(path));
+      write(sessionStorage, "mkvo.web.removedPaths", [...removedPaths.current]);
+      setFilesState((current) => current.filter((file) => !removedPaths.current.has(pathKey(file.path))));
+    },
     setFiles: (nextFiles) => {
       // A direct replacement is a new Dashboard scan or an explicit clear and
       // therefore ends a scoped Library handoff.
       workingViewPaths.current = null;
       setIsWorkingView(false);
+      for (const file of nextFiles) removedPaths.current.delete(pathKey(file.path));
+      write(sessionStorage, "mkvo.web.removedPaths", [...removedPaths.current]);
       setFilesState(nextFiles);
       setTemplateFilePath((current) => {
         if (nextFiles.length === 0) return "";
@@ -278,4 +291,11 @@ export function useMediaLibrary() {
   }
 
   return context;
+}
+
+export function MediaLibrarySynchronizer() {
+  const { syncFromBackend } = useMediaLibrary();
+  const currentScan = useQuery({ queryKey: ["current-scan-files"], queryFn: getCurrentScanFiles });
+  useEffect(() => { if (currentScan.data) syncFromBackend(currentScan.data); }, [currentScan.data, syncFromBackend]);
+  return null;
 }
