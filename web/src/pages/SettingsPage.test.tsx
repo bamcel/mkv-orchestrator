@@ -274,6 +274,11 @@ describe("Settings library folders", () => {
     expect(saveWebSettings.mock.calls.at(-1)?.[0].defaultRoot).toBe("D:\\Media");
     expect(saveWebSettings.mock.calls.at(-1)?.[0].defaultRootName).toBe("Downloads");
     expect(saveWebSettings.mock.calls.at(-1)?.[0].libraryRoots).toEqual([]);
+    const savedNotification = await screen.findByText("Settings saved automatically.");
+    expect(savedNotification.closest('[role="status"]')).toHaveClass("fixed", "bottom-4", "right-4");
+    expect(screen.getByRole("navigation", { name: "Settings sections" })).not.toContainElement(savedNotification);
+    await user.click(screen.getByRole("button", { name: "Dismiss settings notification" }));
+    expect(screen.queryByText("Settings saved automatically.")).not.toBeInTheDocument();
   });
 
   it("saves the desktop default directory separately from Quick Access", async () => {

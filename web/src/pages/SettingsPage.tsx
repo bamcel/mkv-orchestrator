@@ -187,7 +187,15 @@ export function SettingsPage() {
   const [selectedThemeColor, setSelectedThemeColor] = useState<ThemeColorName>("AppTitle");
   const [customThemeName, setCustomThemeName] = useState("My Theme");
   const [settingsStatus, setSettingsStatus] = useState("");
+  const [statusPopupVisible, setStatusPopupVisible] = useState(false);
   const lastSavedFingerprint = useRef("");
+
+  useEffect(() => {
+    setStatusPopupVisible(Boolean(settingsStatus));
+    if (settingsStatus !== "Settings saved automatically.") return;
+    const timer = window.setTimeout(() => setStatusPopupVisible(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [settingsStatus]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -508,7 +516,6 @@ export function SettingsPage() {
               <SettingsTabButton key={tab.id} tab={tab} active={activeTab === tab.id} onSelect={setActiveTab} />
             ))}
           </nav>
-          {activeTab !== "security" ? <p role="status" className="text-right text-xs text-accent lg:max-w-48" title={settingsStatus}>{settingsStatus}</p> : null}
         </div>
 
         <section aria-labelledby="settings-page-heading" className="min-w-0 flex-1 rounded-2xl border border-border bg-card p-4 xl:min-h-0 xl:overflow-y-auto">
@@ -1305,6 +1312,13 @@ export function SettingsPage() {
             </div>
           ) : null}
         </section>
+
+      {statusPopupVisible && settingsStatus ? (
+        <div role="status" aria-live="polite" aria-atomic="true" className="fixed bottom-4 right-4 z-50 flex max-w-[calc(100vw-2rem)] items-start gap-3 rounded-xl border border-border bg-panel p-4 shadow-lg sm:max-w-sm">
+          <p className="min-w-0 break-words text-sm text-text">{settingsStatus}</p>
+          <button type="button" aria-label="Dismiss settings notification" onClick={() => setStatusPopupVisible(false)} className="shrink-0 rounded-md text-subtle hover:text-text focus-visible:outline focus-visible:outline-accent"><X size={16} /></button>
+        </div>
+      ) : null}
 
       {browsingRow !== null ? (
         <FileBrowser
