@@ -104,6 +104,12 @@ describe("MKV Operations file selection", () => {
     await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
     expect(buildMuxPreview.mock.calls[0][0].manualSubtitleSelections).toEqual([]);
     expect(buildMuxPreview.mock.calls[0][0].muxMatchingExternalSubtitles).toBe(false);
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await user.click(screen.getByRole("checkbox", { name: /^Extract subtitles$/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Extract all subtitles regardless of language" }));
+    await user.click(screen.getByRole("button", { name: "Preview Summary" }));
+    await waitFor(() => expect(buildMuxPreview).toHaveBeenCalledTimes(2));
+    expect(buildMuxPreview.mock.calls[1][0]).toEqual(expect.objectContaining({ extractSubtitles: true, extractSubtitleLanguages: "all" }));
   });
 
   it("shows MP4 conversion above track removal when MP4 files are present", async () => {

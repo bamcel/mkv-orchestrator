@@ -299,6 +299,7 @@ fn build_extractions(
                 .filter(|track| track.kind == TrackKind::Subtitle)
                 .filter(|track| {
                     languages.is_empty()
+                        || languages.contains(&"all".to_owned())
                         || languages
                             .contains(&track.language_or_undetermined().to_ascii_lowercase())
                 })
@@ -719,6 +720,22 @@ mod tests {
             provider_match: None,
             status: MediaStatus::Ready,
         }
+    }
+
+    #[test]
+    fn extracting_all_languages_includes_unknown_languages_and_excludes_video() {
+        let mut file = media("episode.mkv");
+        for (id, language) in [(1, Some("eng")), (2, Some("jpn")), (3, None)] {
+            let mut track = file.tracks[0].clone();
+            track.mkvmerge_id = id;
+            track.kind = TrackKind::Subtitle;
+            track.codec = "SubRip".to_owned();
+            track.language = language.map(str::to_owned);
+            file.tracks.push(track);
+        }
+        let files = [file];
+        assert_eq!(build_extractions(&files, "all", false)[&files[0].path].len(), 3);
+        assert_eq!(build_extractions(&files, "eng", false)[&files[0].path].len(), 1);
     }
 
     fn mux_request(plan: Option<&RemuxPlan>) -> MuxPreviewRequest {

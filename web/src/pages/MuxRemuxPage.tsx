@@ -46,6 +46,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
   const [preserveSidecars, setPreserveSidecars] = useState(true);
   const [skipExistingSubtitle, setSkipExistingSubtitle] = useState(false);
   const [extractSubtitles, setExtractSubtitles] = useState(false);
+  const previousExtractLanguages = useRef("eng");
   const [extractLanguages, setExtractLanguages] = useState("eng");
   const [extractOverwrite, setExtractOverwrite] = useState(false);
   const [convertMp4, setConvertMp4] = useState(false);
@@ -332,6 +333,14 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
               <p className="text-xs leading-5 text-muted">Example: Episode 01.eng.Dialogue.ass. See Settings for detailed usage.</p>
               <h2 className="pt-1 text-sm font-semibold">Subtitle Extract</h2>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extractSubtitles} onChange={(event) => setExtractSubtitles(event.target.checked)} /> Extract subtitles</label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={extractLanguages === "all"} onChange={(event) => {
+                  if (event.target.checked) { previousExtractLanguages.current = extractLanguages; setExtractLanguages("all"); }
+                  else setExtractLanguages(previousExtractLanguages.current);
+                }} />
+                Extract all subtitles regardless of language
+              </label>
+              {extractLanguages === "all" ? <p className="text-xs text-muted">Every subtitle track will be extracted, including tracks with an unknown language.</p> : null}
               <LanguageChips label="Subtitle languages" value={extractLanguages} onChange={setExtractLanguages} suggestions={languageSuggestions("subtitle")} allowAll />
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={extractOverwrite} onChange={(event) => setExtractOverwrite(event.target.checked)} /> Overwrite existing extracted files</label>
             </div>

@@ -16,7 +16,7 @@ export function LanguageChips({ label, value, onChange, suggestions = [], single
   }
   return <div className="relative mt-2" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}>
     <label htmlFor={id} className="text-xs font-semibold text-muted">{label}</label>
-    <div className="mt-1 flex min-h-9 flex-wrap items-center gap-1 rounded-md border border-border bg-input p-2" aria-label={`${label} selected languages`}>
+    <div className="mt-1 flex min-h-7 flex-wrap items-center gap-1" aria-label={`${label} selected languages`}>
       {selected.map((code) => <span key={code} className="inline-flex items-center gap-1 rounded bg-selected px-2 py-1 text-xs">{names[code] ?? code} · {code}<button type="button" aria-label={`Remove ${names[code] ?? code}`} onClick={() => onChange(selected.filter((item) => item !== code).join(","))} className="px-1 text-muted hover:text-text">×</button></span>)}
       {selected.length === 0 ? <span className="text-xs text-subtle">No languages selected</span> : null}
     </div>
