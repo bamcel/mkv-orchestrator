@@ -115,15 +115,39 @@ button[class*="bg-accent"]:not(:disabled):hover {
   background: color-mix(in srgb, var(--color-accent) 28%, transparent);
 }
 
-/* Let file columns follow their content instead of filling the panel width. */
+/* Fill the panel while keeping metadata compact and filenames shrinkable. */
 .file-info-table {
-  width: max-content;
+  width: 100%;
   min-width: 0;
   table-layout: auto;
 }
 .file-info-table th,
 .file-info-table td {
-  width: auto;
   max-width: none;
   white-space: nowrap;
+}
+.file-info-table th:not(:first-child),
+.file-info-table td:not(:first-child) {
+  width: 1%;
+}
+.file-info-table td:first-child {
+  max-width: 0;
+  overflow: hidden;
+}
+.file-info-table .file-name {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-info-table.rename-file-table {
+  table-layout: fixed;
+}
+.rename-file-table th,
+.rename-file-table td {
+  width: auto !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

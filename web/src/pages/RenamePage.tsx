@@ -1025,7 +1025,13 @@ export function RenamePage() {
                   toggleHighlightedPreviewSelection();
                 }}
               >
-                <table className="file-info-table border-collapse text-left text-sm">
+                <table className="file-info-table rename-file-table border-collapse text-left text-sm">
+                  <colgroup>
+                    {compactPreview ? <><col style={{ width: "50%" }} /><col style={{ width: "50%" }} /></> : <>
+                      <col style={{ width: "25%" }} /><col style={{ width: "8%" }} /><col style={{ width: "17%" }} />
+                      <col style={{ width: "25%" }} /><col style={{ width: "10%" }} /><col style={{ width: "15%" }} />
+                    </>}
+                  </colgroup>
                   <thead className="sticky top-0 bg-panel text-xs uppercase tracking-wide text-subtle">
                     {compactPreview ? (
                       <tr>
