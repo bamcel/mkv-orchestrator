@@ -311,7 +311,7 @@ it("builds a fresh plan and applies without a manual preview", async () => {
     getCurrentScanFiles: () => Promise.resolve({ files: [file], selectedPaths: [file.path], templateFilePath: file.path, summary: { total: 1, mkv: 1, mp4: 0, failed: 0, cached: 0 }, updatedUtc: "2026-09-17" }),
     buildMuxPreview, startMuxApply
   });
-  const applyButton = screen.getByRole("button", { name: "Apply" });
+  const applyButton = screen.getByRole("button", { name: "Apply Changes" });
   await waitFor(() => expect(applyButton).toBeEnabled());
   expect(screen.queryByRole("button", { name: "Preview" })).not.toBeInTheDocument();
   await user.click(applyButton);
