@@ -741,14 +741,10 @@ export function RenamePage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SectionHeader title="Rename Files" description="Match files to provider metadata and preview safe destination names." />
-      <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2" aria-label="Operation actions">
-        <button type="button" onClick={() => { setIsSummaryExpanded(true); if (renameMode === "batch-movies") void previewBatchMovies(); else runPreview(); }} disabled={preview.isPending || apply.isPending || batchBusy || batchApplying || (renameMode === "batch-movies" ? batchMatches.every((item) => !item.results[item.selectedIndex]) : !selectedResult || selectedFiles.length === 0)} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold disabled:text-disabled">Preview Summary</button>
-        <button type="button" onClick={() => { if (renameMode === "batch-movies") void applyBatchMovies(); else void runApply(); }} disabled={preview.isPending || apply.isPending || batchBusy || batchApplying || (renameMode === "batch-movies" ? batchMatches.every((item) => !item.results[item.selectedIndex]) : !selectedResult || selectedFiles.length === 0)} className="h-9 rounded-md bg-accent px-3 text-sm font-semibold disabled:bg-button disabled:text-disabled">Apply</button>
-        <span className="text-xs text-muted">{selectedFiles.length} files selected</span>
-        <span role="status" className="min-w-0 text-xs text-muted">{statusText}</span>
-      </div>
+
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
-        <section className="min-h-0 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold">Rename Options</h2>
             <button
@@ -988,6 +984,13 @@ export function RenamePage() {
 
 
           </div>
+          </div>
+      <div className="mt-3 flex shrink-0 flex-wrap items-center gap-2 border-t border-border pt-3" aria-label="Operation actions">
+        <button type="button" onClick={() => { setIsSummaryExpanded(true); if (renameMode === "batch-movies") void previewBatchMovies(); else runPreview(); }} disabled={preview.isPending || apply.isPending || batchBusy || batchApplying || (renameMode === "batch-movies" ? batchMatches.every((item) => !item.results[item.selectedIndex]) : !selectedResult || selectedFiles.length === 0)} className="h-9 rounded-md border border-border bg-button px-3 text-sm font-semibold disabled:text-disabled">Preview Summary</button>
+        <button type="button" onClick={() => { if (renameMode === "batch-movies") void applyBatchMovies(); else void runApply(); }} disabled={preview.isPending || apply.isPending || batchBusy || batchApplying || (renameMode === "batch-movies" ? batchMatches.every((item) => !item.results[item.selectedIndex]) : !selectedResult || selectedFiles.length === 0)} className="h-9 rounded-md bg-accent px-3 text-sm font-semibold disabled:bg-button disabled:text-disabled">Apply</button>
+        <span className="w-full text-xs text-muted">{selectedFiles.length} files selected</span>
+        <span role="status" className="w-full min-w-0 break-words text-xs text-muted [overflow-wrap:anywhere]">{statusText}</span>
+      </div>
         </section>
 
         <div className="min-h-0 min-w-0">

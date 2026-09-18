@@ -32,20 +32,10 @@ body,
   height: 100%;
 }
 
-/*
- * The console is laid out in rem, so the root font size is the scale control
- * for the whole interface: type, spacing, and every panel width shrink and
- * grow together instead of the layout rearranging itself at breakpoints.
- *
- * 1.1vw hits 16px at about 1453px, the width of a maximised window on a
- * 2560x1600 display at 200% scale, and 12.1px at the 1100px minimum. Between
- * those the proportions are identical, which is the point -- a small window is
- * the same design seen smaller, not a different one. The clamp stops type
- * becoming unreadable below the minimum and stops it ballooning on very wide
- * monitors, where extra width is better spent on content than on scale.
- */
+/* Rem-based controls scale together, at 90% of the previous base size.
+ * Keep the viewport scaling and bounds proportional to that reduction. */
 html {
-  font-size: clamp(12px, 1.1vw, 16px);
+  font-size: clamp(10.8px, 0.99vw, 14.4px);
   background: var(--color-window);
 }
 
