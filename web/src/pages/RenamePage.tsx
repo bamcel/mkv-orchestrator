@@ -1104,7 +1104,7 @@ export function RenamePage() {
                               <FileName value={row.currentFileName} />
                             </div>
                           </td>
-                          <td className="truncate whitespace-nowrap border-b border-border px-3 py-2" title={row.detected}>{row.detected}</td>
+                          <td className="truncate whitespace-nowrap border-b border-border px-3 py-2" title={row.detected}>{row.detected || "-"}</td>
                           <td className="max-w-[15rem] truncate border-b border-border px-3 py-2" title={row.episodeName}>{row.episodeName || "-"}</td>
                           <td className={["max-w-[21.25rem] truncate border-b border-border px-3 py-2", changedTextClass].join(" ")} title={row.newFileName}><FileName value={row.newFileName || "-"} /></td>
                           <td className="truncate whitespace-nowrap border-b border-border px-3 py-2" title={row.confidence}>{row.confidence}</td>

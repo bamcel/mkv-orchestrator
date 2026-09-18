@@ -2,7 +2,9 @@ use mkvo_contracts::{
     PropEditActionRow, PropEditNoChangeRow, PropEditSkippedRow, RenameApplyResponse,
     RenamePreviewRow, RenameScopeRow,
 };
-use mkvo_domain::{IdempotencyKey, PropertyEditPlan, RemuxPlan, RenamePlan};
+use mkvo_domain::{
+    EpisodeIdentity, IdempotencyKey, MediaFile, PropertyEditPlan, RemuxPlan, RenamePlan,
+};
 
 use super::rename_presentation::{
     file_name, redacted_remux_command, remux_description, remux_mode_label, remux_tool_name,
@@ -15,12 +17,19 @@ pub(super) fn rename_preview_response(
     plan: &RenamePlan,
     scopes: Vec<RenameScopeRow>,
     key: IdempotencyKey,
+    files: &[MediaFile],
 ) -> RenamePreviewResponse {
     let items: Vec<_> = plan
         .payload
         .items
         .iter()
         .map(|item| {
+            let episode = files
+                .iter()
+                .find(|file| file.path == item.source)
+                .and_then(|file| file.episode.as_ref());
+            let (detected, episode_name) =
+                rename_episode_details(&file_name(&item.source), episode);
             let no_change = same_path(&item.source, &item.target);
             let status = item
                 .conflicts
@@ -30,8 +39,8 @@ pub(super) fn rename_preview_response(
                 selected: item.can_apply(),
                 source_path: display_path(&item.source),
                 current_file_name: file_name(&item.source),
-                detected: String::new(),
-                episode_name: String::new(),
+                detected,
+                episode_name,
                 new_file_name: item.new_file_name.clone(),
                 confidence: if item.can_apply() {
                     "High".to_owned()
@@ -57,6 +66,25 @@ pub(super) fn rename_preview_response(
         plan_fingerprint: Some(plan.metadata.fingerprint.clone()),
         idempotency_key: Some(key),
     }
+}
+
+fn rename_episode_details(name: &str, episode: Option<&EpisodeIdentity>) -> (String, String) {
+    let detected = if episode.is_some_and(|episode| episode.is_movie) {
+        "Movie".to_owned()
+    } else if let Some((season, number)) = mkvo_application::parse_season_episode(name) {
+        format!("S{season:02}E{number:02}")
+    } else if let Some(number) = mkvo_application::parse_episode_number(name) {
+        format!("Episode {number}")
+    } else {
+        "Not detected".to_owned()
+    };
+    let title = episode
+        .filter(|episode| !episode.is_movie)
+        .and_then(|episode| episode.episode_title.as_deref())
+        .filter(|title| !title.trim().is_empty())
+        .unwrap_or("-")
+        .to_owned();
+    (detected, title)
 }
 
 pub(super) fn rename_apply_response(plan: &RenamePlan, replay: bool) -> RenameApplyResponse {
@@ -207,6 +235,39 @@ mod tests {
     };
 
     use super::rename_apply_response;
+
+    #[test]
+    fn detailed_episode_columns_show_detection_and_matched_title() {
+        let episode = mkvo_domain::EpisodeIdentity {
+            series_title: Some("Tower of God".into()),
+            season: Some(1),
+            episode: Some(1),
+            absolute_episode: None,
+            episode_title: Some("BALL".into()),
+            year: None,
+            is_movie: false,
+        };
+        assert_eq!(
+            super::rename_episode_details("Tower of God - S01E01 - Ball.mkv", Some(&episode)),
+            ("S01E01".into(), "BALL".into())
+        );
+        assert_eq!(
+            super::rename_episode_details("Tower of God - S02E01.mkv", None),
+            ("S02E01".into(), "-".into())
+        );
+        assert_eq!(
+            super::rename_episode_details("unmatched.mkv", None),
+            ("Not detected".into(), "-".into())
+        );
+        let movie = mkvo_domain::EpisodeIdentity {
+            is_movie: true,
+            ..episode
+        };
+        assert_eq!(
+            super::rename_episode_details("Movie.mkv", Some(&movie)),
+            ("Movie".into(), "-".into())
+        );
+    }
 
     #[test]
     fn applied_rename_rows_present_the_target_as_the_current_file() {

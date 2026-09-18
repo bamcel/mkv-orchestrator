@@ -89,7 +89,12 @@ impl MkvoRuntime {
         })?;
         self.persist_plan(&plan).await?;
         let scopes = scope_rows(&episodes);
-        Ok(rename_preview_response(&plan, scopes, key))
+        Ok(rename_preview_response(
+            &plan,
+            scopes,
+            key,
+            &files_for_access,
+        ))
     }
 
     pub(super) async fn probe_source_access(
@@ -152,130 +157,134 @@ impl MkvoRuntime {
         let runtime = self.clone();
         let (plan, replay) = self
             .jobs()
-            .with_resource_lease(&resources, tokio_util::sync::CancellationToken::new(), || {
-                async move {
-                    // Re-check after acquiring the lease. A concurrent request
-                    // may have completed while this request was waiting.
-                    if let Some(journal) = runtime.dependencies().journal.get(&key).await?
-                        && journal.status == mkvo_application::JournalStatus::Completed
-                    {
-                        return Ok((referenced, true));
-                    }
-                    let plan: RenamePlan = runtime
-                        .load_valid_plan(plan_id, &fingerprint, &key)
-                        .await
-                        .map_err(runtime_application_error)?;
-                    let mut journal = mkvo_application::JournalRecord {
-                        idempotency_key: key.clone(),
-                        plan_id,
-                        step: 0,
-                        status: mkvo_application::JournalStatus::Prepared,
-                        resources: plan.context.resources.clone(),
-                        items: plan
-                            .payload
-                            .items
-                            .iter()
-                            .filter(|item| item.can_apply())
-                            .map(|item| mkvo_application::JournalItemOutcome {
-                                key: item.source.to_string_lossy().into_owned(),
-                                status: mkvo_application::JournalItemStatus::Pending,
-                                detail: None,
-                            })
-                            .collect(),
-                        detail: None,
-                        updated_utc: Utc::now(),
-                    };
-                    runtime.dependencies().journal.begin(&journal).await?;
-                    journal.status = mkvo_application::JournalStatus::Running;
-                    runtime.dependencies().journal.advance(&journal).await?;
-
-                    let batch_id = RenameBatchId::new();
-                    let mut batch = RenameBatchRecord {
-                        id: batch_id,
-                        created_at: Utc::now(),
-                        undone_at: None,
-                        provider: plan.payload.provider,
-                        template: plan.payload.template.clone(),
-                        entries: Vec::new(),
-                    };
-                    let mutation = async {
-                        for item in plan.payload.items.iter().filter(|item| item.can_apply()) {
-                            runtime
-                                .revalidate_fingerprint(&item.source_fingerprint)
-                                .await
-                                .map_err(runtime_application_error)?;
-                            journal.detail = Some(format!(
-                                "prepared move {} -> {}; batchId={batch_id}",
-                                item.source.display(),
-                                item.target.display()
-                            ));
-                            journal.updated_utc = Utc::now();
-                            runtime.dependencies().journal.advance(&journal).await?;
-                            runtime
-                                .dependencies()
-                                .file_system
-                                .move_file(&item.source, &item.target)
-                                .await?;
-                            runtime
-                                .apply_renames_to_working_set(&[(
-                                    item.source.clone(),
-                                    item.target.clone(),
-                                )])
-                                .await;
-                            let renamed_fingerprint = runtime
-                                .dependencies()
-                                .file_system
-                                .fingerprint(&item.target)
-                                .await
-                                .ok();
-                            batch.entries.push(RenameBatchEntry {
-                                original_path: item.source.clone(),
-                                renamed_path: item.target.clone(),
-                                original_fingerprint: item.source_fingerprint.clone(),
-                                renamed_fingerprint,
-                            });
-                            // Persist after every move. Together with the pre-move journal
-                            // detail this permits deterministic crash reconciliation.
-                            runtime.dependencies().rename_history.add(&batch).await?;
-                            journal.step = journal.step.saturating_add(1);
-                            journal.complete_item(&item.source.to_string_lossy());
-                            journal.detail = Some(format!(
-                                "completed move {} -> {}; batchId={batch_id}",
-                                item.source.display(),
-                                item.target.display()
-                            ));
-                            journal.updated_utc = Utc::now();
-                            runtime.dependencies().journal.advance(&journal).await?;
+            .with_resource_lease(
+                &resources,
+                tokio_util::sync::CancellationToken::new(),
+                || {
+                    async move {
+                        // Re-check after acquiring the lease. A concurrent request
+                        // may have completed while this request was waiting.
+                        if let Some(journal) = runtime.dependencies().journal.get(&key).await?
+                            && journal.status == mkvo_application::JournalStatus::Completed
+                        {
+                            return Ok((referenced, true));
                         }
-                        Ok::<(), ApplicationError>(())
-                    }
-                    .await;
-                    if let Err(error) = mutation {
-                        journal.fail_first_pending_item(error.to_string());
-                        journal.status = mkvo_application::JournalStatus::Failed;
-                        journal.detail = Some(format!(
+                        let plan: RenamePlan = runtime
+                            .load_valid_plan(plan_id, &fingerprint, &key)
+                            .await
+                            .map_err(runtime_application_error)?;
+                        let mut journal = mkvo_application::JournalRecord {
+                            idempotency_key: key.clone(),
+                            plan_id,
+                            step: 0,
+                            status: mkvo_application::JournalStatus::Prepared,
+                            resources: plan.context.resources.clone(),
+                            items: plan
+                                .payload
+                                .items
+                                .iter()
+                                .filter(|item| item.can_apply())
+                                .map(|item| mkvo_application::JournalItemOutcome {
+                                    key: item.source.to_string_lossy().into_owned(),
+                                    status: mkvo_application::JournalItemStatus::Pending,
+                                    detail: None,
+                                })
+                                .collect(),
+                            detail: None,
+                            updated_utc: Utc::now(),
+                        };
+                        runtime.dependencies().journal.begin(&journal).await?;
+                        journal.status = mkvo_application::JournalStatus::Running;
+                        runtime.dependencies().journal.advance(&journal).await?;
+
+                        let batch_id = RenameBatchId::new();
+                        let mut batch = RenameBatchRecord {
+                            id: batch_id,
+                            created_at: Utc::now(),
+                            undone_at: None,
+                            provider: plan.payload.provider,
+                            template: plan.payload.template.clone(),
+                            entries: Vec::new(),
+                        };
+                        let mutation = async {
+                            for item in plan.payload.items.iter().filter(|item| item.can_apply()) {
+                                runtime
+                                    .revalidate_fingerprint(&item.source_fingerprint)
+                                    .await
+                                    .map_err(runtime_application_error)?;
+                                journal.detail = Some(format!(
+                                    "prepared move {} -> {}; batchId={batch_id}",
+                                    item.source.display(),
+                                    item.target.display()
+                                ));
+                                journal.updated_utc = Utc::now();
+                                runtime.dependencies().journal.advance(&journal).await?;
+                                runtime
+                                    .dependencies()
+                                    .file_system
+                                    .move_file(&item.source, &item.target)
+                                    .await?;
+                                runtime
+                                    .apply_renames_to_working_set(&[(
+                                        item.source.clone(),
+                                        item.target.clone(),
+                                    )])
+                                    .await;
+                                let renamed_fingerprint = runtime
+                                    .dependencies()
+                                    .file_system
+                                    .fingerprint(&item.target)
+                                    .await
+                                    .ok();
+                                batch.entries.push(RenameBatchEntry {
+                                    original_path: item.source.clone(),
+                                    renamed_path: item.target.clone(),
+                                    original_fingerprint: item.source_fingerprint.clone(),
+                                    renamed_fingerprint,
+                                });
+                                // Persist after every move. Together with the pre-move journal
+                                // detail this permits deterministic crash reconciliation.
+                                runtime.dependencies().rename_history.add(&batch).await?;
+                                journal.step = journal.step.saturating_add(1);
+                                journal.complete_item(&item.source.to_string_lossy());
+                                journal.detail = Some(format!(
+                                    "completed move {} -> {}; batchId={batch_id}",
+                                    item.source.display(),
+                                    item.target.display()
+                                ));
+                                journal.updated_utc = Utc::now();
+                                runtime.dependencies().journal.advance(&journal).await?;
+                            }
+                            Ok::<(), ApplicationError>(())
+                        }
+                        .await;
+                        if let Err(error) = mutation {
+                            journal.fail_first_pending_item(error.to_string());
+                            journal.status = mkvo_application::JournalStatus::Failed;
+                            journal.detail = Some(format!(
                             "rename failed after {} completed move(s); batchId={batch_id}; {error}",
                             journal.step
                         ));
+                            journal.updated_utc = Utc::now();
+                            let _ = runtime.dependencies().journal.advance(&journal).await;
+                            return Err(error);
+                        }
+                        journal.status = mkvo_application::JournalStatus::Completed;
+                        journal.detail = Some("rename plan completed".to_owned());
                         journal.updated_utc = Utc::now();
-                        let _ = runtime.dependencies().journal.advance(&journal).await;
-                        return Err(error);
+                        runtime.dependencies().journal.advance(&journal).await?;
+                        runtime
+                            .append_log(
+                                "Rename",
+                                "Rename plan completed",
+                                &format!("planId={plan_id}; fingerprint={fingerprint}"),
+                            )
+                            .await
+                            .map_err(runtime_application_error)?;
+                        Ok((plan, false))
                     }
-                    journal.status = mkvo_application::JournalStatus::Completed;
-                    journal.detail = Some("rename plan completed".to_owned());
-                    journal.updated_utc = Utc::now();
-                    runtime.dependencies().journal.advance(&journal).await?;
-                    runtime
-                        .append_log(
-                            "Rename",
-                            "Rename plan completed",
-                            &format!("planId={plan_id}; fingerprint={fingerprint}"),
-                        )
-                        .await
-                        .map_err(runtime_application_error)?;
-                    Ok((plan, false))
-                }
-            })
+                },
+            )
             .await?;
 
         // The working set is what later operations run against, so it moves
