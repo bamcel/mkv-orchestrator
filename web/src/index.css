@@ -32,10 +32,9 @@ body,
   height: 100%;
 }
 
-/* Rem-based controls scale together, at 90% of the previous base size.
- * Keep the viewport scaling and bounds proportional to that reduction. */
+/* Rem-based controls scale together with the window width. */
 html {
-  font-size: clamp(10.8px, 0.99vw, 14.4px);
+  font-size: clamp(12px, 1.1vw, 16px);
   background: var(--color-window);
 }
 
@@ -140,4 +139,9 @@ button[class*="bg-accent"]:not(:disabled):hover {
   width: auto !important;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Compact the operation sidebars without changing the file panels or navigation. */
+.operation-sidebar {
+  zoom: 0.9;
 }
