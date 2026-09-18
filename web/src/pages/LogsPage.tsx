@@ -60,7 +60,7 @@ export function LogsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="workspace-page flex h-full min-h-0 flex-col">
       <SectionHeader title="Logs" description="Review recent scan and operation output." />
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-5">
         <section className="flex min-h-0 flex-col rounded-xl border border-border bg-card p-5 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">

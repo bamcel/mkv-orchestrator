@@ -1,4 +1,5 @@
-import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { screen, within } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Layout } from "./Layout";
@@ -31,9 +32,23 @@ describe("global operation status", () => {
       }
     );
 
-    const operationStatus = await screen.findByText(/MKV Operations: 43\/283.*Episode 44\.mkv 75%/i);
+    const [operationStatus] = await screen.findAllByText(/MKV Operations: 43\/283.*Episode 44\.mkv 75%/i);
     expect(operationStatus).toBeInTheDocument();
     expect(operationStatus).toHaveClass("break-words", "[overflow-wrap:anywhere]");
     expect(screen.getByText("Track Properties route")).toBeInTheDocument();
   });
+});
+
+
+it("navigates from the mobile menu and closes it after changing routes", async () => {
+  const user = userEvent.setup();
+  renderWithBackend(<MediaLibraryProvider><Routes><Route element={<Layout />}><Route path="*" element={<div>Dashboard content</div>} /><Route path="/subtitles" element={<div>Subtitle content</div>} /></Route></Routes></MediaLibraryProvider>, {
+    getStatus: () => Promise.resolve({ name: "MKVO", version: "test", mediaRoot: "/media", configRoot: "/config", sourceRoots: [], tools: [], contractVersion: 1 })
+  });
+  await user.click(screen.getByRole("button", { name: "Menu" }));
+  const menu = screen.getByRole("navigation", { name: "Mobile navigation" });
+  await user.click(within(menu).getByRole("link", { name: "Subtitles" }));
+  expect(await screen.findByText("Subtitle content")).toBeInTheDocument();
+  expect(screen.queryByRole("navigation", { name: "Mobile navigation" })).not.toBeInTheDocument();
+
 });

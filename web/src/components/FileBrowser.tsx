@@ -367,7 +367,7 @@ export function FileBrowser({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
       <section
-        className="flex h-[82vh] min-h-[35rem] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_1.5rem_5rem_rgba(0,0,0,0.45)]"
+        className="mobile-file-browser flex h-[82vh] min-h-[35rem] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_1.5rem_5rem_rgba(0,0,0,0.45)]"
         role="dialog"
         aria-label="Select media source"
       >
@@ -383,7 +383,7 @@ export function FileBrowser({
           </button>
         </header>
 
-        <div className="flex h-12 shrink-0 items-center gap-1.5 border-b border-border bg-panel/40 px-3">
+        <div className="file-browser-toolbar flex h-12 shrink-0 items-center gap-1.5 border-b border-border bg-panel/40 px-3">
           <button
             type="button"
             onClick={() => setCursor((current) => Math.max(0, current - 1))}
@@ -496,8 +496,8 @@ export function FileBrowser({
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1">
-          <nav className="w-52 shrink-0 overflow-y-auto border-r border-border bg-sidebar/60 py-3">
+        <div className="file-browser-body flex min-h-0 flex-1">
+          <nav className="file-browser-locations w-52 shrink-0 overflow-y-auto border-r border-border bg-sidebar/60 py-3">
             {homeRoot ? (
               <>
                 <div className="px-4 pb-1.5 text-[0.625rem] font-semibold uppercase tracking-wider text-subtle">
@@ -688,6 +688,13 @@ export function FileBrowser({
                           )}
                           <span className="truncate">{entry.name}</span>
                         </span>
+                        <div className="mobile-file-actions mt-2">
+                          <label className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}><input type="checkbox" aria-label={`Select ${entry.name}`} checked={isSelected} onChange={() => selectEntry(entry, true)} />Select</label>
+                          {entry.kind === "folder" ? <div className="flex flex-wrap gap-2">
+                            <button type="button" className="rounded-md border border-border px-3" onClick={(event) => { event.stopPropagation(); open(entry); }}>Open folder</button>
+                            <button type="button" className="rounded-md border border-border px-3" aria-label={`Options for ${entry.name}`} onClick={(event) => { event.stopPropagation(); setFolderMenu({ x: event.clientX, y: event.clientY, entry }); }}>Folder options</button>
+                          </div> : null}
+                        </div>
                       </td>
                       {/* Truncating rather than merely not wrapping keeps a
                           long value from overflowing its fixed column and
@@ -720,7 +727,7 @@ export function FileBrowser({
             role="menu"
             aria-label={`${folderMenu.entry.name} folder options`}
             className="fixed z-[60] min-w-44 overflow-hidden rounded-lg border border-border bg-card p-1 shadow-[0_0.75rem_2.5rem_rgba(0,0,0,0.45)]"
-            style={{ left: Math.min(folderMenu.x, window.innerWidth - 200), top: Math.min(folderMenu.y, window.innerHeight - 132) }}
+            style={{ left: Math.max(8, Math.min(folderMenu.x, window.innerWidth - 200)), top: Math.max(8, Math.min(folderMenu.y, window.innerHeight - 200)) }}
             onPointerDown={(event) => event.stopPropagation()}
           >
             <button

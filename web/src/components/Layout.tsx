@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useOverlayAccessibility } from "./useOverlayAccessibility";
+import { useEffect, useState } from "react";
 import { PanelLeftClose, PanelLeftOpen, Activity, Captions, Database, FileCog, FolderOpen, ListVideo, Logs, RefreshCw, Settings, Trash2 } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -21,7 +22,27 @@ const navItems = [
 ];
 
 export function Layout() {
+  useOverlayAccessibility();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const location = useLocation();
+  useEffect(() => { setMobileMenuOpen(false); }, [location.pathname]);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("mkvo.sidebar.collapsed") === null ? window.innerWidth < 1100 : localStorage.getItem("mkvo.sidebar.collapsed") === "true");
+  useEffect(() => {
+    const labelTables = () => {
+      document.querySelectorAll<HTMLTableElement>(".page-content table, [role=dialog] table").forEach((table) => {
+        const headers = [...(table.tHead?.rows[0]?.cells ?? [])].map((cell) => cell.textContent?.trim() ?? "");
+        table.classList.add("mobile-data-table");
+        table.setAttribute("role", "table");
+        for (const body of table.tBodies) for (const row of body.rows) {
+          [...row.cells].forEach((cell, index) => { if (cell.colSpan === 1) cell.dataset.label = headers[index] ?? ""; });
+        }
+      });
+    };
+    labelTables();
+    const observer = new MutationObserver(labelTables);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
   const isSettingsPage = useLocation().pathname === "/settings";
   const status = useQuery({ queryKey: ["status"], queryFn: getStatus });
   const missingTools = status.data?.tools.filter((tool) => !tool.available).length ?? 0;
@@ -30,9 +51,9 @@ export function Layout() {
   const hasMp4Files = files.some((file) => file.extension.toLowerCase() === ".mp4");
 
   return (
-    <div className="h-screen overflow-hidden bg-window text-text">
-      <div className={`grid h-screen ${collapsed ? "grid-cols-[4.5rem_minmax(0,1fr)]" : "grid-cols-[14.75rem_minmax(0,1fr)]"}`}>
-        <aside className="flex h-screen min-h-0 flex-col border-r border-border bg-sidebar px-3 py-5">
+    <div className="app-shell h-screen overflow-hidden bg-window text-text">
+      <div className={`app-shell-grid grid h-screen ${collapsed ? "grid-cols-[4.5rem_minmax(0,1fr)]" : "grid-cols-[14.75rem_minmax(0,1fr)]"}`}>
+        <aside className="desktop-navigation flex h-screen min-h-0 flex-col border-r border-border bg-sidebar px-3 py-5">
           <button type="button" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => { localStorage.setItem("mkvo.sidebar.collapsed", String(!value)); return !value; })} className="mb-3 flex h-8 items-center justify-center rounded-md text-muted hover:bg-input-hover focus-visible:outline-accent">{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button>
           <div className="mb-8 flex items-center gap-3 px-1">
             <div className="flex h-9 w-9 items-center justify-center">
@@ -99,14 +120,25 @@ export function Layout() {
           </div>
         </aside>
 
-        <main className={`flex min-h-0 min-w-0 flex-col overflow-hidden ${isSettingsPage ? "px-4 py-4 sm:px-6 lg:px-8" : "px-4 py-4 lg:px-8 lg:py-8"}`}>
-          <header className={`shrink-0 ${collapsed ? "" : "md:hidden"}`}><SignOutButton className="mb-3" /></header>
+        <div className="mobile-navigation">
+          <div className="flex min-h-14 items-center justify-between gap-2 px-4">
+            <span className="font-bold text-app-title">MKV Orchestrator</span>
+            <button type="button" aria-expanded={mobileMenuOpen} aria-controls="mobile-navigation-menu" onClick={() => setMobileMenuOpen((open) => !open)} className="rounded-md border border-border px-3">{mobileMenuOpen ? "Close Menu" : "Menu"}</button>
+          </div>
+          {mobileMenuOpen ? <nav onKeyDown={(event) => { if (event.key === "Escape") { setMobileMenuOpen(false); document.querySelector<HTMLButtonElement>('[aria-controls="mobile-navigation-menu"]')?.focus(); } }} id="mobile-navigation-menu" aria-label="Mobile navigation" className="grid grid-cols-2 gap-2 border-t border-border p-4">
+            {navItems.filter((item) => !item.requiresMp4 || hasMp4Files).map((item) => <NavLink key={item.to} to={item.to} className={({ isActive }) => `flex items-center gap-2 rounded-md px-2 py-2 text-sm ${isActive ? "bg-selected text-accent" : "text-muted"}`}><item.icon size={16} /><span>{item.label}</span></NavLink>)}
+            <SignOutButton className="col-span-2" />
+          </nav> : null}
+          <div role="status" className="break-words border-t border-border px-4 py-2 text-xs text-muted">{operation.statusText ?? (missingTools ? `${missingTools} tool issue(s)` : "Ready")}</div>
+        </div>
+        <main className={`app-main flex min-h-0 min-w-0 flex-col overflow-hidden ${isSettingsPage ? "px-4 py-4 sm:px-6 lg:px-8" : "px-4 py-4 lg:px-8 lg:py-8"}`}>
+          <header className={`desktop-signout shrink-0 ${collapsed ? "" : "md:hidden"}`}><SignOutButton className="mb-3" /></header>
           {selectionError ? (
             <div role="alert" className="mb-3 shrink-0 rounded-md border border-warning bg-panel px-4 py-2 text-sm text-warning">
               Selection sync failed: {selectionError}
             </div>
           ) : null}
-          <div className="min-h-0 min-w-0 flex-1 overflow-auto">
+          <div className="page-content min-h-0 min-w-0 flex-1 overflow-auto">
             <Outlet />
           </div>
         </main>

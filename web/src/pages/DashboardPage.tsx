@@ -90,10 +90,9 @@ export function DashboardPage() {
       return;
     }
     const previousSignature = JSON.stringify(previousSources.current.map((path) => normalizePathForSourceComparison(path)).sort());
-    if (previousSignature !== sourceSignature) {
-      setLastScannedSources("");
-      sessionStorage.removeItem("mkvo.web.lastScannedSources");
-    }
+    if (previousSignature === sourceSignature) return;
+    setLastScannedSources("");
+    sessionStorage.removeItem("mkvo.web.lastScannedSources");
     sourcesExplicitlyCleared.current = previousSources.current.length > 0 && sources.length === 0;
     previousSources.current = sources;
 
@@ -307,11 +306,11 @@ export function DashboardPage() {
     const close = () => setContextMenu(null);
     window.addEventListener("click", close);
     window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true);
+
     return () => {
       window.removeEventListener("click", close);
       window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
+
     };
   }, [contextMenu]);
 
@@ -479,7 +478,7 @@ export function DashboardPage() {
     setActionStatus(`${name || folderName(path)} removed from Quick Access.`);
   }
 
-  function openFileContextMenu(event: MouseEvent<HTMLTableRowElement>, file: MediaFileRow) {
+  function openFileContextMenu(event: MouseEvent<HTMLElement>, file: MediaFileRow) {
     event.preventDefault();
     setSelectedFilePath(file.path);
     // Opening the template menu must not replace the operation batch. A
@@ -569,7 +568,7 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="workspace-page flex h-full min-h-0 flex-col">
       <SectionHeader title="Dashboard" description="Scan folders and review MKV or MP4 file metadata." />
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-5">
         <section className="min-h-0 overflow-auto rounded-xl border border-border bg-card p-5 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
@@ -788,7 +787,7 @@ export function DashboardPage() {
                             templateRow ? "text-template" : mismatchRow ? "text-warning" : "text-text"
                           ].join(" ")}
                         >
-                          <td className="max-w-[21.25rem] truncate border-b border-border px-3 py-2" title={file.path}><FileName value={file.fileName} /></td>
+                          <td className="max-w-[21.25rem] truncate border-b border-border px-3 py-2" title={file.path}><label className="mobile-file-actions mb-2 flex items-center gap-2" onClick={(event) => event.stopPropagation()}><input type="checkbox" aria-label={`Select ${file.fileName}`} checked={rowSelected} onChange={() => toggleSelectedPath(file.path)} />Select file</label><FileName value={file.fileName} /><button type="button" className="mobile-file-actions mt-2 rounded-md border border-border px-3" aria-label={`Actions for ${file.fileName}`} onClick={(event) => { event.stopPropagation(); openFileContextMenu(event, file); }}>File actions</button></td>
                           <td className="border-b border-border px-3 py-2">{file.reader}</td>
                           <td className="border-b border-border px-3 py-2">{file.codec || "Unknown"}</td>
                           <td className="border-b border-border px-3 py-2">{file.resolution || "Unknown"}</td>
@@ -932,8 +931,9 @@ function FileContextMenu({ x, y, file, onSetTemplate, onCopyName, onCopyPath, on
 
   return (
     <div
+      role="menu" aria-label="File actions"
       className="fixed z-[60] w-56 overflow-hidden rounded-lg border border-border-strong bg-card py-1 shadow-[0_1.125rem_3.4375rem_rgba(0,0,0,0.45)]"
-      style={{ left: Math.min(x, window.innerWidth - 240), top: Math.min(y, window.innerHeight - 180) }}
+      style={{ left: Math.max(8, Math.min(x, window.innerWidth - 240)), top: Math.max(8, Math.min(y, window.innerHeight - 256)) }}
       onClick={(event) => event.stopPropagation()}
     >
       <ContextMenuButton icon={<FileCheck size={15} />} label="Set as Template" onClick={() => onSetTemplate(file)} />

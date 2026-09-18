@@ -1,3 +1,4 @@
+import { MobileOptions } from "../components/MobileOptions";
 import { FileName } from "../components/FileName";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -277,12 +278,12 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="workspace-page flex h-full min-h-0 flex-col">
       <SectionHeader title={pageTitle} description={pageDescription} />
 
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(14rem,18.75rem)_minmax(0,1fr)] gap-3">
         <section className="operation-sidebar flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
-          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <MobileOptions>
           {workflow !== "subtitles" ? <div className="flex items-center justify-between">
             {workflow === "remove" ? <h2 className="text-base font-semibold">Track Options</h2> : <span />}
           </div> : null}
@@ -362,7 +363,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
           ) : null}
 
 
-          </div>
+          </MobileOptions>
       <div className="mt-3 flex shrink-0 flex-wrap items-center gap-2 border-t border-border pt-3" aria-label="Operation actions">
         <button type="button" onClick={() => { setIsSummaryExpanded(true); runPreview(); }} disabled={isApplying || preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0))} className="h-9 min-w-0 flex-1 whitespace-nowrap rounded-md border border-border bg-button px-1.5 text-xs font-semibold disabled:text-disabled">Preview Summary</button>
         {isApplying ? <button type="button" onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-9 min-w-0 flex-1 whitespace-nowrap rounded-md border border-warning bg-button px-3 text-sm text-warning">Cancel</button> : <button type="button" onClick={runApply} disabled={apply.isPending || preview.isPending || (selectedMkvPaths.length === 0 && !(convertMp4 && selectedMp4Paths.length > 0))} className="h-9 min-w-0 flex-1 whitespace-nowrap rounded-md bg-accent px-1.5 text-xs font-semibold disabled:bg-button disabled:text-disabled">Apply Changes</button>}
@@ -375,6 +376,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
           <section className="flex min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
             <div className="flex shrink-0 items-center justify-between gap-3">
               <h2 className="text-base font-semibold">File Info</h2>
+              <div className="mobile-file-actions"><div className="flex flex-wrap gap-2"><button type="button" className="rounded-md border border-border px-3" onClick={() => setSelectedPaths(files.map((file) => file.path))}>Select all</button><button type="button" className="rounded-md border border-border px-3" onClick={() => setSelectedPaths([])}>Clear selection</button></div></div>
             </div>
             <div
               className="mt-3 min-h-0 flex-1 overflow-auto"
@@ -541,8 +543,8 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
           aria-label="File selection options"
           className="fixed z-[60] min-w-40 overflow-hidden rounded-lg border border-border bg-card p-1 shadow-[0_0.75rem_2.5rem_rgba(0,0,0,0.45)]"
           style={{
-            left: Math.min(selectionMenu.x, window.innerWidth - 180),
-            top: Math.min(selectionMenu.y, window.innerHeight - 180)
+            left: Math.max(8, Math.min(selectionMenu.x, window.innerWidth - 180)),
+            top: Math.max(8, Math.min(selectionMenu.y, window.innerHeight - 256))
           }}
           onPointerDown={(event) => event.stopPropagation()}
         >

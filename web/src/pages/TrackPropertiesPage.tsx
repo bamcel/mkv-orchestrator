@@ -1,3 +1,4 @@
+import { MobileOptions } from "../components/MobileOptions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
@@ -319,12 +320,12 @@ export function TrackPropertiesPage() {
   const languagePresetOptions = settings.data?.languagePresets?.length ? settings.data.languagePresets : languagePresets;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="workspace-page flex h-full min-h-0 flex-col">
       <SectionHeader title="Edit Tracks" description="Edit container, track title, language, default, and forced flags." />
 
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
         <section className="operation-sidebar flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
-          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <MobileOptions>
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold">Track Options</h2>
             </div>
@@ -395,7 +396,7 @@ export function TrackPropertiesPage() {
             </select>
 
 
-          </div>
+          </MobileOptions>
       <div className="mt-3 flex shrink-0 flex-wrap items-center gap-2 border-t border-border pt-3" aria-label="Operation actions">
         <button type="button" onClick={() => { setIsSummaryExpanded(true); runPreview(); }} disabled={isApplying || preview.isPending || (selectedMkvPaths.length === 0 || !template)} className="h-9 min-w-0 flex-1 whitespace-nowrap rounded-md border border-border bg-button px-1.5 text-xs font-semibold disabled:text-disabled">Preview Summary</button>
         {isApplying ? <button type="button" onClick={cancelRunningApply} disabled={cancelApply.isPending} className="h-9 min-w-0 flex-1 whitespace-nowrap rounded-md border border-warning bg-button px-3 text-sm text-warning">Cancel</button> : <button type="button" onClick={runApply} disabled={apply.isPending || preview.isPending || (selectedMkvPaths.length === 0 || !template)} className="h-9 min-w-0 flex-1 whitespace-nowrap rounded-md bg-accent px-1.5 text-xs font-semibold disabled:bg-button disabled:text-disabled">Apply Changes</button>}

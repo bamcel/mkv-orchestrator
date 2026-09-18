@@ -1,3 +1,4 @@
+import { MobileOptions } from "../components/MobileOptions";
 import { FileName } from "../components/FileName";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -739,12 +740,12 @@ export function RenamePage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="workspace-page flex h-full min-h-0 flex-col">
       <SectionHeader title="Rename Files" description="Match files to provider metadata and preview safe destination names." />
 
       <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[18.75rem_minmax(0,1fr)] gap-3">
         <section className="operation-sidebar flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card p-3 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
-          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <MobileOptions>
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold">Rename Options</h2>
             <button
@@ -984,7 +985,7 @@ export function RenamePage() {
 
 
           </div>
-          </div>
+          </MobileOptions>
       <div className="mt-3 flex shrink-0 flex-wrap items-center gap-2 border-t border-border pt-3" aria-label="Operation actions">
         <button type="button" onClick={() => { setIsSummaryExpanded(true); if (renameMode === "batch-movies") void previewBatchMovies(); else runPreview(); }} disabled={preview.isPending || apply.isPending || batchBusy || batchApplying || (renameMode === "batch-movies" ? batchMatches.every((item) => !item.results[item.selectedIndex]) : !selectedResult || selectedFiles.length === 0)} className="h-9 min-w-0 flex-1 whitespace-nowrap rounded-md border border-border bg-button px-1.5 text-xs font-semibold disabled:text-disabled">Preview Summary</button>
         <button type="button" onClick={() => { if (renameMode === "batch-movies") void applyBatchMovies(); else void runApply(); }} disabled={preview.isPending || apply.isPending || batchBusy || batchApplying || (renameMode === "batch-movies" ? batchMatches.every((item) => !item.results[item.selectedIndex]) : !selectedResult || selectedFiles.length === 0)} className="h-9 min-w-0 flex-1 whitespace-nowrap rounded-md bg-accent px-1.5 text-xs font-semibold disabled:bg-button disabled:text-disabled">Apply Changes</button>
@@ -997,6 +998,7 @@ export function RenamePage() {
         <section className="flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-border bg-card p-4 shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
           <div className="flex shrink-0 items-center justify-between">
             <h2 className="text-base font-semibold">Rename Preview</h2>
+              <div className="mobile-file-actions"><div className="flex flex-wrap gap-2"><button type="button" className="rounded-md border border-border px-3" onClick={() => toggleAll(true)}>Select all</button><button type="button" className="rounded-md border border-border px-3" onClick={() => toggleAll(false)}>Clear selection</button></div></div>
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -1197,7 +1199,7 @@ export function RenamePage() {
           role="menu"
           aria-label="Rename selection options"
           className="fixed z-[60] min-w-48 overflow-hidden rounded-lg border border-border bg-card p-1 shadow-[0_0.75rem_2.5rem_rgba(0,0,0,0.45)]"
-          style={{ left: Math.min(previewSelectionMenu.x, window.innerWidth - 210), top: Math.min(previewSelectionMenu.y, window.innerHeight - 180) }}
+          style={{ left: Math.max(8, Math.min(previewSelectionMenu.x, window.innerWidth - 210)), top: Math.max(8, Math.min(previewSelectionMenu.y, window.innerHeight - 256)) }}
           onPointerDown={(event) => event.stopPropagation()}
         >
           <button type="button" role="menuitem" onClick={() => { setHighlightedPreviewSelection(true); setPreviewSelectionMenu(null); }} className="flex w-full rounded-md px-3 py-2 text-left text-sm text-muted hover:bg-selected hover:text-text">Select highlighted rows</button>

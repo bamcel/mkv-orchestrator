@@ -405,7 +405,7 @@ export function LibraryPage() {
   const matchingCount = titles.length - mismatchCount;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="workspace-page flex h-full min-h-0 flex-col">
       <SectionHeader title="Library" description="Browse your media as posters, review metadata health, and send repair batches to Dashboard." />
 
       <section className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-[0_1.25rem_3.75rem_rgba(0,0,0,0.18)]">
@@ -470,7 +470,7 @@ export function LibraryPage() {
         </div>
       </section>
 
-      {selectedTitle ? <LibraryTitleDialog title={selectedTitle} serverId={selectedSourceOption?.serverId} onClose={() => setSelectedTitleId("")} onSendMismatches={() => handoffToDashboard(selectedTitle, "mismatch")} onSendAll={() => handoffToDashboard(selectedTitle, "all")} /> : null}
+      {selectedTitle ? <LibraryTitleDialog title={selectedTitle} serverId={selectedSourceOption?.serverId} onClose={() => setSelectedTitleId("")} onSendMismatches={() => handoffToDashboard(selectedTitle, "mismatch")} onSendAll={() => handoffToDashboard(selectedTitle, "all")} onRebuild={() => rebuildTitle(selectedTitle)} /> : null}
       {contextMenu ? <LibraryPosterContextMenu x={contextMenu.x} y={contextMenu.y} title={titles.find((title) => title.id === contextMenu.titleId) ?? null} disabled={isBusy} onRebuild={rebuildTitle} /> : null}
     </div>
   );
@@ -511,7 +511,7 @@ function LibraryPosterCard({ title, serverId, artworkGeneration, onOpen, onConte
 function LibraryPosterContextMenu({ x, y, title, disabled, onRebuild }: { x: number; y: number; title: LibraryTitle | null; disabled: boolean; onRebuild: (title: LibraryTitle) => void }) {
   if (!title) return null;
   return (
-    <div role="menu" aria-label={`${title.title} actions`} onMouseDown={(event) => event.stopPropagation()} style={{ left: x, top: y }} className="fixed z-[60] min-w-52 overflow-hidden rounded-lg border border-border bg-card p-1 shadow-[0_0.75rem_2.5rem_rgba(0,0,0,0.45)]">
+    <div role="menu" aria-label={`${title.title} actions`} onMouseDown={(event) => event.stopPropagation()} style={{ left: Math.max(8, Math.min(x, window.innerWidth - 224)), top: Math.max(8, Math.min(y, window.innerHeight - 180)) }} className="fixed z-[60] min-w-52 overflow-hidden rounded-lg border border-border bg-card p-1 shadow-[0_0.75rem_2.5rem_rgba(0,0,0,0.45)]">
       <button type="button" role="menuitem" disabled={disabled} onClick={() => onRebuild(title)} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-text hover:bg-button-hover disabled:text-disabled">
         <RefreshCw size={15} /> Rebuild this title
       </button>
@@ -519,7 +519,7 @@ function LibraryPosterContextMenu({ x, y, title, disabled, onRebuild }: { x: num
   );
 }
 
-function LibraryTitleDialog({ title, serverId, onClose, onSendMismatches, onSendAll }: { title: LibraryTitle; serverId?: string; onClose: () => void; onSendMismatches: () => void; onSendAll: () => void }) {
+function LibraryTitleDialog({ title, serverId, onClose, onSendMismatches, onSendAll, onRebuild }: { title: LibraryTitle; serverId?: string; onClose: () => void; onSendMismatches: () => void; onSendAll: () => void; onRebuild: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section role="dialog" aria-modal="true" aria-label={`${title.title} library details`} className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
@@ -529,6 +529,7 @@ function LibraryTitleDialog({ title, serverId, onClose, onSendMismatches, onSend
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           <div className="grid grid-cols-3 gap-3"><SummaryCard label="Seasons" value={title.seasons.length} /><SummaryCard label="Files" value={title.fileCount} /><SummaryCard label="Mismatch files" value={title.mismatchFileCount} tone={title.hasIssues ? "text-warning" : "text-success"} /></div>
+          <button type="button" onClick={onRebuild} className="mobile-file-actions mt-3 rounded-md border border-border px-3">Rebuild title overview</button>
           <div className="mt-5 space-y-3">
             {title.seasons.map((season) => (
               <section key={season.folderPath} className="rounded-lg border border-border bg-panel p-4">

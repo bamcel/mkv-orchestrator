@@ -521,7 +521,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col gap-4 xl:h-full xl:min-h-0">
+    <div className="settings-page mx-auto flex min-h-full w-full max-w-6xl flex-col gap-4 xl:h-full xl:min-h-0">
       <h1 className="text-2xl font-semibold tracking-tight text-text">Settings</h1>
 
         <div className="flex shrink-0 flex-col gap-3 border-b border-border pb-3 lg:flex-row lg:items-center">
