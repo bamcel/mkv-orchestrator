@@ -291,6 +291,8 @@ describe("Dashboard UI cache reset", () => {
     await user.click(screen.getByRole("button", { name: /^scan$/i }));
 
     expect(await screen.findByRole("row", { name: /Episode 01\.mkv/i }, { timeout: 3000 })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Rescan" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rescan Files" })).not.toBeInTheDocument();
   });
 });
 
@@ -492,6 +494,8 @@ describe("Dashboard ignored folders", () => {
 
   it("can force a rescan of sources that were already scanned", async () => {
     const user = userEvent.setup();
+    window.sessionStorage.setItem("mkvo.web.lastScannedSources", JSON.stringify(["/media"]));
+    window.sessionStorage.setItem("mkvo.web.scanSources", JSON.stringify(["/media"]));
     const startScan = vi.fn().mockResolvedValue({
       id: "refresh-job",
       status: "Queued",
@@ -522,7 +526,7 @@ describe("Dashboard ignored folders", () => {
 
     await user.click(await screen.findByRole("button", { name: /browse/i }));
     await user.click(await screen.findByRole("button", { name: /select this folder/i }));
-    await user.click(await screen.findByRole("button", { name: /rescan files/i }));
+    await user.click(await screen.findByRole("button", { name: /^rescan$/i }));
 
     await waitFor(() => expect(startScan).toHaveBeenCalledTimes(1));
     expect(startScan.mock.calls[0][0]).toMatchObject({

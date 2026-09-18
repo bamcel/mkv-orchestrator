@@ -46,6 +46,10 @@ export function DashboardPage() {
     }
   });
   const previousSources = useRef<string[] | null>(null);
+  const sourceSignature = JSON.stringify(sources.map((path) => normalizePathForSourceComparison(path)).sort());
+  const [lastScannedSources, setLastScannedSources] = useState(() => sessionStorage.getItem("mkvo.web.lastScannedSources") ?? "");
+  const requestedScanSources = useRef("");
+  const isRescan = lastScannedSources === sourceSignature;
   const sourcesExplicitlyCleared = useRef(false);
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
   const [lastBrowsePath, setLastBrowsePath] = useState(() => {
@@ -84,6 +88,11 @@ export function DashboardPage() {
     if (previousSources.current === null) {
       previousSources.current = sources;
       return;
+    }
+    const previousSignature = JSON.stringify(previousSources.current.map((path) => normalizePathForSourceComparison(path)).sort());
+    if (previousSignature !== sourceSignature) {
+      setLastScannedSources("");
+      sessionStorage.removeItem("mkvo.web.lastScannedSources");
     }
     sourcesExplicitlyCleared.current = previousSources.current.length > 0 && sources.length === 0;
     previousSources.current = sources;
@@ -313,6 +322,8 @@ export function DashboardPage() {
     setSkipped(currentScanJob.skipped);
 
     if (currentScanJob.status === "Completed") {
+      setLastScannedSources(requestedScanSources.current);
+      sessionStorage.setItem("mkvo.web.lastScannedSources", requestedScanSources.current);
       setFiles(currentScanJob.files);
       setSkipped(currentScanJob.skipped);
       setSelectedFilePath(currentScanJob.files[0]?.path ?? "");
@@ -352,6 +363,7 @@ export function DashboardPage() {
     setSelectedFilePath("");
     setActionStatus("");
     setScanJobId(null);
+    requestedScanSources.current = sourceSignature;
     scanStart.mutate({
       sources: activeSources,
       ignoredFolderNames: parseIgnoredFolders(ignoredFolders),
@@ -615,7 +627,7 @@ export function DashboardPage() {
             </button>
             <button
               type="button"
-              onClick={() => isScanning ? cancelCurrentScan() : runScan(false)}
+              onClick={() => isScanning ? cancelCurrentScan() : runScan(isRescan)}
               disabled={!hasSources || (isScanning && (!scanJobId || scanCancel.isPending || currentScanJob?.status === "Canceling"))}
               className={["inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-button disabled:text-disabled", isScanning ? "border border-warning bg-button text-warning hover:bg-button-hover" : "bg-accent text-window hover:bg-accent-hover"].join(" ")}
             >
@@ -626,7 +638,7 @@ export function DashboardPage() {
                 ? "Starting Scan"
                 : scanCancel.isPending || currentScanJob?.status === "Canceling"
                   ? "Canceling Scan"
-                  : isScanning ? "Cancel Scan" : "Scan"}
+                  : isScanning ? "Cancel Scan" : isRescan ? "Rescan" : "Scan"}
             </button>
           </div>
           <button
@@ -655,17 +667,6 @@ export function DashboardPage() {
             rows={4}
             className="mt-2 w-full resize-none rounded-md border border-border bg-input px-3 py-2 text-sm text-text outline-none placeholder:text-subtle transition focus:border-accent"
           />
-
-          <div className="mt-4 flex gap-2">
-            <button
-              onClick={() => runScan(true)}
-              disabled={isScanning || !hasSources}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-button px-3 text-sm font-semibold text-muted transition hover:bg-button-hover hover:text-text"
-            >
-              <RefreshCw size={15} />
-              Rescan Files
-            </button>
-          </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             <span className="text-success">{dashboardStatus}</span>
