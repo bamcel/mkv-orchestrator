@@ -1,6 +1,6 @@
 import { useOverlayAccessibility } from "./useOverlayAccessibility";
 import { useEffect, useState } from "react";
-import { PanelLeftClose, PanelLeftOpen, Activity, Captions, Database, FileCog, FolderOpen, ListVideo, Logs, RefreshCw, Settings, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Activity, Captions, Database, FileCog, FolderOpen, ListVideo, Logs, RefreshCw, Settings, Trash2 } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getStatus } from "../api";
@@ -54,8 +54,10 @@ export function Layout() {
   return (
     <div className="app-shell h-screen overflow-hidden bg-window text-text">
       <div className={`app-shell-grid grid h-screen ${collapsed ? "grid-cols-[4.5rem_minmax(0,1fr)]" : "grid-cols-[14.75rem_minmax(0,1fr)]"}`}>
-        <aside className="desktop-navigation flex h-screen min-h-0 flex-col border-r border-border bg-sidebar px-3 py-5">
-          <button type="button" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => { localStorage.setItem("mkvo.sidebar.collapsed", String(!value)); return !value; })} className="mb-3 flex h-8 items-center justify-center rounded-md text-muted hover:bg-input-hover focus-visible:outline-accent">{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button>
+        <aside className="desktop-navigation relative flex h-screen min-h-0 flex-col border-r border-border bg-sidebar px-3 py-5">
+          <button type="button" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} data-tooltip={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => { localStorage.setItem("mkvo.sidebar.collapsed", String(!value)); return !value; })} className="sidebar-collapse-button">
+            <span>{collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</span>
+          </button>
           <div className="mb-8 flex items-center gap-3 px-1">
             <div className="flex h-9 w-9 items-center justify-center">
               <span

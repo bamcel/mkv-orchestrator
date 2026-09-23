@@ -69,3 +69,19 @@ it("shows a styled tooltip for collapsed sidebar links on hover and focus", asyn
   fireEvent.focus(removeTracks);
   expect(screen.getByRole("tooltip")).toHaveTextContent("Remove Tracks");
 });
+
+it("mounts the sidebar toggle on the sidebar edge and updates its direction", async () => {
+  window.localStorage.setItem("mkvo.sidebar.collapsed", "false");
+  const user = userEvent.setup();
+  renderWithBackend(<MediaLibraryProvider><Routes><Route element={<Layout />}><Route path="*" element={<div>Dashboard content</div>} /></Route></Routes></MediaLibraryProvider>, {
+    getStatus: () => Promise.resolve({ name: "MKVO", version: "test", mediaRoot: "/media", configRoot: "/config", sourceRoots: [], tools: [], contractVersion: 1 })
+  });
+
+  const collapse = screen.getByRole("button", { name: "Collapse sidebar" });
+  expect(collapse).toHaveClass("sidebar-collapse-button");
+  expect(collapse).toHaveAttribute("data-tooltip", "Collapse sidebar");
+  await user.click(collapse);
+  const expand = screen.getByRole("button", { name: "Expand sidebar" });
+  expect(expand).toHaveAttribute("data-tooltip", "Expand sidebar");
+  expect(window.localStorage.getItem("mkvo.sidebar.collapsed")).toBe("true");
+});

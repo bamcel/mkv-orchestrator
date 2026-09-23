@@ -145,6 +145,71 @@ button[class*="bg-accent"]:not(:disabled):hover {
 .operation-sidebar {
   zoom: 0.9;
 }
+.sidebar-collapse-button {
+  position: absolute;
+  top: 20px;
+  right: -20px;
+  z-index: 55;
+  display: flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+}
+.sidebar-collapse-button > span {
+  display: flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-card);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 28%);
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
+}
+.sidebar-collapse-button:hover > span {
+  border-color: var(--color-accent);
+  background: var(--color-button-hover);
+  color: var(--color-text);
+  transform: scale(1.05);
+}
+.sidebar-collapse-button:focus-visible { outline: none; }
+.sidebar-collapse-button:focus-visible > span {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.sidebar-collapse-button::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 4px);
+  width: max-content;
+  transform: translate(4px, -50%);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--color-card) 96%, black);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 38%);
+  color: var(--color-text);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 140ms ease 300ms, transform 140ms ease 300ms, visibility 0ms linear 440ms;
+}
+.sidebar-collapse-button:is(:hover, :focus-visible)::after {
+  transform: translate(0, -50%);
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 300ms;
+}
 .collapsed-sidebar-tooltip {
   position: fixed;
   left: calc(4.5rem + 10px);
