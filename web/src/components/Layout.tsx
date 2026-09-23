@@ -23,6 +23,7 @@ const navItems = [
 
 export function Layout() {
   useOverlayAccessibility();
+  const [sidebarTooltip, setSidebarTooltip] = useState<{ label: string; top: number } | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   useEffect(() => { setMobileMenuOpen(false); }, [location.pathname]);
@@ -86,9 +87,13 @@ export function Layout() {
               return (
                 <NavLink
                   key={item.to}
-                  title={collapsed ? item.label : undefined}
                   aria-label={item.label}
+                  aria-describedby={collapsed && sidebarTooltip?.label === item.label ? "collapsed-sidebar-tooltip" : undefined}
                   to={item.to}
+                  onMouseEnter={(event) => collapsed && setSidebarTooltip({ label: item.label, top: event.currentTarget.getBoundingClientRect().top + event.currentTarget.getBoundingClientRect().height / 2 })}
+                  onMouseLeave={() => setSidebarTooltip(null)}
+                  onFocus={(event) => collapsed && setSidebarTooltip({ label: item.label, top: event.currentTarget.getBoundingClientRect().top + event.currentTarget.getBoundingClientRect().height / 2 })}
+                  onBlur={() => setSidebarTooltip(null)}
                   className={({ isActive }) =>
                     [
                       "flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium transition",
@@ -119,6 +124,11 @@ export function Layout() {
           </div>
           </div>
         </aside>
+        {collapsed && sidebarTooltip ? (
+          <div id="collapsed-sidebar-tooltip" role="tooltip" className="collapsed-sidebar-tooltip" style={{ top: sidebarTooltip.top }}>
+            {sidebarTooltip.label}
+          </div>
+        ) : null}
 
         <div className="mobile-navigation">
           <div className="flex min-h-14 items-center justify-between gap-2 px-4">

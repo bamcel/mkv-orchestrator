@@ -145,6 +145,41 @@ button[class*="bg-accent"]:not(:disabled):hover {
 .operation-sidebar {
   zoom: 0.9;
 }
+.collapsed-sidebar-tooltip {
+  position: fixed;
+  left: calc(4.5rem + 10px);
+  z-index: 60;
+  max-width: 14rem;
+  transform: translateY(-50%);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--color-card) 96%, black);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 38%), 0 2px 6px rgb(0 0 0 / 24%);
+  color: var(--color-text);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: sidebar-tooltip-in 140ms ease-out 300ms both;
+}
+.collapsed-sidebar-tooltip::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -5px;
+  width: 9px;
+  height: 9px;
+  transform: translateY(-50%) rotate(45deg);
+  border-bottom: 1px solid var(--color-border-strong);
+  border-left: 1px solid var(--color-border-strong);
+  background: inherit;
+}
+@keyframes sidebar-tooltip-in {
+  from { opacity: 0; transform: translate(4px, -50%) scale(0.98); }
+  to { opacity: 1; transform: translate(0, -50%) scale(1); }
+}
 /* Mobile layout keeps desktop sizing and panels intact above this breakpoint. */
 .mobile-navigation, .mobile-options-summary, .mobile-file-name, .mobile-file-actions { display: none; }
 :where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {

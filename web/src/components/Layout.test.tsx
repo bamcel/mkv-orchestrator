@@ -1,5 +1,5 @@
 import userEvent from "@testing-library/user-event";
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Layout } from "./Layout";
@@ -51,4 +51,21 @@ it("navigates from the mobile menu and closes it after changing routes", async (
   expect(await screen.findByText("Subtitle content")).toBeInTheDocument();
   expect(screen.queryByRole("navigation", { name: "Mobile navigation" })).not.toBeInTheDocument();
 
+});
+
+it("shows a styled tooltip for collapsed sidebar links on hover and focus", async () => {
+  window.localStorage.setItem("mkvo.sidebar.collapsed", "true");
+  const user = userEvent.setup();
+  renderWithBackend(<MediaLibraryProvider><Routes><Route element={<Layout />}><Route path="*" element={<div>Dashboard content</div>} /></Route></Routes></MediaLibraryProvider>, {
+    getStatus: () => Promise.resolve({ name: "MKVO", version: "test", mediaRoot: "/media", configRoot: "/config", sourceRoots: [], tools: [], contractVersion: 1 })
+  });
+
+  const removeTracks = screen.getByRole("link", { name: "Remove Tracks" });
+  expect(removeTracks).not.toHaveAttribute("title");
+  await user.hover(removeTracks);
+  expect(screen.getByRole("tooltip")).toHaveTextContent("Remove Tracks");
+  await user.unhover(removeTracks);
+  expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  fireEvent.focus(removeTracks);
+  expect(screen.getByRole("tooltip")).toHaveTextContent("Remove Tracks");
 });
