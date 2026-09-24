@@ -1,7 +1,7 @@
 import userEvent from "@testing-library/user-event";
 import { fireEvent, screen, within } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Layout } from "./Layout";
 import { MediaLibraryProvider } from "../state/MediaLibraryContext";
 import { renderWithBackend } from "../test/render";
@@ -84,4 +84,8 @@ it("mounts the sidebar toggle on the sidebar edge and updates its direction", as
   const expand = screen.getByRole("button", { name: "Expand sidebar" });
   expect(expand).toHaveAttribute("data-tooltip", "Expand sidebar");
   expect(window.localStorage.getItem("mkvo.sidebar.collapsed")).toBe("true");
+  const sidebar = screen.getByRole("complementary");
+  vi.spyOn(sidebar, "getBoundingClientRect").mockReturnValue({ x: 0, y: 0, width: 72, height: 900, top: 0, right: 72, bottom: 900, left: 0, toJSON: () => ({}) });
+  fireEvent.click(sidebar, { clientX: 70 });
+  expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
 });

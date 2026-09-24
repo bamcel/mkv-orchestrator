@@ -50,13 +50,24 @@ export function Layout() {
   const { files, selectionError } = useMediaLibrary();
   const operation = useOperationJob();
   const hasMp4Files = files.some((file) => file.extension.toLowerCase() === ".mp4");
+  const toggleSidebar = () => setCollapsed((value) => {
+    localStorage.setItem("mkvo.sidebar.collapsed", String(!value));
+    return !value;
+  });
 
   return (
     <div className="app-shell h-screen overflow-hidden bg-window text-text">
       <div className={`app-shell-grid grid h-screen ${collapsed ? "grid-cols-[4.5rem_minmax(0,1fr)]" : "grid-cols-[14.75rem_minmax(0,1fr)]"}`}>
-        <aside className="desktop-navigation relative flex h-screen min-h-0 flex-col border-r border-border bg-sidebar px-3 py-5">
-          <button type="button" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} data-tooltip={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => { localStorage.setItem("mkvo.sidebar.collapsed", String(!value)); return !value; })} className="sidebar-collapse-button">
-            <span>{collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</span>
+        <aside
+          className="desktop-navigation relative flex h-screen min-h-0 flex-col border-r border-border bg-sidebar px-3 py-5"
+          onClickCapture={(event) => {
+            if ((event.target as HTMLElement).closest(".sidebar-collapse-button")) return;
+            const edge = event.currentTarget.getBoundingClientRect().right;
+            if (event.clientX >= edge - 12) toggleSidebar();
+          }}
+        >
+          <button type="button" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} data-tooltip={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} onClick={toggleSidebar} className="sidebar-collapse-button">
+            <span>{collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}</span>
           </button>
           <div className="mb-8 flex items-center gap-3 px-1">
             <div className="flex h-9 w-9 items-center justify-center">

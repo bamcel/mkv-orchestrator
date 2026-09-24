@@ -147,28 +147,29 @@ button[class*="bg-accent"]:not(:disabled):hover {
 }
 .sidebar-collapse-button {
   position: absolute;
-  top: 20px;
-  right: -20px;
+  top: 50%;
+  right: -12px;
   z-index: 55;
   display: flex;
-  width: 40px;
-  height: 40px;
+  width: 24px;
+  height: 56px;
   align-items: center;
   justify-content: center;
   border: 0;
   background: transparent;
   color: var(--color-muted);
+  transform: translateY(-50%);
 }
 .sidebar-collapse-button > span {
   display: flex;
-  width: 30px;
-  height: 30px;
+  width: 14px;
+  height: 42px;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--color-border-strong);
-  border-radius: 999px;
+  border-radius: 4px;
   background: var(--color-card);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 28%);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 32%);
   transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
 }
 .sidebar-collapse-button:hover > span {
