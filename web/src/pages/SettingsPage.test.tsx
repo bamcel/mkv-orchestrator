@@ -592,6 +592,7 @@ describe("Settings appearance", () => {
     expect(borderOption.querySelector('[aria-hidden="true"]')).toHaveStyle({ backgroundColor: "#3B4252" });
     await user.click(borderOption);
     const colorInput = await screen.findByLabelText(/^border color$/i);
+    expect(colorInput).toHaveClass("theme-color-input");
     fireEvent.change(colorInput, { target: { value: "#12ab34" } });
 
     expect(document.documentElement.style.getPropertyValue("--color-border")).toBe("#12AB34");

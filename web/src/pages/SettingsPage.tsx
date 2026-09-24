@@ -1420,13 +1420,13 @@ function ThemeColorField({ label, value, onChange }: { label: string; value: str
   return (
     <label className="block">
       <span className="text-xs font-semibold text-muted">{label}</span>
-      <div className="mt-2 flex h-10 items-center gap-2 rounded-md border border-border bg-input px-2">
+      <div className="mt-2 flex h-10 items-center gap-2 rounded-md border border-border bg-input px-3">
         <input
           type="color"
           aria-label={`${label} color`}
           value={value}
           onChange={(event) => onChange(event.target.value.toUpperCase())}
-          className="h-7 w-9 cursor-pointer border-0 bg-transparent p-0"
+          className="theme-color-input cursor-pointer"
         />
         <span className="font-mono text-xs text-text">{value.toUpperCase()}</span>
       </div>
