@@ -1204,16 +1204,11 @@ export function SettingsPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block">
                     <span className="text-xs font-semibold text-muted">Color label</span>
-                    <select
-                      aria-label="Theme color label"
+                    <ThemeColorSelect
                       value={selectedThemeColor}
-                      onChange={(event) => setSelectedThemeColor(event.target.value as ThemeColorName)}
-                      className="mt-2 h-10 w-full rounded-md border border-border bg-input px-3 text-sm text-text outline-none focus:border-accent"
-                    >
-                      {themeColorOptions.map((option) => (
-                        <option key={option.name} value={option.name}>{option.label}</option>
-                      ))}
-                    </select>
+                      onChange={setSelectedThemeColor}
+                      colorFor={(name) => themeColorValue(themeJson, name, getWebTheme(themeName).colors[name] ?? "#000000")}
+                    />
                   </label>
                   <ThemeColorField
                     label={themeColorOptions.find((option) => option.name === selectedThemeColor)?.label ?? selectedThemeColor}
@@ -1437,6 +1432,61 @@ function ThemeColorField({ label, value, onChange }: { label: string; value: str
       </div>
     </label>
   );
+}
+
+function ThemeColorSelect({ value, onChange, colorFor }: {
+  value: ThemeColorName;
+  onChange: (value: ThemeColorName) => void;
+  colorFor: (value: ThemeColorName) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const selected = themeColorOptions.find((option) => option.name === value) ?? themeColorOptions[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [open]);
+
+  return <div ref={root} className="relative mt-2">
+    <button
+      type="button"
+      role="combobox"
+      aria-label="Theme color label"
+      aria-controls="theme-color-options"
+      aria-expanded={open}
+      aria-haspopup="listbox"
+      onClick={() => setOpen((current) => !current)}
+      onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}
+      className="flex h-10 w-full items-center gap-2 rounded-md border border-border bg-input px-3 text-left text-sm text-text outline-none focus:border-accent"
+    >
+      <ThemeColorSwatch color={colorFor(selected.name)} />
+      <span className="min-w-0 flex-1 truncate">{selected.label}</span>
+      <ChevronDown size={15} className={`shrink-0 text-subtle transition-transform ${open ? "rotate-180" : ""}`} />
+    </button>
+    {open ? <div id="theme-color-options" role="listbox" aria-label="Theme color labels" className="absolute z-50 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-border bg-card p-1 shadow-[0_12px_32px_rgba(0,0,0,0.4)]">
+      {themeColorOptions.map((option) => <button
+        key={option.name}
+        type="button"
+        role="option"
+        aria-selected={option.name === value}
+        onClick={() => { onChange(option.name); setOpen(false); }}
+        className={`flex min-h-9 w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-sm transition ${option.name === value ? "bg-selected text-text" : "text-muted hover:bg-input-hover hover:text-text"}`}
+      >
+        <ThemeColorSwatch color={colorFor(option.name)} />
+        <span className="flex-1">{option.label}</span>
+        <span className="font-mono text-[0.6875rem] text-subtle">{colorFor(option.name)}</span>
+      </button>)}
+    </div> : null}
+  </div>;
+}
+
+function ThemeColorSwatch({ color }: { color: string }) {
+  return <span aria-hidden="true" className="h-4 w-4 shrink-0 rounded-[3px] border border-white/20 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.15)]" style={{ backgroundColor: color }} />;
 }
 
 function themeColorValue(themeJson: string, colorName: string, fallback: string) {

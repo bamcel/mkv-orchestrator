@@ -585,7 +585,12 @@ describe("Settings appearance", () => {
     });
 
     await user.click(await screen.findByRole("button", { name: /^appearance$/i }));
-    await user.selectOptions(await screen.findByLabelText(/theme color label/i), "Border");
+    const colorLabel = await screen.findByRole("combobox", { name: /theme color label/i });
+    expect(colorLabel.querySelector('[aria-hidden="true"]')).toHaveStyle({ backgroundColor: "#BD93F9" });
+    await user.click(colorLabel);
+    const borderOption = screen.getByRole("option", { name: /^Border /i });
+    expect(borderOption.querySelector('[aria-hidden="true"]')).toHaveStyle({ backgroundColor: "#3B4252" });
+    await user.click(borderOption);
     const colorInput = await screen.findByLabelText(/^border color$/i);
     fireEvent.change(colorInput, { target: { value: "#12ab34" } });
 
