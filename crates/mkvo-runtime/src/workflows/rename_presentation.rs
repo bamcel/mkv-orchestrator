@@ -1,7 +1,9 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use mkvo_application::{parse_episode_number, parse_season_episode};
+use mkvo_application::{
+    parse_episode_number, parse_season_episode, try_match_absolute_episode,
+};
 use mkvo_contracts::RenameScopeRow;
 use mkvo_domain::{EpisodeMetadata, ExternalSubtitle, RemuxMode, RemuxPlanItem, TrackKind};
 
@@ -45,13 +47,49 @@ pub(super) fn match_episode_for_file<'a>(
             .find(|episode| episode.season == season && episode.episode == number);
     }
 
-    let number = parse_episode_number(file_name)?;
+    let number = rename_episode_number(file_name)?;
     let mut matches = episodes
         .iter()
         .filter(in_scope)
         .filter(|episode| episode.episode == number);
-    let matched = matches.next()?;
-    matches.next().is_none().then_some(matched)
+    let matched = matches.next();
+    if matched.is_some() && matches.next().is_none() {
+        return matched;
+    }
+
+    // Anime releases commonly use one continuously increasing episode number
+    // instead of season/episode notation. When that number is ambiguous (or no
+    // season contains it), treat it as a one-based position in the provider's
+    // regular episode order: 1 = S01E01, then continue across seasons. A
+    // concrete season scope remains authoritative and must not be silently
+    // reinterpreted as an all-series absolute number.
+    if !selected_seasons.is_empty() {
+        return None;
+    }
+    let absolute = try_match_absolute_episode(episodes, Some(number))?;
+    episodes
+        .iter()
+        .find(|episode| episode.id == absolute.episode.id)
+}
+
+/// Extract an episode number for rename matching.
+///
+/// The shared parser intentionally requires an episode marker or numeric
+/// bracket. Rename additionally accepts the common release form `Title - 55`,
+/// but only when the final stem component is entirely numeric. Keeping this
+/// rule here avoids making library audits mistake unrelated numbers for episode
+/// identities.
+pub(super) fn rename_episode_number(file_name: &str) -> Option<u32> {
+    parse_episode_number(file_name).or_else(|| {
+        let stem = Path::new(file_name).file_stem()?.to_string_lossy();
+        let (_, suffix) = stem.rsplit_once(" - ")?;
+        let suffix = suffix.trim();
+        (!suffix.is_empty()
+            && suffix.len() <= 4
+            && suffix.bytes().all(|byte| byte.is_ascii_digit()))
+        .then(|| suffix.parse().ok())
+        .flatten()
+    })
 }
 
 pub(super) fn track_kind_label(kind: TrackKind) -> &'static str {
@@ -188,15 +226,62 @@ mod tests {
     #[test]
     fn episode_only_filename_must_be_unambiguous_in_scope() {
         let episodes = vec![episode(1, 1, "Pilot"), episode(6, 1, "Essential")];
-        assert!(
-            match_episode_for_file("Superstore - Episode 1.mkv", &episodes, &BTreeSet::new())
-                .is_none()
-        );
+        let release_order = match_episode_for_file(
+            "Superstore - Episode 1.mkv",
+            &episodes,
+            &BTreeSet::new(),
+        )
+        .expect("first regular episode by release order");
+        assert_eq!((release_order.season, release_order.episode), (1, 1));
 
         let selected = BTreeSet::from([6]);
         let matched = match_episode_for_file("Superstore - Episode 1.mkv", &episodes, &selected)
             .expect("unique selected-season match");
         assert_eq!(matched.season, 6);
+    }
+
+    #[test]
+    fn episode_only_filename_falls_back_to_cross_season_release_order() {
+        let episodes = vec![
+            episode(2, 2, "Fourth"),
+            episode(1, 2, "Second"),
+            episode(2, 1, "Third"),
+            episode(1, 1, "First"),
+        ];
+
+        let matched = match_episode_for_file(
+            "Example Show - 3.mkv",
+            &episodes,
+            &BTreeSet::new(),
+        )
+        .expect("third regular episode");
+
+        assert_eq!((matched.season, matched.episode), (2, 1));
+        assert_eq!(matched.title, "Third");
+    }
+
+    #[test]
+    fn explicit_season_episode_still_wins_over_release_order() {
+        let episodes = vec![episode(1, 1, "First"), episode(2, 1, "Second season")];
+
+        let matched = match_episode_for_file(
+            "Example Show - S02E01.mkv",
+            &episodes,
+            &BTreeSet::new(),
+        )
+        .expect("explicit season match");
+
+        assert_eq!((matched.season, matched.episode), (2, 1));
+    }
+
+    #[test]
+    fn trailing_release_number_is_a_rename_only_episode_number() {
+        assert_eq!(
+            rename_episode_number("[Anime Time] My Hero Academia - 55.mkv"),
+            Some(55)
+        );
+        assert_eq!(rename_episode_number("Example Show - 20240.mkv"), None);
+        assert_eq!(rename_episode_number("Example Show 55.mkv"), None);
     }
 
     #[test]

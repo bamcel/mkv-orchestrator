@@ -8,7 +8,7 @@ use mkvo_domain::{
 
 use super::rename_presentation::{
     file_name, redacted_remux_command, remux_description, remux_mode_label, remux_tool_name,
-    same_path,
+    rename_episode_number, same_path,
 };
 use crate::compat::{MuxPreviewResponse, PropEditPreviewResponse, RenamePreviewResponse};
 use crate::runtime::display_path;
@@ -73,8 +73,13 @@ fn rename_episode_details(name: &str, episode: Option<&EpisodeIdentity>) -> (Str
         "Movie".to_owned()
     } else if let Some((season, number)) = mkvo_application::parse_season_episode(name) {
         format!("S{season:02}E{number:02}")
-    } else if let Some(number) = mkvo_application::parse_episode_number(name) {
-        format!("Episode {number}")
+    } else if let Some(number) = rename_episode_number(name) {
+        match episode.and_then(|episode| episode.season.zip(episode.episode)) {
+            Some((season, matched_number)) => {
+                format!("Episode {number} → S{season:02}E{matched_number:02}")
+            }
+            None => format!("Episode {number}"),
+        }
     } else {
         "Not detected".to_owned()
     };
@@ -254,6 +259,22 @@ mod tests {
         assert_eq!(
             super::rename_episode_details("Tower of God - S02E01.mkv", None),
             ("S02E01".into(), "-".into())
+        );
+        let release_order_episode = mkvo_domain::EpisodeIdentity {
+            season: Some(3),
+            episode: Some(17),
+            episode_title: Some("Relief for License Trainees".into()),
+            ..episode.clone()
+        };
+        assert_eq!(
+            super::rename_episode_details(
+                "[Anime Time] My Hero Academia - 55.mkv",
+                Some(&release_order_episode)
+            ),
+            (
+                "Episode 55 → S03E17".into(),
+                "Relief for License Trainees".into()
+            )
         );
         assert_eq!(
             super::rename_episode_details("unmatched.mkv", None),
