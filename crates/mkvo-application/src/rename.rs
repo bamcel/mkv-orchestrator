@@ -587,6 +587,42 @@ mod tests {
         }
     }
 
+    #[test]
+    fn database_order_ignores_specials_when_regular_file_count_matches() {
+        let mut episodes = (1..=7)
+            .map(|number| EpisodeMetadata {
+                id: format!("special-{number}"),
+                season: 0,
+                episode: number,
+                absolute_episode: None,
+                title: format!("Special {number}"),
+                aired_at: None,
+            })
+            .collect::<Vec<_>>();
+        for (season, count) in [(1, 13), (2, 12), (3, 12), (4, 22), (5, 15)] {
+            episodes.extend((1..=count).map(|number| EpisodeMetadata {
+                id: format!("{season}-{number}"),
+                season,
+                episode: number,
+                absolute_episode: None,
+                title: format!("Episode {number}"),
+                aired_at: None,
+            }));
+        }
+
+        let matched = match_by_list_order(&episodes, 74);
+
+        assert_eq!(matched.len(), 74);
+        assert_eq!(
+            matched.first().map(|item| (item.episode.season, item.episode.episode)),
+            Some((1, 1))
+        );
+        assert_eq!(
+            matched.last().map(|item| (item.episode.season, item.episode.episode)),
+            Some((5, 15))
+        );
+    }
+
     /// A film named with a series template used to render as the template's
     /// bare punctuation -- "SE -.mkv" -- because season and episode have
     /// nothing to say about a film.

@@ -7,6 +7,7 @@ use mkvo_application::{
     ApplicationError, FileAccessState, JobSpec, LibraryAuditService, PropertyEditPlanRequest,
     PropertyEditPlanner, RemuxOptions, RemuxPlanRequest, RemuxPlanner, RenamePlanRequest,
     RenamePlanner, RequiredAccess, TextEdit, ToolInvocation, TrackEditIntent,
+    match_by_list_order,
 };
 use mkvo_contracts::{
     JobCompletion, JobKind, JobLogLevel, LibraryAuditResponse, LibraryAuditRow,

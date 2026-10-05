@@ -27,12 +27,32 @@ impl MkvoRuntime {
             .await?;
         let selected_seasons = selected_seasons(&request.scope_keys);
         let is_movie = request.selected_result.format.eq_ignore_ascii_case("movie");
+        if !is_movie {
+            files.sort_by(|left, right| {
+                mkvo_domain::natural_compare(
+                    &left.path.to_string_lossy(),
+                    &right.path.to_string_lossy(),
+                )
+            });
+        }
+        let ordered_episodes = episodes
+            .iter()
+            .filter(|episode| {
+                selected_seasons.is_empty() || selected_seasons.contains(&episode.season)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let ordered_matches = if is_movie {
+            Vec::new()
+        } else {
+            match_by_list_order(&ordered_episodes, files.len())
+        };
         let series_title = if !is_movie && !request.custom_series_title.trim().is_empty() {
             request.custom_series_title.trim()
         } else {
             request.selected_result.name.as_str()
         };
-        for file in &mut files {
+        for (index, file) in files.iter_mut().enumerate() {
             // A film has no episode number to parse out of its name, so
             // requiring one left every movie unmatched and every token empty --
             // the rename came out as the bare punctuation of the template. The
@@ -40,8 +60,15 @@ impl MkvoRuntime {
             // match.
             let matched = if is_movie {
                 episodes.first()
-            } else {
+            } else if mkvo_application::parse_season_episode(&file.file_name()).is_some() {
                 match_episode_for_file(&file.file_name(), &episodes, &selected_seasons)
+            } else {
+                ordered_matches
+                    .get(index)
+                    .map(|matched| &matched.episode)
+                    .or_else(|| {
+                        match_episode_for_file(&file.file_name(), &episodes, &selected_seasons)
+                    })
             };
             if let Some(episode) = matched {
                 file.episode = Some(EpisodeIdentity {

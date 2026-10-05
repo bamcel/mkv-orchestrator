@@ -80,6 +80,10 @@ fn rename_episode_details(name: &str, episode: Option<&EpisodeIdentity>) -> (Str
             }
             None => format!("Episode {number}"),
         }
+    } else if let Some((season, number)) =
+        episode.and_then(|episode| episode.season.zip(episode.episode))
+    {
+        format!("Database order → S{season:02}E{number:02}")
     } else {
         "Not detected".to_owned()
     };
@@ -279,6 +283,10 @@ mod tests {
         assert_eq!(
             super::rename_episode_details("unmatched.mkv", None),
             ("Not detected".into(), "-".into())
+        );
+        assert_eq!(
+            super::rename_episode_details("Different Local Title [BD 1080p].mkv", Some(&episode)),
+            ("Database order → S01E01".into(), "BALL".into())
         );
         let movie = mkvo_domain::EpisodeIdentity {
             is_movie: true,
