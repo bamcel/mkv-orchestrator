@@ -35,7 +35,7 @@ impl MkvoRuntime {
             )));
         }
         let connection = self.media_server_connection(server).await?;
-        let client = media_server_client(server.kind, &loaded.settings);
+        let client = self.media_server_client(server.kind, &loaded.settings);
         let items = client
             .discover_items(
                 &connection,
@@ -84,7 +84,8 @@ impl MkvoRuntime {
                 RuntimeError::not_found(format!("media server {}", request.server_id))
             })?;
         let connection = self.media_server_connection(server).await?;
-        let artwork = media_server_client(server.kind, &loaded.settings)
+        let artwork = self
+            .media_server_client(server.kind, &loaded.settings)
             .fetch_artwork(&connection, &request.item_id, CancellationToken::new())
             .await?;
         if !artwork
@@ -232,7 +233,7 @@ impl MkvoRuntime {
                 self.secret_alias(&[key]).await?.unwrap_or_default()
             }
         };
-        let client = media_server_client(kind, &loaded.settings);
+        let client = self.media_server_client(kind, &loaded.settings);
         let connection = MediaServerConnection {
             kind,
             base_url: url,
@@ -289,7 +290,8 @@ impl MkvoRuntime {
             base_url: server.server_url.clone(),
             credential,
         };
-        let mut libraries = media_server_client(server.kind, &settings)
+        let mut libraries = self
+            .media_server_client(server.kind, &settings)
             .discover_libraries(&connection, CancellationToken::new())
             .await?;
         resolve_media_server_local_paths(&mut libraries, &self.inner.config.media_root);

@@ -69,6 +69,33 @@ struct RuntimeInner {
     settings_service: Arc<SettingsService>,
     current_scan: Arc<RwLock<CurrentScanState>>,
     legacy_rename_history: Vec<LegacyRenameBatchRecord>,
+    providers: ProviderClients,
+    media_server_http: MediaServerDiscoveryClient,
+}
+
+/// HTTP clients for the metadata providers, built once per runtime.
+///
+/// Each client keeps its state behind an `Arc`: the TVDB login token and the
+/// AniDB title dump (which AniDB asks clients to fetch at most once a day), as
+/// well as the connection pool. Building a client per request threw all of
+/// that away, so every search logged in to TVDB again and downloaded the AniDB
+/// dump again. Clones share the state.
+struct ProviderClients {
+    tvdb: TvdbClient,
+    tmdb: TmdbClient,
+    anilist: AniListClient,
+    anidb: AniDbClient,
+}
+
+impl ProviderClients {
+    fn new() -> Self {
+        Self {
+            tvdb: TvdbClient::new(),
+            tmdb: TmdbClient::new(),
+            anilist: AniListClient::new(),
+            anidb: AniDbClient::new(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -213,6 +240,8 @@ impl MkvoRuntime {
                 settings_service,
                 current_scan: Arc::new(RwLock::new(CurrentScanState::default())),
                 legacy_rename_history,
+                providers: ProviderClients::new(),
+                media_server_http: MediaServerDiscoveryClient::new(),
             }),
         }
     }
@@ -665,23 +694,29 @@ fn resolve_media_server_local_paths(libraries: &mut [MediaServerLibrary], media_
     }
 }
 
-fn media_server_client(
-    kind: MediaServerKind,
-    settings: &AppSettings,
-) -> Arc<dyn MediaServerClient> {
-    let mappings = settings
-        .media_server_path_mappings
-        .iter()
-        .map(|mapping| MediaServerPathMapping {
-            server_path_prefix: display_path(&mapping.remote_prefix),
-            local_path_prefix: mapping.local_prefix.clone(),
-        })
-        .collect();
-    Arc::new(ConfiguredMediaServerClient::new(
-        kind,
-        MediaServerDiscoveryClient::new(),
-        mappings,
-    ))
+impl MkvoRuntime {
+    /// A media-server client over the runtime's shared HTTP client, so poster
+    /// grids and syncs reuse pooled connections instead of a new client (and a
+    /// new TLS handshake) per request.
+    fn media_server_client(
+        &self,
+        kind: MediaServerKind,
+        settings: &AppSettings,
+    ) -> Arc<dyn MediaServerClient> {
+        let mappings = settings
+            .media_server_path_mappings
+            .iter()
+            .map(|mapping| MediaServerPathMapping {
+                server_path_prefix: display_path(&mapping.remote_prefix),
+                local_path_prefix: mapping.local_prefix.clone(),
+            })
+            .collect();
+        Arc::new(ConfiguredMediaServerClient::new(
+            kind,
+            self.inner.media_server_http.clone(),
+            mappings,
+        ))
+    }
 }
 
 fn rename_search_result(value: mkvo_domain::ProviderSearchResult) -> RenameSearchResult {
