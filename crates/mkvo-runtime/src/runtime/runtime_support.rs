@@ -30,7 +30,7 @@ impl MkvoRuntime {
                     .await?
                     .map(SecretString::new);
                 Ok(Arc::new(ConfiguredTvdbProvider::new(
-                    TvdbClient::new(),
+                    self.inner.providers.tvdb.clone(),
                     ProviderCredentials {
                         api_key: SecretString::new(api_key),
                         pin,
@@ -44,14 +44,14 @@ impl MkvoRuntime {
                     .await?
                     .ok_or_else(|| RuntimeError::invalid("TMDB API key is not configured"))?;
                 Ok(Arc::new(ConfiguredTmdbProvider::new(
-                    TmdbClient::new(),
+                    self.inner.providers.tmdb.clone(),
                     ProviderCredentials::api_key(api_key),
                     language,
                 )))
             }
             // AniList is a public GraphQL API and needs no credentials.
             MetadataProvider::AniList => Ok(Arc::new(ConfiguredAniListProvider::new(
-                AniListClient::new(),
+                self.inner.providers.anilist.clone(),
                 language,
             ))),
             // AniDB identifies callers by a registered client name rather than a
@@ -64,7 +64,7 @@ impl MkvoRuntime {
                     .await?
                     .unwrap_or_default();
                 Ok(Arc::new(ConfiguredAniDbProvider::new(
-                    AniDbClient::new(),
+                    self.inner.providers.anidb.clone(),
                     ProviderCredentials::api_key(client),
                     language,
                 )))
