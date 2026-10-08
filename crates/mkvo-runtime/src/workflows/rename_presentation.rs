@@ -183,8 +183,14 @@ pub(super) fn same_path(left: &Path, right: &Path) -> bool {
     path_key(&left.to_string_lossy()) == path_key(&right.to_string_lossy())
 }
 
+/// Comparison key for a path in workflow lookups.
+///
+/// Scanned files carry the canonical path, which on Windows has the
+/// extended-length `\\?\` prefix, while rows from the UI carry the plain form.
+/// The prefix is dropped first so both spellings of one file share a key;
+/// otherwise row lookups miss and fall back to re-fingerprinting the file.
 pub(super) fn path_key(value: &str) -> String {
-    value
+    mkvo_domain::normalized_path_text(Path::new(value))
         .replace('\\', "/")
         .trim_end_matches('/')
         .to_ascii_lowercase()
@@ -282,6 +288,23 @@ mod tests {
         );
         assert_eq!(rename_episode_number("Example Show - 20240.mkv"), None);
         assert_eq!(rename_episode_number("Example Show 55.mkv"), None);
+    }
+
+    #[test]
+    fn extended_length_and_plain_windows_paths_compare_equal() {
+        assert!(same_path(
+            Path::new(r"\\?\C:\Media\Show\Episode 01.mkv"),
+            Path::new(r"C:\Media\Show\Episode 01.mkv")
+        ));
+        assert!(same_path(
+            Path::new(r"\\?\UNC\nas\media\Episode 01.mkv"),
+            Path::new(r"\\nas\media\Episode 01.mkv")
+        ));
+        assert_eq!(path_key(r"\\?\C:\Media\Show"), path_key("c:/media/show/"));
+        assert!(!same_path(
+            Path::new(r"\\?\C:\Media\Show\Episode 01.mkv"),
+            Path::new(r"C:\Media\Show\Episode 02.mkv")
+        ));
     }
 
     #[test]
