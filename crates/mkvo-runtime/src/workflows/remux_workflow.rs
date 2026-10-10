@@ -14,6 +14,18 @@ impl MkvoRuntime {
         let files = self
             .resolve_rows(&request.files, &request.selected_paths)
             .await?;
+        let reorder_template = if request.reorder_tracks {
+            let template_path = PathBuf::from(&request.reorder_template_path);
+            Some(
+                files
+                    .iter()
+                    .find(|file| same_path(&file.path, &template_path))
+                    .cloned()
+                    .ok_or_else(|| RuntimeError::invalid("Reorder template must be one of the selected MKV files."))?,
+            )
+        } else {
+            None
+        };
         let mode = if request.convert_mp4_to_mkv {
             RemuxMode::ConvertToMkv
         } else if request.extract_subtitles {
@@ -161,7 +173,7 @@ impl MkvoRuntime {
         let base = RemuxPlanner
             .build_plan(RemuxPlanRequest {
                 mode,
-                files,
+                files: files.clone(),
                 source_access,
                 options: RemuxOptions {
                     filter_audio_languages: request.remove_unwanted_audio_languages,
@@ -189,6 +201,31 @@ impl MkvoRuntime {
             .map_err(RuntimeError::from)?;
         let mut context = base.context;
         let mut payload = base.payload;
+        if let Some(template) = reorder_template.as_ref() {
+            let desired_template_tracks = ordered_template_tracks(
+                template,
+                &request.reorder_template_track_ids,
+            )?;
+            for item in &mut payload.items {
+                let Some(file) = files.iter().find(|file| same_path(&file.path, &item.source)) else {
+                    continue;
+                };
+                match track_order_for(file, &desired_template_tracks) {
+                    Ok(order) if order != file.tracks.iter().map(|track| track.mkvmerge_id).collect::<Vec<_>>() => {
+                        item.track_order_ids = order;
+                        item.conflicts.retain(|conflict| conflict.kind != mkvo_domain::PlanConflictKind::NoChange);
+                    }
+                    Ok(order) => {
+                        item.track_order_ids = order;
+                    }
+                    Err(message) => item.conflicts.push(mkvo_domain::PlanConflict::blocking(
+                        mkvo_domain::PlanConflictKind::InvalidSelection,
+                        message,
+                        Some(item.source.clone()),
+                    )),
+                }
+            }
+        }
         for item in &mut payload.items {
             if item.mode == RemuxMode::ExtractSubtitles {
                 continue;
@@ -535,6 +572,16 @@ impl MkvoRuntime {
         {
             append_track_selection(&mut arguments, &source, &item.selected_track_ids);
         }
+        if !item.track_order_ids.is_empty() {
+            arguments.push("--track-order".to_owned());
+            arguments.push(
+                item.track_order_ids
+                    .iter()
+                    .map(|id| format!("0:{id}"))
+                    .collect::<Vec<_>>()
+                    .join(","),
+            );
+        }
         arguments.push(item.source.to_string_lossy().into_owned());
         for subtitle in &item.external_subtitles {
             if !subtitle.language.trim().is_empty() {
@@ -667,6 +714,65 @@ impl MkvoRuntime {
     }
 }
 
+fn ordered_template_tracks<'a>(
+    template: &'a MediaFile,
+    requested_ids: &[u64],
+) -> RuntimeResult<Vec<&'a MediaTrack>> {
+    let ids = if requested_ids.is_empty() {
+        template.tracks.iter().map(|track| track.mkvmerge_id).collect::<Vec<_>>()
+    } else {
+        requested_ids.to_vec()
+    };
+    if ids.len() != template.tracks.len() {
+        return Err(RuntimeError::invalid("Template order must contain every track exactly once."));
+    }
+    let mut ordered = Vec::with_capacity(ids.len());
+    for id in ids {
+        if ordered.iter().any(|track: &&MediaTrack| track.mkvmerge_id == id) {
+            return Err(RuntimeError::invalid("Template order contains a duplicate track."));
+        }
+        ordered.push(template.tracks.iter().find(|track| track.mkvmerge_id == id).ok_or_else(|| {
+            RuntimeError::invalid(format!("Template track ID {id} was not found."))
+        })?);
+    }
+    Ok(ordered)
+}
+
+fn track_order_for(file: &MediaFile, template_tracks: &[&MediaTrack]) -> Result<Vec<u64>, String> {
+    if file.tracks.len() != template_tracks.len() {
+        return Err(format!("Track count does not match template ({} vs {}).", file.tracks.len(), template_tracks.len()));
+    }
+    let mut used = BTreeSet::new();
+    let mut order = Vec::with_capacity(template_tracks.len());
+    for template in template_tracks {
+        let matches = file
+            .tracks
+            .iter()
+            .filter(|track| !used.contains(&track.mkvmerge_id) && tracks_match(template, track))
+            .collect::<Vec<_>>();
+        if matches.len() != 1 {
+            return Err(format!(
+                "Could not uniquely match template track {} ({} / {} / {}).",
+                template.propedit_track_number,
+                track_kind_label(template.kind),
+                template.language_or_undetermined(),
+                template.name.as_deref().unwrap_or("unnamed")
+            ));
+        }
+        used.insert(matches[0].mkvmerge_id);
+        order.push(matches[0].mkvmerge_id);
+    }
+    Ok(order)
+}
+
+fn tracks_match(left: &MediaTrack, right: &MediaTrack) -> bool {
+    left.kind == right.kind
+        && left.language_or_undetermined().eq_ignore_ascii_case(right.language_or_undetermined())
+        && left.name.as_deref().unwrap_or("").trim().eq_ignore_ascii_case(right.name.as_deref().unwrap_or("").trim())
+        && left.codec_id.as_deref().unwrap_or(&left.codec).eq_ignore_ascii_case(right.codec_id.as_deref().unwrap_or(&right.codec))
+        && left.channels == right.channels
+}
+
 fn subtitle_codec_matches(codec: &str, codec_id: Option<&str>, subtitle_path: &Path) -> bool {
     let extension = subtitle_path
         .extension()
@@ -683,10 +789,41 @@ fn subtitle_codec_matches(codec: &str, codec_id: Option<&str>, subtitle_path: &P
     }
 }
 
+fn subtitle_names_match(existing: Option<&str>, candidate: Option<&str>) -> bool {
+    let existing = existing.map(str::trim).filter(|value| !value.is_empty());
+    let candidate = candidate.map(str::trim).filter(|value| !value.is_empty());
+    match (existing, candidate) {
+        (None, None) => true,
+        (Some(existing), Some(candidate)) => existing.eq_ignore_ascii_case(candidate),
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod subtitle_match_tests {
-    use super::{subtitle_codec_matches, subtitle_names_match};
+    use super::{subtitle_codec_matches, subtitle_names_match, track_order_for};
+    use mkvo_domain::{ContainerMetadata, FileFingerprint, MediaFile, MediaStatus, MediaTrack, TrackKind};
     use std::path::Path;
+    use chrono::Utc;
+
+    fn track(id: u64, number: u32, kind: TrackKind, name: &str) -> MediaTrack {
+        MediaTrack {
+            mkvmerge_id: id, propedit_track_number: number, kind,
+            codec: if kind == TrackKind::Subtitle { "SubStationAlpha" } else { "HEVC" }.to_owned(),
+            codec_id: None, language: Some(if kind == TrackKind::Subtitle { "eng" } else { "und" }.to_owned()),
+            name: (!name.is_empty()).then(|| name.to_owned()), resolution: None, bit_depth: None,
+            hdr: None, channels: None, sampling_frequency_hz: None, default: false, forced: false, enabled: true,
+        }
+    }
+
+    fn file(tracks: Vec<MediaTrack>) -> MediaFile {
+        MediaFile {
+            path: "episode.mkv".into(), original_file_name: None, watch_root: None, relative_path: None,
+            fingerprint: FileFingerprint { path: "episode.mkv".into(), size_bytes: 1, modified_at: Utc::now(), quick_hash: None },
+            container: ContainerMetadata::default(), tracks, attachments: Vec::new(), episode: None,
+            provider_match: None, status: MediaStatus::Ready,
+        }
+    }
 
     #[test]
     fn requires_the_external_format_to_match_the_embedded_codec() {
@@ -702,14 +839,33 @@ mod subtitle_match_tests {
         assert!(!subtitle_names_match(Some("Dialogue"), Some("SDH")));
         assert!(!subtitle_names_match(Some("Dialogue"), None));
     }
-}
 
-fn subtitle_names_match(existing: Option<&str>, candidate: Option<&str>) -> bool {
-    let existing = existing.map(str::trim).filter(|value| !value.is_empty());
-    let candidate = candidate.map(str::trim).filter(|value| !value.is_empty());
-    match (existing, candidate) {
-        (None, None) => true,
-        (Some(existing), Some(candidate)) => existing.eq_ignore_ascii_case(candidate),
-        _ => false,
+    #[test]
+    fn maps_reversed_subtitles_to_the_template_order() {
+        let template_tracks = [
+            track(0, 1, TrackKind::Video, ""),
+            track(1, 2, TrackKind::Subtitle, "Dialogue"),
+            track(2, 3, TrackKind::Subtitle, "Signs/Songs"),
+        ];
+        let target = file(vec![
+            track(0, 1, TrackKind::Video, ""),
+            track(1, 2, TrackKind::Subtitle, "Signs/Songs"),
+            track(2, 3, TrackKind::Subtitle, "Dialogue"),
+        ]);
+        let desired = template_tracks.iter().collect::<Vec<_>>();
+
+        assert_eq!(track_order_for(&target, &desired), Ok(vec![0, 2, 1]));
+    }
+
+    #[test]
+    fn refuses_to_guess_between_duplicate_track_signatures() {
+        let template_tracks = [track(0, 1, TrackKind::Subtitle, "Dialogue")];
+        let target = file(vec![
+            track(1, 1, TrackKind::Subtitle, "Dialogue"),
+            track(2, 2, TrackKind::Subtitle, "Dialogue"),
+        ]);
+        let desired = template_tracks.iter().collect::<Vec<_>>();
+
+        assert!(track_order_for(&target, &desired).is_err());
     }
 }

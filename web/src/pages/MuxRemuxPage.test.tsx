@@ -33,7 +33,7 @@ beforeEach(() => {
 });
 
 describe("MKV Operations file selection", () => {
-  it("preserves originals by default and allows replacement", async () => {
+  it("replaces originals by default and allows preserving them", async () => {
     const user = userEvent.setup();
     const file = mediaFile("Episode 01.mkv");
     const buildMuxPreview = vi.fn((_request: MuxPreviewRequest) => Promise.resolve({
@@ -53,19 +53,20 @@ describe("MKV Operations file selection", () => {
     );
 
     await screen.findByText("Episode 01.mkv");
-    expect(screen.getByRole("radio", { name: "Create new file and preserve original" })).toBeChecked();
-    expect(screen.getByLabelText("Output suffix")).toHaveValue(".remuxed");
+    expect(screen.getByRole("radio", { name: "Replace the original" })).toBeChecked();
+    expect(screen.queryByLabelText("Output suffix")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Preview Summary" }));
     await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
     expect(buildMuxPreview.mock.calls[0][0]).toMatchObject({
-      preserveOriginal: true,
+      preserveOriginal: false,
       remuxOutputSuffix: ".remuxed"
     });
 
-    await user.click(screen.getByRole("radio", { name: "Replace the original" }));
+    await user.click(screen.getByRole("radio", { name: "Create new file and preserve original" }));
+    expect(screen.getByLabelText("Output suffix")).toHaveValue(".remuxed");
     await user.click(screen.getByRole("button", { name: "Preview Summary" }));
     await waitFor(() => expect(buildMuxPreview).toHaveBeenCalledTimes(2));
-    expect(buildMuxPreview.mock.calls[1][0].preserveOriginal).toBe(false);
+    expect(buildMuxPreview.mock.calls[1][0].preserveOriginal).toBe(true);
   });
 
   it("removes manual subtitle browsing and does not skip existing subtitles by default", async () => {

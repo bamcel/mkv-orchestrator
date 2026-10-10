@@ -144,6 +144,12 @@ pub struct MuxPreviewRequest {
     pub preserve_original: bool,
     #[serde(default = "default_remux_output_suffix")]
     pub remux_output_suffix: String,
+    #[serde(default)]
+    pub reorder_tracks: bool,
+    #[serde(default)]
+    pub reorder_template_path: String,
+    #[serde(default)]
+    pub reorder_template_track_ids: Vec<u64>,
     pub mux_matching_external_subtitles: bool,
     #[serde(default)]
     pub manual_subtitle_selections: Vec<ManualSubtitleSelection>,

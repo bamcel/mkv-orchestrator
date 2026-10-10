@@ -1,6 +1,6 @@
 import { useOverlayAccessibility } from "./useOverlayAccessibility";
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Activity, Captions, Database, FileCog, FolderOpen, ListVideo, Logs, RefreshCw, Settings, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Activity, Captions, Database, FileCog, FolderOpen, ListRestart, ListVideo, Logs, RefreshCw, Settings, Trash2 } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getStatus } from "../api";
@@ -13,6 +13,7 @@ const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: Activity },
   { to: "/rename", label: "Rename Files", icon: ListVideo },
   { to: "/remove-tracks", label: "Remove Tracks", icon: Trash2 },
+  { to: "/reorder-tracks", label: "Reorder Tracks", icon: ListRestart },
   { to: "/edit-tracks", label: "Edit Tracks", icon: FileCog },
   { to: "/subtitles", label: "Subtitles", icon: Captions },
   { to: "/convert-remux", label: "Convert / Remux", icon: RefreshCw, requiresMp4: true },

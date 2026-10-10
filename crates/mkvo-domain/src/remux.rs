@@ -40,6 +40,9 @@ pub struct RemuxPlanItem {
     pub mode: RemuxMode,
     #[serde(default)]
     pub selected_track_ids: Vec<u64>,
+    /// mkvmerge track IDs in the exact order they should appear in the output.
+    #[serde(default)]
+    pub track_order_ids: Vec<u64>,
     #[serde(default)]
     pub external_subtitles: Vec<ExternalSubtitle>,
     #[serde(default)]

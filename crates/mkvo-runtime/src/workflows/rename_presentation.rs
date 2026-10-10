@@ -130,6 +130,9 @@ pub(super) fn remux_description(item: &RemuxPlanItem) -> String {
             external_subtitle_list(&item.external_subtitles)
         ),
         RemuxMode::ConvertToMkv => "Losslessly copy streams into MKV".to_owned(),
+        RemuxMode::Remux if !item.track_order_ids.is_empty() => {
+            format!("Reorder {} track(s) to match the template", item.track_order_ids.len())
+        }
         RemuxMode::Remux => format!("Keep {} selected track(s)", item.selected_track_ids.len()),
     };
     if !same_path(&item.source, &item.final_output) {

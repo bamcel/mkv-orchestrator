@@ -287,6 +287,7 @@ impl RemuxPlanner {
                 final_output,
                 mode: request.mode,
                 selected_track_ids,
+                track_order_ids: Vec::new(),
                 external_subtitles,
                 extract_tracks,
                 preserve_chapters: request.options.preserve_chapters,

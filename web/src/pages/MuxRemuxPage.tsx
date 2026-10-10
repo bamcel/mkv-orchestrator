@@ -40,7 +40,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
   const [trackIds, setTrackIds] = useState("");
   const [preserveChapters, setPreserveChapters] = useState(true);
   const [preserveAttachments, setPreserveAttachments] = useState(true);
-  const [preserveOriginal, setPreserveOriginal] = useState(true);
+  const [preserveOriginal, setPreserveOriginal] = useState(() => workflow !== "remove");
   const [remuxOutputSuffix, setRemuxOutputSuffix] = useState(".remuxed");
   const [muxExternal, setMuxExternal] = useState(false);
   const [externalLanguage, setExternalLanguage] = useState("eng");
@@ -195,6 +195,9 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
       preserveAttachments,
       preserveOriginal: !convertMp4 && !extractSubtitles && preserveOriginal,
       remuxOutputSuffix,
+      reorderTracks: false,
+      reorderTemplatePath: "",
+      reorderTemplateTrackIds: [],
       muxMatchingExternalSubtitles: muxExternal,
       manualSubtitleSelections: [],
       externalSubtitleLanguage: externalLanguage,
