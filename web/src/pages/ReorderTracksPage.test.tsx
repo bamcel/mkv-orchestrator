@@ -40,13 +40,17 @@ it("builds a batch request from the user-arranged template order", async () => {
 
   await screen.findByText("Dialogue");
   await user.click(screen.getByRole("button", { name: "Move Dialogue down" }));
-  await user.click(screen.getByRole("button", { name: "Preview" }));
+  expect(screen.getByRole("heading", { name: "File Info" })).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: "Select 01.mkv" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Select 02.mkv" })).toBeChecked();
+  await user.click(screen.getByRole("button", { name: "Preview Summary" }));
 
   await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
   expect(buildMuxPreview.mock.calls[0][0]).toMatchObject({
     reorderTracks: true,
     reorderTemplatePath: "/media/01.mkv",
     reorderTemplateTrackIds: [0, 2, 1],
+    selectedPaths: ["/media/01.mkv", "/media/02.mkv"],
     preserveOriginal: false
   });
 });
