@@ -757,6 +757,7 @@ mod tests {
             reorder_template_path: String::new(),
             reorder_template_track_ids: Vec::new(),
             format_subtitles: false,
+            subtitle_track_selections: Vec::new(),
             subtitle_font_family: String::new(),
             subtitle_primary_color: "#FFFFFF".to_owned(),
             subtitle_outline_color: "#000000".to_owned(),

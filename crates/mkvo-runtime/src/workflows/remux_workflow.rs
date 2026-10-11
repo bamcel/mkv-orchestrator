@@ -243,8 +243,13 @@ impl MkvoRuntime {
                 let Some(file) = files.iter().find(|file| same_path(&file.path, &item.source)) else {
                     continue;
                 };
+                let selected_track_ids = request.subtitle_track_selections.iter()
+                    .find(|selection| same_path(Path::new(&selection.file_path), &item.source))
+                    .map(|selection| selection.track_ids.iter().copied().collect::<BTreeSet<_>>());
                 let transforms = file.tracks.iter().filter(|track| {
-                    track.kind == TrackKind::Subtitle && is_editable_ass_track(track)
+                    track.kind == TrackKind::Subtitle
+                        && is_editable_ass_track(track)
+                        && selected_track_ids.as_ref().is_none_or(|ids| ids.contains(&track.mkvmerge_id))
                 }).map(|track| {
                     let stem = item.source.file_stem().map_or_else(String::new, |value| value.to_string_lossy().into_owned());
                     mkvo_domain::SubtitleTransform {
@@ -259,7 +264,7 @@ impl MkvoRuntime {
                 if transforms.is_empty() {
                     item.conflicts.push(mkvo_domain::PlanConflict::blocking(
                         mkvo_domain::PlanConflictKind::InvalidSelection,
-                        "No editable ASS/SSA subtitle tracks were found. Bitmap subtitles such as PGS cannot have their font changed.",
+                        "No editable ASS/SSA subtitle tracks were selected. Bitmap subtitles such as PGS cannot have their font changed.",
                         Some(item.source.clone()),
                     ));
                     continue;

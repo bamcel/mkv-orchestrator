@@ -24,17 +24,30 @@ export function SubtitleFormatPage() {
   const [outlineSize, setOutlineSize] = useState("2");
   const [keepTiming, setKeepTiming] = useState(true);
   const [timingOffset, setTimingOffset] = useState("0");
+  const [selectedTrackIds, setSelectedTrackIds] = useState<Record<string, number[]>>({});
   const [previewResult, setPreviewResult] = useState<MuxPreviewResponse | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [status, setStatus] = useState("Select MKV files and choose the new ASS/SSA subtitle style.");
   const offsetMs = keepTiming ? 0 : Math.round((Number(timingOffset) || 0) * 1000);
-  const compatibleCount = mkvFiles.filter((file) => selectedMkvPaths.some((path) => samePath(path, file.path)) && file.tracks.some(isEditableSubtitle)).length;
+  const selectedTrackCount = selectedMkvPaths.reduce((count, path) => count + (selectedTrackIds[pathKey(path)]?.length ?? 0), 0);
+  const compatibleCount = selectedMkvPaths.filter((path) => (selectedTrackIds[pathKey(path)]?.length ?? 0) > 0).length;
 
   useEffect(() => {
     loadImportedFonts().then((fonts) => setFontLibrary([...builtInSubtitleFonts, ...fonts])).catch(() => setStatus("Saved fonts could not be loaded in this browser."));
     void selectFont(builtInSubtitleFonts[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setSelectedTrackIds((current) => {
+      const next = { ...current };
+      for (const file of mkvFiles) {
+        const key = pathKey(file.path);
+        if (!(key in next)) next[key] = file.tracks.filter(isEditableSubtitle).map((track) => track.id);
+      }
+      return next;
+    });
+  }, [mkvFiles]);
 
   async function selectFont(font: SubtitleFont) {
     try {
@@ -75,7 +88,7 @@ export function SubtitleFormatPage() {
       removeUnwantedAudioLanguages: false, keepAudioLanguages: "", removeUnwantedSubtitleLanguages: false, keepSubtitleLanguages: "", removeUnwantedTrackIds: false, removeTrackIdsText: "",
       preserveChapters: true, preserveAttachments: true, preserveOriginal: false, remuxOutputSuffix: ".remuxed",
       reorderTracks: false, reorderTemplatePath: "", reorderTemplateTrackIds: [],
-      formatSubtitles: true, subtitleFontFamily: fontFamily.trim(), subtitlePrimaryColor: primaryColor, subtitleOutlineColor: outlineColor, subtitleOutlineSize: outlineSize, subtitleFontFileName: fontFileName, subtitleFontDataBase64: fontDataBase64, subtitleTimingOffsetMs: offsetMs,
+      formatSubtitles: true, subtitleTrackSelections: selectedMkvPaths.map((filePath) => ({ filePath, trackIds: selectedTrackIds[pathKey(filePath)] ?? [] })), subtitleFontFamily: fontFamily.trim(), subtitlePrimaryColor: primaryColor, subtitleOutlineColor: outlineColor, subtitleOutlineSize: outlineSize, subtitleFontFileName: fontFileName, subtitleFontDataBase64: fontDataBase64, subtitleTimingOffsetMs: offsetMs,
       muxMatchingExternalSubtitles: false, manualSubtitleSelections: [], externalSubtitleLanguage: "und", externalSubtitleTrackName: null, externalSubtitleFormats: "", preserveExternalSubtitleFiles: true, skipMuxIfSubtitleAlreadyExists: false,
       extractSubtitles: false, extractSubtitleLanguages: "", extractOverwriteExistingFiles: false, convertMp4ToMkv: false, deleteMp4AfterConvert: false,
       planId: plan?.planId ?? null, planFingerprint: plan?.planFingerprint ?? null, idempotencyKey: plan?.idempotencyKey ?? null
@@ -83,13 +96,13 @@ export function SubtitleFormatPage() {
   }
 
   function runPreview() {
-    if (!fontFamily.trim() || selectedMkvPaths.length === 0) return;
+    if (!fontFamily.trim() || selectedMkvPaths.length === 0 || selectedTrackCount === 0) return;
     setSummaryOpen(true);
     preview.mutate(request());
   }
 
   async function runApply() {
-    if (!fontFamily.trim() || selectedMkvPaths.length === 0) return;
+    if (!fontFamily.trim() || selectedMkvPaths.length === 0 || selectedTrackCount === 0) return;
     try {
       const plan = await preview.mutateAsync(request());
       if (!plan.actions.length) { setStatus("No compatible subtitle changes are available."); return; }
@@ -99,6 +112,15 @@ export function SubtitleFormatPage() {
 
   const busy = preview.isPending || apply.isPending || (operation.activeOperation?.label === "Subtitle Format" && operation.isRunning);
   const shiftedTime = formatOffset(offsetMs);
+
+  function toggleTrack(filePath: string, trackId: number) {
+    const key = pathKey(filePath);
+    setSelectedTrackIds((current) => {
+      const selected = current[key] ?? [];
+      return { ...current, [key]: selected.includes(trackId) ? selected.filter((id) => id !== trackId) : [...selected, trackId] };
+    });
+    setPreviewResult(null);
+  }
 
   return <div className="workspace-page flex h-full min-h-0 flex-col">
     <SectionHeader title="Subtitle Format" description="Batch-change ASS/SSA subtitle fonts and optionally shift cue timing." />
@@ -118,14 +140,14 @@ export function SubtitleFormatPage() {
           {!keepTiming ? <label className="block"><span className="text-xs font-semibold text-muted">Offset in seconds</span><input aria-label="Timing offset in seconds" type="number" step="0.1" value={timingOffset} onChange={(event) => { setTimingOffset(event.target.value); setPreviewResult(null); }} className="mt-1.5 h-9 w-full rounded-md border border-border bg-input px-3 text-sm" /><span className="mt-1 block text-xs text-muted">Positive delays subtitles; negative shows them earlier.</span></label> : null}
           <div className="rounded-md border border-warning bg-panel p-3 text-xs leading-5 text-muted">Font editing supports ASS/SSA text subtitles. PGS, VobSub, and other bitmap subtitles have no editable font and will be blocked.</div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3"><button onClick={runPreview} disabled={busy || !fontFamily.trim() || selectedMkvPaths.length === 0} className="h-9 flex-1 rounded-md border border-border bg-button text-xs font-semibold disabled:text-disabled">Preview Summary</button><button onClick={runApply} disabled={busy || !fontFamily.trim() || selectedMkvPaths.length === 0} className="h-9 flex-1 rounded-md bg-accent text-xs font-semibold disabled:bg-button disabled:text-disabled">Apply Changes</button><span className="w-full text-xs text-muted">{selectedMkvPaths.length} files selected · {compatibleCount} compatible</span><span role="status" className="w-full text-xs text-muted">{status}</span></div>
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3"><button onClick={runPreview} disabled={busy || !fontFamily.trim() || selectedMkvPaths.length === 0 || selectedTrackCount === 0} className="h-9 flex-1 rounded-md border border-border bg-button text-xs font-semibold disabled:text-disabled">Preview Summary</button><button onClick={runApply} disabled={busy || !fontFamily.trim() || selectedMkvPaths.length === 0 || selectedTrackCount === 0} className="h-9 flex-1 rounded-md bg-accent text-xs font-semibold disabled:bg-button disabled:text-disabled">Apply Changes</button><span className="w-full text-xs text-muted">{selectedMkvPaths.length} files selected · {selectedTrackCount} tracks across {compatibleCount} files</span><span role="status" className="w-full text-xs text-muted">{status}</span></div>
       </section>
 
       <div className="grid min-h-0 gap-3 grid-rows-[minmax(0,1fr)_minmax(15rem,0.75fr)]">
         <section className="flex min-h-0 flex-col rounded-lg border border-border bg-card p-4"><div className="flex items-center justify-between"><h2 className="text-base font-semibold">File Info</h2><div className="flex gap-2 text-xs"><button className="rounded border border-border px-3 py-1.5" onClick={() => setSelectedPaths(mkvFiles.map((file) => file.path))}>Select all</button><button className="rounded border border-border px-3 py-1.5" onClick={() => setSelectedPaths([])}>Clear selection</button></div></div>
-          <div className="mt-3 min-h-0 flex-1 overflow-auto"><table className="file-info-table border-collapse text-left text-sm"><thead className="sticky top-0 bg-card text-xs"><tr><th className="border-b border-border px-3 py-2">File</th><th className="border-b border-border px-3 py-2">Subtitle tracks</th><th className="border-b border-border px-3 py-2">Editable</th><th className="border-b border-border px-3 py-2">Status</th></tr></thead><tbody>{mkvFiles.map((file) => {
-            const editable = file.tracks.filter(isEditableSubtitle).length; const subtitleTracks = file.tracks.filter((track) => ["subtitle", "subtitles"].includes(track.type.toLowerCase())).length; const selected = selectedMkvPaths.some((path) => samePath(path, file.path));
-            return <tr key={file.path} className="bg-card hover:bg-selected"><td className="border-b border-border px-3 py-2"><div className="flex items-center gap-3"><input aria-label={`Select ${file.fileName}`} type="checkbox" checked={selected} onChange={() => toggleSelectedPath(file.path)} /><FileName value={file.fileName}/></div></td><td className="border-b border-border px-3 py-2">{subtitleTracks}</td><td className="border-b border-border px-3 py-2">{editable} ASS/SSA</td><td className={["border-b border-border px-3 py-2", editable ? "text-success" : "text-warning"].join(" ")}>{editable ? "Ready" : "No editable subtitles"}</td></tr>;
+          <div className="mt-3 min-h-0 flex-1 overflow-auto"><table className="file-info-table border-collapse text-left text-sm"><thead className="sticky top-0 bg-card text-xs"><tr><th className="border-b border-border px-3 py-2">File</th><th className="border-b border-border px-3 py-2">Tracks to format</th><th className="border-b border-border px-3 py-2">Status</th></tr></thead><tbody>{mkvFiles.map((file) => {
+            const editableTracks = file.tracks.filter(isEditableSubtitle); const selected = selectedMkvPaths.some((path) => samePath(path, file.path)); const chosenIds = selectedTrackIds[pathKey(file.path)] ?? [];
+            return <tr key={file.path} className="bg-card hover:bg-selected"><td className="border-b border-border px-3 py-2"><div className="flex items-center gap-3"><input aria-label={`Select ${file.fileName}`} type="checkbox" checked={selected} onChange={() => toggleSelectedPath(file.path)} /><FileName value={file.fileName}/></div></td><td className="border-b border-border px-3 py-2">{editableTracks.length ? <div className="flex flex-wrap gap-x-4 gap-y-2">{editableTracks.map((track) => <label key={track.id} className={["flex items-center gap-2", selected ? "" : "text-disabled"].join(" ")}><input aria-label={`${file.fileName} track ${track.trackNumber} ${track.name || track.language || "Subtitle"}`} type="checkbox" checked={chosenIds.includes(track.id)} disabled={!selected} onChange={() => toggleTrack(file.path, track.id)} /><span>#{track.trackNumber} · {track.name || "Subtitle"} · {track.language || "und"}</span></label>)}</div> : <span className="text-muted">No ASS/SSA tracks</span>}</td><td className={["border-b border-border px-3 py-2", editableTracks.length && chosenIds.length ? "text-success" : "text-warning"].join(" ")}>{!editableTracks.length ? "No editable subtitles" : chosenIds.length ? `${chosenIds.length} selected` : "Choose a track"}</td></tr>;
           })}</tbody></table></div>
         </section>
 
@@ -143,4 +165,5 @@ function PreviewCard({ label, font, color, outlineColor, outlineSize, time }: { 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label className="block"><span className="text-xs font-semibold text-muted">{label}</span><span className="mt-1.5 flex h-9 overflow-hidden rounded-md border border-border bg-input"><input aria-label={label} type="color" value={value} onChange={(event) => onChange(event.target.value.toUpperCase())} className="h-full w-11 border-0 bg-transparent p-1"/><input aria-label={`${label} hex`} value={value} onChange={(event) => onChange(event.target.value.toUpperCase())} className="min-w-0 flex-1 bg-transparent px-2 text-xs"/></span></label>; }
 function isEditableSubtitle(track: { type: string; codec: string }) { const codec = track.codec.toLowerCase(); return ["subtitle", "subtitles"].includes(track.type.toLowerCase()) && (codec.includes("substation") || codec === "ass" || codec === "ssa"); }
 function samePath(left: string, right: string) { return left.replace(/\\/g, "/").toLowerCase() === right.replace(/\\/g, "/").toLowerCase(); }
+function pathKey(path: string) { return path.replace(/\\/g, "/").toLowerCase(); }
 function formatOffset(offset: number) { const format = (millis: number) => { const value = Math.max(0, millis); return `${String(Math.floor(value / 3_600_000)).padStart(2, "0")}:${String(Math.floor(value / 60_000) % 60).padStart(2, "0")}:${String(Math.floor(value / 1000) % 60).padStart(2, "0")}.${String(value % 1000).padStart(3, "0")}`; }; return { start: format(72_000 + offset), end: format(75_000 + offset) }; }

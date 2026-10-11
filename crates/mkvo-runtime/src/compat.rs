@@ -153,6 +153,8 @@ pub struct MuxPreviewRequest {
     #[serde(default)]
     pub format_subtitles: bool,
     #[serde(default)]
+    pub subtitle_track_selections: Vec<SubtitleTrackSelection>,
+    #[serde(default)]
     pub subtitle_font_family: String,
     #[serde(default = "default_subtitle_primary_color")]
     pub subtitle_primary_color: String,
@@ -183,6 +185,14 @@ pub struct MuxPreviewRequest {
     pub plan_id: Option<PlanId>,
     pub plan_fingerprint: Option<String>,
     pub idempotency_key: Option<IdempotencyKey>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubtitleTrackSelection {
+    pub file_path: String,
+    #[serde(default)]
+    pub track_ids: Vec<u64>,
 }
 
 pub type MuxApplyRequest = MuxPreviewRequest;

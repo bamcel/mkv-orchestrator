@@ -199,6 +199,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
       reorderTemplatePath: "",
       reorderTemplateTrackIds: [],
       formatSubtitles: false,
+      subtitleTrackSelections: [],
       subtitleFontFamily: "",
       subtitlePrimaryColor: "#FFFFFF",
       subtitleOutlineColor: "#000000",
