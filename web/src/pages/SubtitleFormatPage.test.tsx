@@ -58,6 +58,25 @@ it("formats only the subtitle tracks selected for each file", async () => {
   ]);
 });
 
+it("batch selects and deselects a Track ID across all selected files", async () => {
+  const buildMuxPreview = vi.fn((_request: MuxPreviewRequest) => Promise.resolve({ actions: [], noChangeFiles: [], summary: "ready", status: "ready", planId: null, planFingerprint: null, idempotencyKey: null }));
+  const user = userEvent.setup();
+  renderWithBackend(<MediaLibraryProvider><OperationJobProvider><Scan/><SubtitleFormatPage/></OperationJobProvider></MediaLibraryProvider>, { buildMuxPreview });
+
+  const batchTrack = await screen.findByRole("checkbox", { name: "Batch Track ID 3" });
+  expect(batchTrack).toBeChecked();
+  await user.click(batchTrack);
+  expect(screen.getByRole("checkbox", { name: "01.mkv track 4 Signs/Songs" })).not.toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "02.mkv track 4 Signs/Songs" })).not.toBeChecked();
+  await user.click(screen.getByRole("button", { name: "Preview Summary" }));
+
+  await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
+  expect(buildMuxPreview.mock.calls[0][0].subtitleTrackSelections).toEqual([
+    { filePath: "/media/01.mkv", trackIds: [2] },
+    { filePath: "/media/02.mkv", trackIds: [2] }
+  ]);
+});
+
 it("sends a negative cue offset when timing is changed", async () => {
   const buildMuxPreview = vi.fn((_request: MuxPreviewRequest) => Promise.resolve({ actions: [], noChangeFiles: [], summary: "ready", status: "ready", planId: null, planFingerprint: null, idempotencyKey: null }));
   const user = userEvent.setup();
