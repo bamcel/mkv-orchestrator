@@ -1,4 +1,5 @@
 use super::*;
+use base64::Engine as _;
 
 impl MkvoRuntime {
     pub(super) async fn build_mux_preview_impl(
@@ -226,6 +227,57 @@ impl MkvoRuntime {
                 }
             }
         }
+        if request.format_subtitles {
+            if request.subtitle_font_family.trim().is_empty() {
+                return Err(RuntimeError::invalid("A subtitle font family is required."));
+            }
+            validate_css_color(&request.subtitle_primary_color)?;
+            validate_css_color(&request.subtitle_outline_color)?;
+            let outline_size = request.subtitle_outline_size.trim().parse::<f32>()
+                .map_err(|_| RuntimeError::invalid("Subtitle outline size must be a number."))?;
+            if !(0.0..=20.0).contains(&outline_size) {
+                return Err(RuntimeError::invalid("Subtitle outline size must be between 0 and 20."));
+            }
+            validate_imported_font(&request.subtitle_font_file_name, &request.subtitle_font_data_base64)?;
+            for item in &mut payload.items {
+                let Some(file) = files.iter().find(|file| same_path(&file.path, &item.source)) else {
+                    continue;
+                };
+                let transforms = file.tracks.iter().filter(|track| {
+                    track.kind == TrackKind::Subtitle && is_editable_ass_track(track)
+                }).map(|track| {
+                    let stem = item.source.file_stem().map_or_else(String::new, |value| value.to_string_lossy().into_owned());
+                    mkvo_domain::SubtitleTransform {
+                        track_id: track.mkvmerge_id,
+                        temporary_path: item.source.with_file_name(format!(".{stem}.mkvo-subtitle-{}.ass", track.mkvmerge_id)),
+                        language: track.language_or_undetermined().to_owned(),
+                        name: track.name.clone(),
+                        default: track.default,
+                        forced: track.forced,
+                    }
+                }).collect::<Vec<_>>();
+                if transforms.is_empty() {
+                    item.conflicts.push(mkvo_domain::PlanConflict::blocking(
+                        mkvo_domain::PlanConflictKind::InvalidSelection,
+                        "No editable ASS/SSA subtitle tracks were found. Bitmap subtitles such as PGS cannot have their font changed.",
+                        Some(item.source.clone()),
+                    ));
+                    continue;
+                }
+                let transformed_ids = transforms.iter().map(|track| track.track_id).collect::<BTreeSet<_>>();
+                item.selected_track_ids.retain(|id| !transformed_ids.contains(id));
+                item.external_subtitles.extend(transforms.iter().map(|track| ExternalSubtitle {
+                    path: track.temporary_path.clone(), language: track.language.clone(), name: track.name.clone(),
+                    default: track.default, forced: track.forced,
+                }));
+                item.mux_track_order = file.tracks.iter().map(|track| {
+                    transforms.iter().position(|candidate| candidate.track_id == track.mkvmerge_id)
+                        .map_or_else(|| format!("0:{}", track.mkvmerge_id), |index| format!("{}:0", index + 1))
+                }).collect();
+                item.subtitle_transforms = transforms;
+                item.conflicts.retain(|conflict| conflict.kind != mkvo_domain::PlanConflictKind::NoChange);
+            }
+        }
         for item in &mut payload.items {
             if item.mode == RemuxMode::ExtractSubtitles {
                 continue;
@@ -283,6 +335,13 @@ impl MkvoRuntime {
                 .clone()
                 .unwrap_or_default(),
         );
+        context.attributes.insert("subtitleFontFamily".to_owned(), request.subtitle_font_family.trim().to_owned());
+        context.attributes.insert("subtitlePrimaryColor".to_owned(), request.subtitle_primary_color.trim().to_owned());
+        context.attributes.insert("subtitleOutlineColor".to_owned(), request.subtitle_outline_color.trim().to_owned());
+        context.attributes.insert("subtitleOutlineSize".to_owned(), request.subtitle_outline_size.trim().to_owned());
+        context.attributes.insert("subtitleFontFileName".to_owned(), request.subtitle_font_file_name.trim().to_owned());
+        context.attributes.insert("subtitleFontDataBase64".to_owned(), request.subtitle_font_data_base64.clone());
+        context.attributes.insert("subtitleTimingOffsetMs".to_owned(), request.subtitle_timing_offset_ms.to_string());
         let now = Utc::now();
         OperationPlan::new(
             base.metadata.kind,
@@ -456,6 +515,9 @@ impl MkvoRuntime {
                 0,
             )
             .await?;
+        if !item.subtitle_transforms.is_empty() {
+            self.prepare_subtitle_transforms(item, attributes, context).await?;
+        }
         let invocation = self.remux_invocation(item, attributes).await?;
         context
             .log(
@@ -494,6 +556,14 @@ impl MkvoRuntime {
         } else {
             self.promote_remux_output(item).await?;
         }
+        for transform in &item.subtitle_transforms {
+            if self.dependencies().file_system.exists(&transform.temporary_path).await? {
+                self.dependencies().file_system.remove_file(&transform.temporary_path).await?;
+            }
+        }
+        if let Some(path) = imported_font_path(item, attributes) {
+            if self.dependencies().file_system.exists(&path).await? { self.dependencies().file_system.remove_file(&path).await?; }
+        }
         if item.delete_external_subtitles_after_success {
             for subtitle in &item.external_subtitles {
                 self.dependencies()
@@ -513,6 +583,49 @@ impl MkvoRuntime {
                 self.refresh_working_set(std::slice::from_ref(&item.final_output))
                     .await;
             }
+        }
+        Ok(())
+    }
+
+    async fn prepare_subtitle_transforms(
+        &self,
+        item: &mkvo_domain::RemuxPlanItem,
+        attributes: &BTreeMap<String, String>,
+        context: &mkvo_application::JobContext,
+    ) -> Result<(), ApplicationError> {
+        let executable = self.tool_path("mkvextract").await?;
+        for track in &item.subtitle_transforms {
+            if self.dependencies().file_system.exists(&track.temporary_path).await? {
+                self.dependencies().file_system.remove_file(&track.temporary_path).await?;
+            }
+        }
+        let font_name = attributes.get("subtitleFontFileName").map_or("", String::as_str);
+        let font_data = attributes.get("subtitleFontDataBase64").map_or("", String::as_str);
+        if !font_name.is_empty() && !font_data.is_empty() {
+            let path = imported_font_path(item, attributes).ok_or_else(|| ApplicationError::InvalidRequest("Invalid imported font file name.".to_owned()))?;
+            let bytes = base64::engine::general_purpose::STANDARD.decode(font_data).map_err(|_| ApplicationError::InvalidRequest("Imported font data is not valid base64.".to_owned()))?;
+            tokio::fs::write(&path, bytes).await.map_err(|error| ApplicationError::Internal(format!("could not stage imported font: {error}")))?;
+        }
+        let mut arguments = vec!["tracks".to_owned(), item.source.to_string_lossy().into_owned()];
+        arguments.extend(item.subtitle_transforms.iter().map(|track| format!("{}:{}", track.track_id, track.temporary_path.to_string_lossy())));
+        let invocation = ToolInvocation {
+            tool: "mkvextract".to_owned(), executable, arguments,
+            working_directory: item.source.parent().map(Path::to_path_buf),
+            expected_outputs: item.subtitle_transforms.iter().map(|track| track.temporary_path.clone()).collect(),
+        };
+        let execution = self.dependencies().tool_executor.execute(&invocation, context.cancellation_token()).await?;
+        if execution.exit_code != Some(0) {
+            return Err(ApplicationError::Internal(format!("mkvextract exited with {:?}: {}", execution.exit_code, execution.stderr.trim())));
+        }
+        let font = attributes.get("subtitleFontFamily").map_or("", String::as_str);
+        let primary_color = css_to_ass_color(attributes.get("subtitlePrimaryColor").map_or("#FFFFFF", String::as_str))?;
+        let outline_color = css_to_ass_color(attributes.get("subtitleOutlineColor").map_or("#000000", String::as_str))?;
+        let outline_size = attributes.get("subtitleOutlineSize").map_or("2", String::as_str);
+        let offset = attributes.get("subtitleTimingOffsetMs").and_then(|value| value.parse::<i64>().ok()).unwrap_or(0);
+        for track in &item.subtitle_transforms {
+            let content = tokio::fs::read_to_string(&track.temporary_path).await.map_err(|error| ApplicationError::Internal(format!("could not read extracted subtitle {}: {error}", track.temporary_path.display())))?;
+            let transformed = transform_ass_document(&content, font, &primary_color, &outline_color, outline_size, offset)?;
+            tokio::fs::write(&track.temporary_path, transformed).await.map_err(|error| ApplicationError::Internal(format!("could not write transformed subtitle {}: {error}", track.temporary_path.display())))?;
         }
         Ok(())
     }
@@ -572,7 +685,10 @@ impl MkvoRuntime {
         {
             append_track_selection(&mut arguments, &source, &item.selected_track_ids);
         }
-        if !item.track_order_ids.is_empty() {
+        if !item.mux_track_order.is_empty() {
+            arguments.push("--track-order".to_owned());
+            arguments.push(item.mux_track_order.join(","));
+        } else if !item.track_order_ids.is_empty() {
             arguments.push("--track-order".to_owned());
             arguments.push(
                 item.track_order_ids
@@ -592,6 +708,8 @@ impl MkvoRuntime {
                 arguments.push("--forced-display-flag".to_owned());
                 arguments.push("0:yes".to_owned());
             }
+            arguments.push("--default-track-flag".to_owned());
+            arguments.push(format!("0:{}", if subtitle.default { "yes" } else { "no" }));
             if let Some(name) = subtitle
                 .name
                 .as_deref()
@@ -601,6 +719,15 @@ impl MkvoRuntime {
                 arguments.push(format!("0:{}", name.trim()));
             }
             arguments.push(subtitle.path.to_string_lossy().into_owned());
+        }
+        if let Some(font_path) = imported_font_path(item, attributes) {
+            let extension = font_path.extension().and_then(|value| value.to_str()).unwrap_or("ttf");
+            arguments.push("--attachment-name".to_owned());
+            arguments.push(attributes.get("subtitleFontFileName").cloned().unwrap_or_default());
+            arguments.push("--attachment-mime-type".to_owned());
+            arguments.push(if extension.eq_ignore_ascii_case("otf") { "application/vnd.ms-opentype" } else { "application/x-truetype-font" }.to_owned());
+            arguments.push("--attach-file".to_owned());
+            arguments.push(font_path.to_string_lossy().into_owned());
         }
         Ok(ToolInvocation {
             tool: tool.to_owned(),
@@ -799,9 +926,134 @@ fn subtitle_names_match(existing: Option<&str>, candidate: Option<&str>) -> bool
     }
 }
 
+fn is_editable_ass_track(track: &MediaTrack) -> bool {
+    let codec = track.codec.to_ascii_lowercase();
+    let codec_id = track.codec_id.as_deref().unwrap_or_default().to_ascii_lowercase();
+    codec.contains("substation") || codec == "ass" || codec == "ssa" || codec_id == "s_text/ass" || codec_id == "s_text/ssa"
+}
+
+fn transform_ass_document(content: &str, font: &str, primary_color: &str, outline_color: &str, outline_size: &str, offset_ms: i64) -> Result<String, ApplicationError> {
+    let mut section = "";
+    let mut style_font_index = None;
+    let mut style_primary_index = None;
+    let mut style_outline_color_index = None;
+    let mut style_outline_size_index = None;
+    let mut event_start_index = None;
+    let mut event_end_index = None;
+    let mut event_text_index = None;
+    let mut output = String::with_capacity(content.len());
+    for raw in content.split_inclusive('\n') {
+        let newline = if raw.ends_with("\r\n") { "\r\n" } else if raw.ends_with('\n') { "\n" } else { "" };
+        let line = raw.trim_end_matches(['\r', '\n']);
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') { section = trimmed; }
+        let mut next = line.to_owned();
+        if section.eq_ignore_ascii_case("[V4+ Styles]") || section.eq_ignore_ascii_case("[V4 Styles]") {
+            if let Some(value) = trimmed.strip_prefix("Format:") {
+                let fields = value.split(',').map(str::trim).collect::<Vec<_>>();
+                style_font_index = fields.iter().position(|field| field.eq_ignore_ascii_case("Fontname"));
+                style_primary_index = fields.iter().position(|field| field.eq_ignore_ascii_case("PrimaryColour"));
+                style_outline_color_index = fields.iter().position(|field| field.eq_ignore_ascii_case("OutlineColour"));
+                style_outline_size_index = fields.iter().position(|field| field.eq_ignore_ascii_case("Outline"));
+            } else if let Some(value) = line.strip_prefix("Style:") {
+                let mut fields = value.split(',').map(str::to_owned).collect::<Vec<_>>();
+                set_ass_style_field(&mut fields, style_font_index, font);
+                set_ass_style_field(&mut fields, style_primary_index, primary_color);
+                set_ass_style_field(&mut fields, style_outline_color_index, outline_color);
+                set_ass_style_field(&mut fields, style_outline_size_index, outline_size);
+                next = format!("Style:{}", fields.join(","));
+            }
+        } else if section.eq_ignore_ascii_case("[Events]") {
+            if let Some(value) = trimmed.strip_prefix("Format:") {
+                let fields = value.split(',').map(str::trim).collect::<Vec<_>>();
+                event_start_index = fields.iter().position(|field| field.eq_ignore_ascii_case("Start"));
+                event_end_index = fields.iter().position(|field| field.eq_ignore_ascii_case("End"));
+                event_text_index = fields.iter().position(|field| field.eq_ignore_ascii_case("Text"));
+            } else {
+                if let Some(value) = line.strip_prefix("Dialogue:") {
+                    let mut fields = value.split(',').map(str::to_owned).collect::<Vec<_>>();
+                    if let (Some(start), Some(end)) = (event_start_index, event_end_index) {
+                        if offset_ms != 0 && start < fields.len() && end < fields.len() {
+                            fields[start] = shift_ass_time(&fields[start], offset_ms)?;
+                            fields[end] = shift_ass_time(&fields[end], offset_ms)?;
+                        }
+                    }
+                    if let Some(text) = event_text_index.filter(|index| *index < fields.len()) {
+                        fields[text] = replace_ass_inline_fonts(&fields[text..].join(","), font);
+                        fields.truncate(text + 1);
+                    }
+                    next = format!("Dialogue:{}", fields.join(","));
+                }
+            }
+        }
+        output.push_str(&next);
+        output.push_str(newline);
+    }
+    Ok(output)
+}
+
+fn set_ass_style_field(fields: &mut [String], index: Option<usize>, value: &str) {
+    if let Some(index) = index.filter(|index| *index < fields.len()) { fields[index] = value.to_owned(); }
+}
+
+fn validate_css_color(value: &str) -> RuntimeResult<()> {
+    let value = value.trim();
+    if value.len() == 7 && value.starts_with('#') && value[1..].chars().all(|character| character.is_ascii_hexdigit()) { return Ok(()); }
+    Err(RuntimeError::invalid("Subtitle colors must use #RRGGBB format."))
+}
+
+fn css_to_ass_color(value: &str) -> Result<String, ApplicationError> {
+    validate_css_color(value).map_err(|error| ApplicationError::InvalidRequest(error.to_string()))?;
+    let hex = &value.trim()[1..];
+    Ok(format!("&H00{}{}{}", &hex[4..6], &hex[2..4], &hex[0..2]))
+}
+
+fn validate_imported_font(file_name: &str, data: &str) -> RuntimeResult<()> {
+    if file_name.trim().is_empty() && data.is_empty() { return Ok(()); }
+    if file_name.trim().is_empty() || data.is_empty() { return Err(RuntimeError::invalid("Imported font name and data must both be provided.")); }
+    let path = Path::new(file_name.trim());
+    if path.file_name().and_then(|value| value.to_str()) != Some(file_name.trim()) { return Err(RuntimeError::invalid("Imported font name must not contain a path.")); }
+    let extension = path.extension().and_then(|value| value.to_str()).unwrap_or_default();
+    if !extension.eq_ignore_ascii_case("ttf") && !extension.eq_ignore_ascii_case("otf") { return Err(RuntimeError::invalid("Imported fonts must be .ttf or .otf files.")); }
+    let decoded = base64::engine::general_purpose::STANDARD.decode(data).map_err(|_| RuntimeError::invalid("Imported font data is not valid base64."))?;
+    if decoded.len() > 1024 * 1024 { return Err(RuntimeError::invalid("Imported fonts must be 1 MB or smaller.")); }
+    Ok(())
+}
+
+fn imported_font_path(item: &mkvo_domain::RemuxPlanItem, attributes: &BTreeMap<String, String>) -> Option<PathBuf> {
+    let name = attributes.get("subtitleFontFileName")?.trim();
+    if name.is_empty() || Path::new(name).file_name().and_then(|value| value.to_str()) != Some(name) { return None; }
+    let source_name = item.source.file_stem()?.to_string_lossy();
+    Some(item.source.with_file_name(format!(".{source_name}.mkvo-font-{name}")))
+}
+
+fn replace_ass_inline_fonts(text: &str, font: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(index) = rest.find("\\fn") {
+        output.push_str(&rest[..index + 3]);
+        rest = &rest[index + 3..];
+        let end = rest.find(['\\', '}']).unwrap_or(rest.len());
+        output.push_str(font);
+        rest = &rest[end..];
+    }
+    output.push_str(rest);
+    output
+}
+
+fn shift_ass_time(value: &str, offset_ms: i64) -> Result<String, ApplicationError> {
+    let parts = value.trim().split(':').collect::<Vec<_>>();
+    if parts.len() != 3 { return Err(ApplicationError::Internal(format!("invalid ASS timestamp: {value}"))); }
+    let hours = parts[0].parse::<i64>().map_err(|_| ApplicationError::Internal(format!("invalid ASS timestamp: {value}")))?;
+    let minutes = parts[1].parse::<i64>().map_err(|_| ApplicationError::Internal(format!("invalid ASS timestamp: {value}")))?;
+    let seconds = parts[2].parse::<f64>().map_err(|_| ApplicationError::Internal(format!("invalid ASS timestamp: {value}")))?;
+    let millis = ((hours * 3600 + minutes * 60) * 1000 + (seconds * 1000.0).round() as i64 + offset_ms).max(0);
+    Ok(format!("{}:{:02}:{:02}.{:02}", millis / 3_600_000, (millis / 60_000) % 60, (millis / 1000) % 60, (millis % 1000) / 10))
+}
+
 #[cfg(test)]
 mod subtitle_match_tests {
-    use super::{subtitle_codec_matches, subtitle_names_match, track_order_for};
+    use super::{shift_ass_time, subtitle_codec_matches, subtitle_names_match, track_order_for, transform_ass_document, validate_imported_font};
     use mkvo_domain::{ContainerMetadata, FileFingerprint, MediaFile, MediaStatus, MediaTrack, TrackKind};
     use std::path::Path;
     use chrono::Utc;
@@ -867,5 +1119,27 @@ mod subtitle_match_tests {
         let desired = template_tracks.iter().collect::<Vec<_>>();
 
         assert!(track_order_for(&target, &desired).is_err());
+    }
+
+    #[test]
+    fn changes_ass_fonts_without_changing_other_style_fields() {
+        let source = "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, Outline, Bold\nStyle: Default,Arial,48,&H00FFFFFF,&H00000000,2,-1\n[Events]\nFormat: Layer, Start, End, Text\nDialogue: 0,0:00:01.00,0:00:02.00,{\\fnComic Sans}Hello, world\n";
+        let result = transform_ass_document(source, "Noto Sans", "&H0000FFFF", "&H00FF0000", "3.5", 0).expect("transform");
+        assert!(result.contains("Style: Default,Noto Sans,48,&H0000FFFF,&H00FF0000,3.5,-1"));
+        assert!(result.contains("Dialogue: 0,0:00:01.00,0:00:02.00,{\\fnNoto Sans}Hello, world"));
+    }
+
+    #[test]
+    fn shifts_ass_cues_and_clamps_negative_times() {
+        assert_eq!(shift_ass_time("0:00:01.25", 500).expect("shift"), "0:00:01.75");
+        assert_eq!(shift_ass_time("0:00:01.25", -2_000).expect("shift"), "0:00:00.00");
+    }
+
+    #[test]
+    fn accepts_only_safe_supported_imported_fonts() {
+        assert!(validate_imported_font("Papernotes.ttf", "AA==").is_ok());
+        assert!(validate_imported_font("../Papernotes.ttf", "AA==").is_err());
+        assert!(validate_imported_font("Papernotes.exe", "AA==").is_err());
+        assert!(validate_imported_font("Papernotes.ttf", "not base64").is_err());
     }
 }

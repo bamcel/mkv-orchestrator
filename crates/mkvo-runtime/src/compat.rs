@@ -150,6 +150,22 @@ pub struct MuxPreviewRequest {
     pub reorder_template_path: String,
     #[serde(default)]
     pub reorder_template_track_ids: Vec<u64>,
+    #[serde(default)]
+    pub format_subtitles: bool,
+    #[serde(default)]
+    pub subtitle_font_family: String,
+    #[serde(default = "default_subtitle_primary_color")]
+    pub subtitle_primary_color: String,
+    #[serde(default = "default_subtitle_outline_color")]
+    pub subtitle_outline_color: String,
+    #[serde(default = "default_subtitle_outline_size")]
+    pub subtitle_outline_size: String,
+    #[serde(default)]
+    pub subtitle_font_file_name: String,
+    #[serde(default)]
+    pub subtitle_font_data_base64: String,
+    #[serde(default)]
+    pub subtitle_timing_offset_ms: i64,
     pub mux_matching_external_subtitles: bool,
     #[serde(default)]
     pub manual_subtitle_selections: Vec<ManualSubtitleSelection>,
@@ -174,6 +190,10 @@ pub type MuxApplyRequest = MuxPreviewRequest;
 fn default_remux_output_suffix() -> String {
     ".remuxed".to_owned()
 }
+
+fn default_subtitle_primary_color() -> String { "#FFFFFF".to_owned() }
+fn default_subtitle_outline_color() -> String { "#000000".to_owned() }
+fn default_subtitle_outline_size() -> String { "2".to_owned() }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

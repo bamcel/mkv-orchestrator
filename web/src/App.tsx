@@ -8,6 +8,7 @@ import { LogsPage } from "./pages/LogsPage";
 import { MuxRemuxPage } from "./pages/MuxRemuxPage";
 import { RenamePage } from "./pages/RenamePage";
 import { ReorderTracksPage } from "./pages/ReorderTracksPage";
+import { SubtitleFormatPage } from "./pages/SubtitleFormatPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TrackPropertiesPage } from "./pages/TrackPropertiesPage";
 import { MediaLibraryProvider, MediaLibrarySynchronizer } from "./state/MediaLibraryContext";
@@ -34,6 +35,7 @@ function ProtectedApp() {
           <Route path="/rename" element={<RenamePage />} />
           <Route path="/remove-tracks" element={<MuxRemuxPage workflow="remove" />} />
           <Route path="/reorder-tracks" element={<ReorderTracksPage />} />
+          <Route path="/subtitle-format" element={<SubtitleFormatPage />} />
           <Route path="/subtitles" element={<MuxRemuxPage workflow="subtitles" />} />
           <Route path="/convert-remux" element={<MuxRemuxPage workflow="convert" />} />
           <Route path="/edit-tracks" element={<TrackPropertiesPage />} />

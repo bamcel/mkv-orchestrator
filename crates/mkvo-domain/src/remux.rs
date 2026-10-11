@@ -43,6 +43,12 @@ pub struct RemuxPlanItem {
     /// mkvmerge track IDs in the exact order they should appear in the output.
     #[serde(default)]
     pub track_order_ids: Vec<u64>,
+    /// ASS/SSA subtitle tracks that are extracted, restyled, and remuxed.
+    #[serde(default)]
+    pub subtitle_transforms: Vec<SubtitleTransform>,
+    /// Fully qualified mkvmerge input/track pairs used when more than one input participates.
+    #[serde(default)]
+    pub mux_track_order: Vec<String>,
     #[serde(default)]
     pub external_subtitles: Vec<ExternalSubtitle>,
     #[serde(default)]
@@ -57,6 +63,17 @@ pub struct RemuxPlanItem {
     pub delete_external_subtitles_after_success: bool,
     #[serde(default)]
     pub conflicts: Vec<PlanConflict>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubtitleTransform {
+    pub track_id: u64,
+    pub temporary_path: PathBuf,
+    pub language: String,
+    pub name: Option<String>,
+    pub default: bool,
+    pub forced: bool,
 }
 
 impl RemuxPlanItem {

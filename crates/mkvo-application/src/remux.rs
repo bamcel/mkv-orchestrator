@@ -288,6 +288,8 @@ impl RemuxPlanner {
                 mode: request.mode,
                 selected_track_ids,
                 track_order_ids: Vec::new(),
+                subtitle_transforms: Vec::new(),
+                mux_track_order: Vec::new(),
                 external_subtitles,
                 extract_tracks,
                 preserve_chapters: request.options.preserve_chapters,
