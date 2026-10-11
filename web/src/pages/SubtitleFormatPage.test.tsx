@@ -7,7 +7,7 @@ import { SubtitleFormatPage } from "./SubtitleFormatPage";
 import { MediaLibraryProvider, useMediaLibrary } from "../state/MediaLibraryContext";
 import { OperationJobProvider } from "../state/OperationJobContext";
 import { renderWithBackend } from "../test/render";
-import type { MediaFileRow, MuxPreviewRequest } from "../api";
+import type { MediaFileRow, MuxPreviewRequest, WebSettings } from "../api";
 
 const files: MediaFileRow[] = ["01.mkv", "02.mkv"].map((fileName) => ({
   path: `/media/${fileName}`, fileName, extension: ".mkv", status: "Scanned", reader: "mkvmerge", codec: "HEVC", resolution: "1080p", bitDepth: "10", hdr: "", videoSummary: "", audioSummary: "jpn", subtitleSummary: "eng", attachmentSummary: "", attachments: [],
@@ -87,4 +87,21 @@ it("sends a negative cue offset when timing is changed", async () => {
   await user.click(screen.getByRole("button", { name: "Preview Summary" }));
   await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
   expect(buildMuxPreview.mock.calls[0][0].subtitleTimingOffsetMs).toBe(-1500);
+});
+
+it("shows an imported font immediately and saves it in MKVO settings", async () => {
+  const getWebSettings = vi.fn(() => Promise.resolve({ subtitleFonts: [] } as unknown as WebSettings));
+  const saveWebSettings = vi.fn((request) => Promise.resolve({ subtitleFonts: request.subtitleFonts ?? [] } as unknown as WebSettings));
+  const user = userEvent.setup();
+  renderWithBackend(<MediaLibraryProvider><OperationJobProvider><Scan/><SubtitleFormatPage/></OperationJobProvider></MediaLibraryProvider>, { getWebSettings, saveWebSettings });
+
+  const font = new File([new Uint8Array([79, 84, 84, 79])], "DrawingBrutalDemo.otf", { type: "font/otf" });
+  await user.upload(screen.getByLabelText("Import font file"), font);
+
+  await waitFor(() => expect(saveWebSettings).toHaveBeenCalled());
+  expect(screen.getByRole("combobox", { name: "Saved font" })).toHaveDisplayValue("DrawingBrutalDemo");
+  expect(screen.getByRole("button", { name: "Remove imported" })).toBeEnabled();
+  expect(saveWebSettings.mock.calls.at(-1)?.[0].subtitleFonts).toEqual([
+    expect.objectContaining({ family: "DrawingBrutalDemo", fileName: "DrawingBrutalDemo.otf", dataBase64: "T1RUTw==" })
+  ]);
 });

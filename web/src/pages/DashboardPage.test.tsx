@@ -62,6 +62,7 @@ function settings(overrides: Partial<WebSettings> = {}): WebSettings {
     customThemes: [],
     mediaServers: [],
     mediaServerPathMappings: [],
+    subtitleFonts: [],
     ...overrides
   };
 }

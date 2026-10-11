@@ -13,7 +13,7 @@ function settings(overrides: Partial<WebSettings> = {}): WebSettings {
     ignoredScanFolderNames: [], useQuickHashOnUnreliableTimestamps: false, renamePreviewCompactView: false,
     maxScanWorkers: 4, maxEditWorkers: 2, maxRemuxWorkers: 1, watchFolders: ["/media/watch"],
     enableLiveWatchFolderMonitoring: false, watchDebounceMillis: 750, watchReconciliationIntervalMinutes: 30,
-    watchForcePolling: false, selectedThemeName: "Dark", customThemes: [], mediaServerPathMappings: [],
+    watchForcePolling: false, selectedThemeName: "Dark", customThemes: [], mediaServerPathMappings: [], subtitleFonts: [],
     mediaServers: [{
       id: "server-1", name: "Jellyfin", type: "Jellyfin", serverUrl: "http://server", hasApiKey: true,
       isDefault: true, lastSyncedUtc: null,

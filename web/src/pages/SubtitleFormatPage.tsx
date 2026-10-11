@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 
-import { buildMuxPreview, startMuxApply, type MuxPreviewRequest, type MuxPreviewResponse } from "../api";
+import { buildMuxPreview, getWebSettings, saveWebSettings, startMuxApply, type MuxPreviewRequest, type MuxPreviewResponse } from "../api";
 import { FileName } from "../components/FileName";
 import { PreviewSummaryModal } from "../components/PreviewSummaryModal";
 import { SectionHeader } from "../components/SectionHeader";
 import { useMediaLibrary } from "../state/MediaLibraryContext";
 import { useOperationJob } from "../state/OperationJobContext";
-import { builtInSubtitleFonts, deleteImportedFont, fileToSubtitleFont, loadImportedFonts, registerPreviewFont, resolveFontData, saveImportedFont, type SubtitleFont } from "../lib/subtitleFonts";
+import { builtInSubtitleFonts, deleteImportedFont, fileToSubtitleFont, loadImportedFonts, registerPreviewFont, resolveFontData, type SubtitleFont } from "../lib/subtitleFonts";
 
 export function SubtitleFormatPage() {
   const { files, selectedPaths, setSelectedPaths, toggleSelectedPath } = useMediaLibrary();
@@ -46,10 +46,25 @@ export function SubtitleFormatPage() {
   }, [mkvFiles, selectedMkvPaths, selectedTrackIds]);
 
   useEffect(() => {
-    loadImportedFonts().then((fonts) => setFontLibrary([...builtInSubtitleFonts, ...fonts])).catch(() => setStatus("Saved fonts could not be loaded in this browser."));
+    void loadSavedFonts();
     void selectFont(builtInSubtitleFonts[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadSavedFonts() {
+    try {
+      const settings = await getWebSettings();
+      const serverFonts = (settings.subtitleFonts ?? []).map((font) => ({ ...font, builtIn: false } satisfies SubtitleFont));
+      const legacyFonts = await loadImportedFonts().catch(() => []);
+      const imported = uniqueFonts([...serverFonts, ...legacyFonts]);
+      setFontLibrary([...builtInSubtitleFonts, ...imported]);
+      if (legacyFonts.some((font) => !serverFonts.some((saved) => saved.id === font.id))) {
+        await saveWebSettings({ subtitleFonts: imported.map(fontDto) });
+      }
+    } catch (error) {
+      setStatus(error instanceof Error ? `Saved fonts could not be loaded: ${error.message}` : "Saved fonts could not be loaded from MKVO storage.");
+    }
+  }
 
   useEffect(() => {
     setSelectedTrackIds((current) => {
@@ -82,20 +97,29 @@ export function SubtitleFormatPage() {
     if (file.size > 1024 * 1024) { setStatus("Font files must be 1 MB or smaller."); return; }
     try {
       const font = await fileToSubtitleFont(file);
-      await saveImportedFont(font);
       setFontLibrary((current) => [...current.filter((item) => item.id !== font.id), font]);
       const previewAvailable = await selectFont(font);
-      setStatus(`${font.family} was imported and saved for future operations.${previewAvailable ? "" : " Live preview is unavailable for this font, but subtitle formatting can still use it."}`);
+      try {
+        const imported = uniqueFonts([...fontLibrary.filter((item) => !item.builtIn), font]);
+        await saveWebSettings({ subtitleFonts: imported.map(fontDto) });
+        setStatus(`${font.family} was imported and saved for future operations.${previewAvailable ? "" : " Live preview is unavailable for this font, but subtitle formatting can still use it."}`);
+      } catch {
+        setStatus(`${font.family} was imported for this session, but MKVO storage could not save it. It will need to be imported again after a restart.`);
+      }
     } catch (error) { setStatus(error instanceof Error ? error.message : "The font could not be imported."); }
   }
 
   async function removeSelectedFont() {
     const selected = fontLibrary.find((font) => font.id === selectedFontId);
     if (!selected || selected.builtIn) return;
-    await deleteImportedFont(selected.id);
-    setFontLibrary((current) => current.filter((font) => font.id !== selected.id));
-    await selectFont(builtInSubtitleFonts[0]);
-    setStatus(`${selected.family} was removed from saved fonts.`);
+    try {
+      const remaining = fontLibrary.filter((font) => !font.builtIn && font.id !== selected.id);
+      await saveWebSettings({ subtitleFonts: remaining.map(fontDto) });
+      await deleteImportedFont(selected.id);
+      setFontLibrary((current) => current.filter((font) => font.id !== selected.id));
+      await selectFont(builtInSubtitleFonts[0]);
+      setStatus(`${selected.family} was removed from saved fonts.`);
+    } catch (error) { setStatus(error instanceof Error ? error.message : "The imported font could not be removed."); }
   }
 
   const preview = useMutation({ mutationFn: buildMuxPreview, onSuccess: (result) => { setPreviewResult(result); setStatus(result.status); }, onError: (error) => setStatus(error instanceof Error ? error.message : "Preview failed.") });
@@ -216,4 +240,6 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
 function isEditableSubtitle(track: { type: string; codec: string }) { const codec = track.codec.toLowerCase(); return ["subtitle", "subtitles"].includes(track.type.toLowerCase()) && (codec.includes("substation") || codec === "ass" || codec === "ssa"); }
 function samePath(left: string, right: string) { return left.replace(/\\/g, "/").toLowerCase() === right.replace(/\\/g, "/").toLowerCase(); }
 function pathKey(path: string) { return path.replace(/\\/g, "/").toLowerCase(); }
+function fontDto(font: SubtitleFont) { return { id: font.id, family: font.family, fileName: font.fileName, dataBase64: font.dataBase64 ?? "" }; }
+function uniqueFonts(fonts: SubtitleFont[]) { return [...new Map(fonts.map((font) => [font.id, font])).values()]; }
 function formatOffset(offset: number) { const format = (millis: number) => { const value = Math.max(0, millis); return `${String(Math.floor(value / 3_600_000)).padStart(2, "0")}:${String(Math.floor(value / 60_000) % 60).padStart(2, "0")}:${String(Math.floor(value / 1000) % 60).padStart(2, "0")}.${String(value % 1000).padStart(3, "0")}`; }; return { start: format(72_000 + offset), end: format(75_000 + offset) }; }

@@ -13,13 +13,13 @@ use mkvo_contracts::{
     JobCompletion, JobKind, JobSnapshot, JobStatus, LibraryArtworkRequest, LibraryArtworkResponse,
     LibraryCatalogItem, LibraryCatalogRequest, LibraryCatalogResponse, LibraryLocalArtworkRequest,
     LogQuery, MediaFileRow, MediaServerSyncResponse, MediaServerTestResponse, ScanJobResponse,
-    ScanRequest, SecretUpdate, SourceRoot, WebMediaServer, WebMediaServerLibraryPath,
-    WebMediaServerPathMapping, WebSettings, WebSettingsRequest,
+    ScanRequest, SecretUpdate, SourceRoot, SubtitleFontDto, WebMediaServer,
+    WebMediaServerLibraryPath, WebMediaServerPathMapping, WebSettings, WebSettingsRequest,
 };
 use mkvo_domain::{
     AppSettings, CredentialState, IdempotencyKey, JobId, LibraryRoot, MediaFile, MediaServerId,
     MediaServerKind, MediaServerLibrary, MediaServerSettings, MetadataProvider, PathMapping,
-    PresetSettings, same_path, stable_fingerprint,
+    PresetSettings, SavedSubtitleFont, same_path, stable_fingerprint,
 };
 use mkvo_infra_media_servers::{
     ConfiguredMediaServerClient, MediaServerDiscoveryClient, MediaServerPathMapping,
@@ -329,6 +329,16 @@ fn web_settings(
                 container_path_prefix: display_path(&mapping.local_prefix),
             })
             .collect(),
+        subtitle_fonts: settings
+            .subtitle_fonts
+            .iter()
+            .map(|font| SubtitleFontDto {
+                id: font.id.clone(),
+                family: font.family.clone(),
+                file_name: font.file_name.clone(),
+                data_base64: font.data_base64.clone(),
+            })
+            .collect(),
     }
 }
 
@@ -479,6 +489,9 @@ fn apply_web_settings_request(
             })
             .collect();
     }
+    if let Some(fonts) = request.subtitle_fonts {
+        settings.subtitle_fonts = validate_saved_subtitle_fonts(fonts)?;
+    }
     if let Some(servers) = request.media_servers {
         let existing: HashMap<_, _> = settings
             .media_servers
@@ -569,6 +582,67 @@ fn apply_web_settings_request(
         settings.media_servers = updated;
     }
     Ok(())
+}
+
+fn validate_saved_subtitle_fonts(
+    fonts: Vec<SubtitleFontDto>,
+) -> RuntimeResult<Vec<SavedSubtitleFont>> {
+    if fonts.len() > 8 {
+        return Err(RuntimeError::invalid(
+            "No more than 8 imported subtitle fonts can be saved.",
+        ));
+    }
+    let mut ids = BTreeSet::new();
+    fonts
+        .into_iter()
+        .map(|font| {
+            let id = font.id.trim();
+            let family = font.family.trim();
+            let file_name = font.file_name.trim();
+            if id.is_empty()
+                || family.is_empty()
+                || file_name.is_empty()
+                || !ids.insert(id.to_owned())
+            {
+                return Err(RuntimeError::invalid(
+                    "Imported subtitle fonts require unique IDs, family names, and file names.",
+                ));
+            }
+            let path = Path::new(file_name);
+            if path.file_name().and_then(|value| value.to_str()) != Some(file_name) {
+                return Err(RuntimeError::invalid(
+                    "Imported subtitle font names must not contain a path.",
+                ));
+            }
+            let extension = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .unwrap_or_default();
+            if !extension.eq_ignore_ascii_case("ttf") && !extension.eq_ignore_ascii_case("otf") {
+                return Err(RuntimeError::invalid(
+                    "Imported subtitle fonts must be .ttf or .otf files.",
+                ));
+            }
+            let decoded = base64::Engine::decode(
+                &base64::engine::general_purpose::STANDARD,
+                &font.data_base64,
+            )
+            .map_err(|_| {
+                RuntimeError::invalid("Imported subtitle font data is not valid base64.")
+            })?;
+            if decoded.is_empty() || decoded.len() > 1024 * 1024 {
+                return Err(RuntimeError::invalid(
+                    "Imported subtitle fonts must be between 1 byte and 1 MB.",
+                ));
+            }
+            Ok(SavedSubtitleFont {
+                id: id.to_owned(),
+                family: family.to_owned(),
+                file_name: file_name.to_owned(),
+                data_base64: font.data_base64,
+            })
+        })
+        .collect()
 }
 
 fn normalized_strings(values: Vec<String>) -> Vec<String> {
@@ -1410,6 +1484,12 @@ mod tests {
                     .into_iter()
                     .collect(),
             }]),
+            subtitle_fonts: Some(vec![SubtitleFontDto {
+                id: "drawing-brutal".to_owned(),
+                family: "Drawing Brutal Demo".to_owned(),
+                file_name: "DrawingBrutalDemo.otf".to_owned(),
+                data_base64: "AA==".to_owned(),
+            }]),
             ..WebSettingsRequest::default()
         };
 
@@ -1442,6 +1522,8 @@ mod tests {
         assert_eq!(view.default_root_name, "Media");
         assert_eq!(view.ignored_scan_folder_names, vec!["Trailers".to_owned()]);
         assert!(view.use_quick_hash_on_unreliable_timestamps);
+        assert_eq!(view.subtitle_fonts.len(), 1);
+        assert_eq!(view.subtitle_fonts[0].family, "Drawing Brutal Demo");
         assert_eq!(view.max_scan_workers, 6);
         assert_eq!(view.max_edit_workers, 3);
         assert_eq!(view.max_remux_workers, 2);

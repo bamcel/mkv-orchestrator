@@ -389,6 +389,8 @@ pub struct WebSettings {
     pub media_servers: Vec<WebMediaServer>,
     #[serde(default)]
     pub media_server_path_mappings: Vec<WebMediaServerPathMapping>,
+    #[serde(default)]
+    pub subtitle_fonts: Vec<SubtitleFontDto>,
 }
 
 impl Default for WebSettings {
@@ -427,6 +429,7 @@ impl Default for WebSettings {
             custom_themes: Vec::new(),
             media_servers: Vec::new(),
             media_server_path_mappings: Vec::new(),
+            subtitle_fonts: Vec::new(),
         }
     }
 }
@@ -467,6 +470,16 @@ pub struct WebSettingsRequest {
     pub custom_themes: Option<Vec<ThemeDefinition>>,
     pub media_servers: Option<Vec<WebMediaServerRequest>>,
     pub media_server_path_mappings: Option<Vec<WebMediaServerPathMapping>>,
+    pub subtitle_fonts: Option<Vec<SubtitleFontDto>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubtitleFontDto {
+    pub id: String,
+    pub family: String,
+    pub file_name: String,
+    pub data_base64: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

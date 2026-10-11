@@ -25,6 +25,8 @@ pub struct AppSettings {
     pub appearance: AppearanceSettings,
     #[serde(default)]
     pub presets: PresetSettings,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subtitle_fonts: Vec<SavedSubtitleFont>,
 }
 
 impl Default for AppSettings {
@@ -41,8 +43,18 @@ impl Default for AppSettings {
             workers: WorkerSettings::default(),
             appearance: AppearanceSettings::default(),
             presets: PresetSettings::default(),
+            subtitle_fonts: Vec::new(),
         }
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedSubtitleFont {
+    pub id: String,
+    pub family: String,
+    pub file_name: String,
+    pub data_base64: String,
 }
 
 impl AppSettings {
