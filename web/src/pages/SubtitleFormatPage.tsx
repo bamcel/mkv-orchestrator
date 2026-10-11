@@ -62,12 +62,18 @@ export function SubtitleFormatPage() {
     });
   }, [mkvFiles]);
 
-  async function selectFont(font: SubtitleFont) {
+  async function selectFont(font: SubtitleFont): Promise<boolean> {
     try {
       const resolved = await resolveFontData(font);
-      await registerPreviewFont(resolved);
       setSelectedFontId(font.id); setFontFamily(font.family); setFontFileName(font.fileName); setFontDataBase64(resolved.dataBase64 ?? ""); setPreviewResult(null);
-    } catch (error) { setStatus(error instanceof Error ? error.message : "The font could not be loaded."); }
+      try {
+        await registerPreviewFont(resolved);
+        return true;
+      } catch {
+        setStatus(`${font.family} is selected, but this browser cannot render a live preview of the font. It can still be attached and used for subtitle formatting.`);
+        return false;
+      }
+    } catch (error) { setStatus(error instanceof Error ? error.message : "The font could not be loaded."); return false; }
   }
 
   async function importFont(file: File | undefined) {
@@ -78,8 +84,8 @@ export function SubtitleFormatPage() {
       const font = await fileToSubtitleFont(file);
       await saveImportedFont(font);
       setFontLibrary((current) => [...current.filter((item) => item.id !== font.id), font]);
-      await selectFont(font);
-      setStatus(`${font.family} was imported and saved for future operations.`);
+      const previewAvailable = await selectFont(font);
+      setStatus(`${font.family} was imported and saved for future operations.${previewAvailable ? "" : " Live preview is unavailable for this font, but subtitle formatting can still use it."}`);
     } catch (error) { setStatus(error instanceof Error ? error.message : "The font could not be imported."); }
   }
 

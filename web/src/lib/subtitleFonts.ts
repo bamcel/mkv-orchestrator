@@ -38,22 +38,32 @@ export async function loadImportedFonts(): Promise<SubtitleFont[]> {
 
 export async function saveImportedFont(font: SubtitleFont): Promise<void> {
   const database = await openDatabase();
-  await new Promise<void>((resolve, reject) => {
-    const request = database.transaction(storeName, "readwrite").objectStore(storeName).put(font);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-  database.close();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(storeName, "readwrite");
+      transaction.objectStore(storeName).put(font);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error ?? new Error("The font import was cancelled by browser storage."));
+    });
+  } finally {
+    database.close();
+  }
 }
 
 export async function deleteImportedFont(id: string): Promise<void> {
   const database = await openDatabase();
-  await new Promise<void>((resolve, reject) => {
-    const request = database.transaction(storeName, "readwrite").objectStore(storeName).delete(id);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-  database.close();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(storeName, "readwrite");
+      transaction.objectStore(storeName).delete(id);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error ?? new Error("The saved font could not be removed."));
+    });
+  } finally {
+    database.close();
+  }
 }
 
 export async function resolveFontData(font: SubtitleFont): Promise<SubtitleFont> {
