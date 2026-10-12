@@ -527,10 +527,12 @@ impl MkvoRuntime {
                 0,
             )
             .await?;
-        if !item.subtitle_transforms.is_empty() {
-            self.prepare_subtitle_transforms(item, attributes, context).await?;
-        }
-        let invocation = self.remux_invocation(item, attributes).await?;
+        let replaced_font_names = if item.subtitle_transforms.is_empty() {
+            BTreeSet::new()
+        } else {
+            self.prepare_subtitle_transforms(item, attributes, context).await?
+        };
+        let invocation = self.remux_invocation(item, attributes, &replaced_font_names).await?;
         context
             .log(
                 JobLogLevel::Information,
@@ -604,7 +606,7 @@ impl MkvoRuntime {
         item: &mkvo_domain::RemuxPlanItem,
         attributes: &BTreeMap<String, String>,
         context: &mkvo_application::JobContext,
-    ) -> Result<(), ApplicationError> {
+    ) -> Result<BTreeSet<String>, ApplicationError> {
         let executable = self.tool_path("mkvextract").await?;
         for track in &item.subtitle_transforms {
             if self.dependencies().file_system.exists(&track.temporary_path).await? {
@@ -635,22 +637,25 @@ impl MkvoRuntime {
         let outline_color = css_to_ass_color(attributes.get("subtitleOutlineColor").map_or("#000000", String::as_str))?;
         let outline_size = attributes.get("subtitleOutlineSize").map_or("2", String::as_str);
         let offset = attributes.get("subtitleTimingOffsetMs").and_then(|value| value.parse::<i64>().ok()).unwrap_or(0);
+        let mut replaced_font_names = BTreeSet::new();
         for track in &item.subtitle_transforms {
             let content = tokio::fs::read_to_string(&track.temporary_path).await.map_err(|error| ApplicationError::Internal(format!("could not read extracted subtitle {}: {error}", track.temporary_path.display())))?;
             let transformed = if track.source_format.eq_ignore_ascii_case("srt") {
                 transform_srt_document(&content, font, font_size, &primary_color, &outline_color, outline_size, offset)?
             } else {
+                replaced_font_names.extend(ass_font_names(&content));
                 transform_ass_document(&content, font, font_size, &primary_color, &outline_color, outline_size, offset)?
             };
             tokio::fs::write(&track.temporary_path, transformed).await.map_err(|error| ApplicationError::Internal(format!("could not write transformed subtitle {}: {error}", track.temporary_path.display())))?;
         }
-        Ok(())
+        Ok(replaced_font_names)
     }
 
     pub(super) async fn remux_invocation(
         &self,
         item: &mkvo_domain::RemuxPlanItem,
         attributes: &BTreeMap<String, String>,
+        replaced_font_names: &BTreeSet<String>,
     ) -> Result<ToolInvocation, ApplicationError> {
         let tool = remux_tool_name(item.mode);
         let executable = self.tool_path(tool).await?;
@@ -688,19 +693,29 @@ impl MkvoRuntime {
         {
             arguments.push("--no-chapters".to_owned());
         }
-        if attributes
+        let preserve_attachments = !attributes
             .get("preserveAttachments")
-            .is_some_and(|value| value == "false")
-        {
+            .is_some_and(|value| value == "false");
+        if !preserve_attachments {
             arguments.push("--no-attachments".to_owned());
         }
-        if let Some(source) = self
+        let source = self
             .current_domain_files()
             .await
             .into_iter()
-            .find(|file| same_path(&file.path, &item.source))
-        {
+            .find(|file| same_path(&file.path, &item.source));
+        if let Some(source) = source.as_ref() {
             append_track_selection(&mut arguments, &source, &item.selected_track_ids);
+            if preserve_attachments && !item.subtitle_transforms.is_empty() {
+                let all_formatable_tracks_selected = source.tracks.iter().filter(|track| track.kind == TrackKind::Subtitle && is_formatable_text_subtitle(track))
+                    .all(|track| item.subtitle_transforms.iter().any(|transform| transform.track_id == track.mkvmerge_id));
+                append_subtitle_font_attachment_selection(
+                    &mut arguments,
+                    &source.attachments,
+                    attributes.get("subtitleFontFileName").map_or("", String::as_str),
+                    all_formatable_tracks_selected.then_some(replaced_font_names),
+                );
+            }
         }
         if !item.mux_track_order.is_empty() {
             arguments.push("--track-order".to_owned());
@@ -959,6 +974,63 @@ fn is_formatable_text_subtitle(track: &MediaTrack) -> bool {
     is_editable_ass_track(track) || is_srt_track(track)
 }
 
+fn append_subtitle_font_attachment_selection(arguments: &mut Vec<String>, attachments: &[mkvo_domain::MediaAttachment], selected_font_file_name: &str, replaced_font_names: Option<&BTreeSet<String>>) {
+    let retained = attachments.iter().filter(|attachment| {
+        if !is_font_attachment(attachment) { return true; }
+        if !selected_font_file_name.is_empty() && attachment.file_name.eq_ignore_ascii_case(selected_font_file_name) { return false; }
+        let Some(replaced) = replaced_font_names else { return true; };
+        let stem = Path::new(&attachment.file_name).file_stem().and_then(|value| value.to_str()).unwrap_or_default();
+        !replaced.contains(&font_match_key(stem))
+    }).map(|attachment| attachment.id).collect::<Vec<_>>();
+    if retained.is_empty() {
+        arguments.push("--no-attachments".to_owned());
+    } else if retained.len() != attachments.len() {
+        arguments.push("--attachments".to_owned());
+        arguments.push(retained.iter().map(u64::to_string).collect::<Vec<_>>().join(","));
+    }
+}
+
+fn font_match_key(value: &str) -> String {
+    value.chars().filter(|character| character.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+fn ass_font_names(content: &str) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    let mut section = "";
+    let mut font_index = None;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') { section = trimmed; }
+        if section.eq_ignore_ascii_case("[V4+ Styles]") || section.eq_ignore_ascii_case("[V4 Styles]") {
+            if let Some(value) = trimmed.strip_prefix("Format:") {
+                font_index = value.split(',').map(str::trim).position(|field| field.eq_ignore_ascii_case("Fontname"));
+            } else if let Some(value) = line.strip_prefix("Style:") {
+                if let Some(name) = font_index.and_then(|index| value.split(',').nth(index)).map(str::trim).filter(|name| !name.is_empty()) {
+                    names.insert(font_match_key(name));
+                }
+            }
+        }
+        let mut rest = line;
+        while let Some(index) = rest.find("\\fn") {
+            let value = &rest[index + 3..];
+            let end = value.find(['\\', '}']).unwrap_or(value.len());
+            let name = value[..end].trim();
+            if !name.is_empty() { names.insert(font_match_key(name)); }
+            rest = &value[end..];
+        }
+    }
+    names
+}
+
+fn is_font_attachment(attachment: &mkvo_domain::MediaAttachment) -> bool {
+    let extension = Path::new(&attachment.file_name).extension().and_then(|value| value.to_str()).unwrap_or_default();
+    let content_type = attachment.content_type.as_deref().unwrap_or_default().to_ascii_lowercase();
+    matches!(extension.to_ascii_lowercase().as_str(), "ttf" | "otf" | "ttc" | "woff" | "woff2")
+        || content_type.contains("font")
+        || content_type.contains("truetype")
+        || content_type.contains("opentype")
+}
+
 fn transform_srt_document(content: &str, font: &str, font_size: &str, primary_color: &str, outline_color: &str, outline_size: &str, offset_ms: i64) -> Result<String, ApplicationError> {
     let normalized = content.replace("\r\n", "\n").replace('\r', "\n");
     let mut dialogues = Vec::new();
@@ -1119,8 +1191,9 @@ fn shift_ass_time(value: &str, offset_ms: i64) -> Result<String, ApplicationErro
 
 #[cfg(test)]
 mod subtitle_match_tests {
-    use super::{shift_ass_time, subtitle_codec_matches, subtitle_names_match, track_order_for, transform_ass_document, transform_srt_document, validate_imported_font};
-    use mkvo_domain::{ContainerMetadata, FileFingerprint, MediaFile, MediaStatus, MediaTrack, TrackKind};
+    use super::{append_subtitle_font_attachment_selection, ass_font_names, font_match_key, shift_ass_time, subtitle_codec_matches, subtitle_names_match, track_order_for, transform_ass_document, transform_srt_document, validate_imported_font};
+    use mkvo_domain::{ContainerMetadata, FileFingerprint, MediaAttachment, MediaFile, MediaStatus, MediaTrack, TrackKind};
+    use std::collections::BTreeSet;
     use std::path::Path;
     use chrono::Utc;
 
@@ -1201,6 +1274,50 @@ mod subtitle_match_tests {
         let result = transform_srt_document(source, "Andika Basic", "52", "&H00FFFFFF", "&H00000000", "2.5", 500).expect("transform");
         assert!(result.contains("Style: Default,Andika Basic,52,&H00FFFFFF,&H00FFFFFF,&H00000000"));
         assert!(result.contains("Dialogue: 0,0:00:01.75,0:00:04.00,Default,,0,0,0,,{\\i1}Hello{\\i0}\\Nworld"));
+    }
+
+    #[test]
+    fn subtitle_formatting_replaces_font_attachments_but_preserves_other_attachments() {
+        let attachments = vec![
+            MediaAttachment { id: 1, file_name: "Winter Storm.ttf".to_owned(), content_type: Some("application/x-truetype-font".to_owned()), description: None, size_bytes: Some(100) },
+            MediaAttachment { id: 2, file_name: "Winter Storm.ttf".to_owned(), content_type: Some("application/x-truetype-font".to_owned()), description: None, size_bytes: Some(100) },
+            MediaAttachment { id: 3, file_name: "cover.jpg".to_owned(), content_type: Some("image/jpeg".to_owned()), description: None, size_bytes: Some(200) },
+        ];
+        let mut arguments = Vec::new();
+
+        let replaced = BTreeSet::from([font_match_key("Winter Storm")]);
+        append_subtitle_font_attachment_selection(&mut arguments, &attachments, "AndikaBasic-Regular.ttf", Some(&replaced));
+
+        assert_eq!(arguments, ["--attachments", "3"]);
+    }
+
+    #[test]
+    fn subtitle_formatting_disables_inherited_attachments_when_only_fonts_exist() {
+        let attachments = vec![MediaAttachment { id: 7, file_name: "AndikaBasic-Regular.ttf".to_owned(), content_type: None, description: None, size_bytes: None }];
+        let mut arguments = Vec::new();
+
+        append_subtitle_font_attachment_selection(&mut arguments, &attachments, "AndikaBasic-Regular.ttf", None);
+
+        assert_eq!(arguments, ["--no-attachments"]);
+    }
+
+    #[test]
+    fn partial_track_formatting_keeps_unrelated_embedded_fonts() {
+        let attachments = vec![
+            MediaAttachment { id: 1, file_name: "Winter Storm.ttf".to_owned(), content_type: Some("application/x-truetype-font".to_owned()), description: None, size_bytes: None },
+            MediaAttachment { id: 2, file_name: "AndikaBasic-Regular.ttf".to_owned(), content_type: Some("application/x-truetype-font".to_owned()), description: None, size_bytes: None },
+        ];
+        let mut arguments = Vec::new();
+
+        append_subtitle_font_attachment_selection(&mut arguments, &attachments, "AndikaBasic-Regular.ttf", None);
+
+        assert_eq!(arguments, ["--attachments", "1"]);
+    }
+
+    #[test]
+    fn finds_style_and_inline_fonts_replaced_in_an_ass_track() {
+        let content = "[V4+ Styles]\nFormat: Name, Fontname, Fontsize\nStyle: Default,Winter Storm,48\n[Events]\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,{\\fnHey Comic}Hello";
+        assert_eq!(ass_font_names(content), BTreeSet::from([font_match_key("Winter Storm"), font_match_key("Hey Comic")]));
     }
 
     #[test]
