@@ -978,9 +978,10 @@ fn append_subtitle_font_attachment_selection(arguments: &mut Vec<String>, attach
     let retained = attachments.iter().filter(|attachment| {
         if !is_font_attachment(attachment) { return true; }
         if !selected_font_file_name.is_empty() && attachment.file_name.eq_ignore_ascii_case(selected_font_file_name) { return false; }
-        let Some(replaced) = replaced_font_names else { return true; };
-        let stem = Path::new(&attachment.file_name).file_stem().and_then(|value| value.to_str()).unwrap_or_default();
-        !replaced.contains(&font_match_key(stem))
+        // When every compatible text track is being formatted, all style and inline font
+        // references are rewritten to the selected font. No inherited font attachment remains
+        // referenced, even when its file name differs from its internal family name.
+        replaced_font_names.is_none()
     }).map(|attachment| attachment.id).collect::<Vec<_>>();
     if retained.is_empty() {
         arguments.push("--no-attachments".to_owned());
@@ -1299,6 +1300,20 @@ mod subtitle_match_tests {
         append_subtitle_font_attachment_selection(&mut arguments, &attachments, "AndikaBasic-Regular.ttf", None);
 
         assert_eq!(arguments, ["--no-attachments"]);
+    }
+
+    #[test]
+    fn full_track_formatting_removes_old_fonts_even_when_file_and_family_names_differ() {
+        let attachments = vec![
+            MediaAttachment { id: 1, file_name: "Unrelated File Name.ttf".to_owned(), content_type: Some("application/x-truetype-font".to_owned()), description: None, size_bytes: None },
+            MediaAttachment { id: 2, file_name: "cover.jpg".to_owned(), content_type: Some("image/jpeg".to_owned()), description: None, size_bytes: None },
+        ];
+        let mut arguments = Vec::new();
+        let rewritten_fonts = BTreeSet::new();
+
+        append_subtitle_font_attachment_selection(&mut arguments, &attachments, "Gandhi Sans Bold.otf", Some(&rewritten_fonts));
+
+        assert_eq!(arguments, ["--attachments", "2"]);
     }
 
     #[test]
