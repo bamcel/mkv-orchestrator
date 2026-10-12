@@ -23,6 +23,12 @@ function Scan() {
   return null;
 }
 
+function SrtScan() {
+  const library = useMediaLibrary();
+  useEffect(() => { library.setFiles([{ ...files[0], path: "/media/srt.mkv", fileName: "srt.mkv", tracks: [{ id: 4, trackNumber: 5, type: "subtitles", codec: "SubRip/SRT", language: "eng", name: "English", channels: null, default: true, forced: false }] }]); library.setSelectedPaths(["/media/srt.mkv"]); }, []);
+  return null;
+}
+
 it("keeps timing by default and formats every selected file", async () => {
   localStorage.clear(); sessionStorage.clear();
   const buildMuxPreview = vi.fn((_request: MuxPreviewRequest) => Promise.resolve({ actions: [], noChangeFiles: [], summary: "ready", status: "ready", planId: null, planFingerprint: null, idempotencyKey: null }));
@@ -56,6 +62,17 @@ it("applies the selected font size", async () => {
   await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
   expect(buildMuxPreview.mock.calls[0][0].subtitleFontSize).toBe("56");
   expect(screen.getByText("56")).toBeInTheDocument();
+});
+
+it("offers SRT tracks for conversion to styled ASS", async () => {
+  const buildMuxPreview = vi.fn((_request: MuxPreviewRequest) => Promise.resolve({ actions: [], noChangeFiles: [], summary: "ready", status: "ready", planId: null, planFingerprint: null, idempotencyKey: null }));
+  const user = userEvent.setup();
+  renderWithBackend(<MediaLibraryProvider><OperationJobProvider><SrtScan/><SubtitleFormatPage/></OperationJobProvider></MediaLibraryProvider>, { buildMuxPreview });
+
+  expect(await screen.findByText(/SRT → ASS/)).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Preview Summary" }));
+  await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
+  expect(buildMuxPreview.mock.calls[0][0].subtitleTrackSelections).toEqual([{ filePath: "/media/srt.mkv", trackIds: [4] }]);
 });
 
 it("formats only the subtitle tracks selected for each file", async () => {

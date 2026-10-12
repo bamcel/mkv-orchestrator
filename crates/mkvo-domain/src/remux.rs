@@ -43,7 +43,7 @@ pub struct RemuxPlanItem {
     /// mkvmerge track IDs in the exact order they should appear in the output.
     #[serde(default)]
     pub track_order_ids: Vec<u64>,
-    /// ASS/SSA subtitle tracks that are extracted, restyled, and remuxed.
+    /// ASS/SSA subtitle tracks that are restyled, plus SRT tracks converted to ASS.
     #[serde(default)]
     pub subtitle_transforms: Vec<SubtitleTransform>,
     /// Fully qualified mkvmerge input/track pairs used when more than one input participates.
@@ -70,6 +70,8 @@ pub struct RemuxPlanItem {
 pub struct SubtitleTransform {
     pub track_id: u64,
     pub temporary_path: PathBuf,
+    #[serde(default)]
+    pub source_format: String,
     pub language: String,
     pub name: Option<String>,
     pub default: bool,

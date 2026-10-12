@@ -253,13 +253,14 @@ impl MkvoRuntime {
                     .map(|selection| selection.track_ids.iter().copied().collect::<BTreeSet<_>>());
                 let transforms = file.tracks.iter().filter(|track| {
                     track.kind == TrackKind::Subtitle
-                        && is_editable_ass_track(track)
+                        && is_formatable_text_subtitle(track)
                         && selected_track_ids.as_ref().is_none_or(|ids| ids.contains(&track.mkvmerge_id))
                 }).map(|track| {
                     let stem = item.source.file_stem().map_or_else(String::new, |value| value.to_string_lossy().into_owned());
                     mkvo_domain::SubtitleTransform {
                         track_id: track.mkvmerge_id,
                         temporary_path: item.source.with_file_name(format!(".{stem}.mkvo-subtitle-{}.ass", track.mkvmerge_id)),
+                        source_format: if is_srt_track(track) { "srt" } else { "ass" }.to_owned(),
                         language: track.language_or_undetermined().to_owned(),
                         name: track.name.clone(),
                         default: track.default,
@@ -269,7 +270,7 @@ impl MkvoRuntime {
                 if transforms.is_empty() {
                     item.conflicts.push(mkvo_domain::PlanConflict::blocking(
                         mkvo_domain::PlanConflictKind::InvalidSelection,
-                        "No editable ASS/SSA subtitle tracks were selected. Bitmap subtitles such as PGS cannot have their font changed.",
+                        "No compatible ASS/SSA or SRT subtitle tracks were selected. Bitmap subtitles such as PGS cannot have their font changed.",
                         Some(item.source.clone()),
                     ));
                     continue;
@@ -636,7 +637,11 @@ impl MkvoRuntime {
         let offset = attributes.get("subtitleTimingOffsetMs").and_then(|value| value.parse::<i64>().ok()).unwrap_or(0);
         for track in &item.subtitle_transforms {
             let content = tokio::fs::read_to_string(&track.temporary_path).await.map_err(|error| ApplicationError::Internal(format!("could not read extracted subtitle {}: {error}", track.temporary_path.display())))?;
-            let transformed = transform_ass_document(&content, font, font_size, &primary_color, &outline_color, outline_size, offset)?;
+            let transformed = if track.source_format.eq_ignore_ascii_case("srt") {
+                transform_srt_document(&content, font, font_size, &primary_color, &outline_color, outline_size, offset)?
+            } else {
+                transform_ass_document(&content, font, font_size, &primary_color, &outline_color, outline_size, offset)?
+            };
             tokio::fs::write(&track.temporary_path, transformed).await.map_err(|error| ApplicationError::Internal(format!("could not write transformed subtitle {}: {error}", track.temporary_path.display())))?;
         }
         Ok(())
@@ -944,6 +949,52 @@ fn is_editable_ass_track(track: &MediaTrack) -> bool {
     codec.contains("substation") || codec == "ass" || codec == "ssa" || codec_id == "s_text/ass" || codec_id == "s_text/ssa"
 }
 
+fn is_srt_track(track: &MediaTrack) -> bool {
+    let codec = track.codec.to_ascii_lowercase();
+    let codec_id = track.codec_id.as_deref().unwrap_or_default().to_ascii_lowercase();
+    codec.contains("subrip") || codec == "srt" || codec_id == "s_text/utf8"
+}
+
+fn is_formatable_text_subtitle(track: &MediaTrack) -> bool {
+    is_editable_ass_track(track) || is_srt_track(track)
+}
+
+fn transform_srt_document(content: &str, font: &str, font_size: &str, primary_color: &str, outline_color: &str, outline_size: &str, offset_ms: i64) -> Result<String, ApplicationError> {
+    let normalized = content.replace("\r\n", "\n").replace('\r', "\n");
+    let mut dialogues = Vec::new();
+    for block in normalized.split("\n\n") {
+        let lines = block.lines().collect::<Vec<_>>();
+        let Some(timing_index) = lines.iter().position(|line| line.contains(" --> ")) else { continue; };
+        let timing = lines[timing_index].split_once(" --> ").ok_or_else(|| ApplicationError::InvalidRequest("Invalid SRT cue timing.".to_owned()))?;
+        let start = srt_time_to_ass(timing.0, offset_ms)?;
+        let end_value = timing.1.split_whitespace().next().unwrap_or(timing.1);
+        let end = srt_time_to_ass(end_value, offset_ms)?;
+        let text = lines.get(timing_index + 1..).unwrap_or_default().iter().map(|line| srt_text_to_ass(line)).collect::<Vec<_>>().join("\\N");
+        dialogues.push(format!("Dialogue: 0,{start},{end},Default,,0,0,0,,{text}"));
+    }
+    if dialogues.is_empty() {
+        return Err(ApplicationError::InvalidRequest("The selected SRT track contains no valid cues.".to_owned()));
+    }
+    Ok(format!("[Script Info]\nScriptType: v4.00+\nWrapStyle: 0\nScaledBorderAndShadow: yes\nYCbCr Matrix: TV.709\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,{font},{font_size},{primary_color},{primary_color},{outline_color},&H00000000,0,0,0,0,100,100,0,0,1,{outline_size},0,2,10,10,10,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n{}\n", dialogues.join("\n")))
+}
+
+fn srt_time_to_ass(value: &str, offset_ms: i64) -> Result<String, ApplicationError> {
+    let parts = value.trim().replace(',', ".").split(':').map(str::to_owned).collect::<Vec<_>>();
+    if parts.len() != 3 { return Err(ApplicationError::InvalidRequest(format!("Invalid SRT timestamp: {value}"))); }
+    let hours = parts[0].parse::<i64>().map_err(|_| ApplicationError::InvalidRequest(format!("Invalid SRT timestamp: {value}")))?;
+    let minutes = parts[1].parse::<i64>().map_err(|_| ApplicationError::InvalidRequest(format!("Invalid SRT timestamp: {value}")))?;
+    let seconds = parts[2].parse::<f64>().map_err(|_| ApplicationError::InvalidRequest(format!("Invalid SRT timestamp: {value}")))?;
+    let millis = ((hours * 3_600 + minutes * 60) * 1_000 + (seconds * 1_000.0).round() as i64 + offset_ms).max(0);
+    Ok(format!("{}:{:02}:{:02}.{:02}", millis / 3_600_000, (millis / 60_000) % 60, (millis / 1_000) % 60, (millis % 1_000) / 10))
+}
+
+fn srt_text_to_ass(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('{', "\\{").replace('}', "\\}")
+        .replace("<i>", "{\\i1}").replace("</i>", "{\\i0}")
+        .replace("<b>", "{\\b1}").replace("</b>", "{\\b0}")
+        .replace("<u>", "{\\u1}").replace("</u>", "{\\u0}")
+}
+
 fn transform_ass_document(content: &str, font: &str, font_size: &str, primary_color: &str, outline_color: &str, outline_size: &str, offset_ms: i64) -> Result<String, ApplicationError> {
     let mut section = "";
     let mut style_font_index = None;
@@ -1068,7 +1119,7 @@ fn shift_ass_time(value: &str, offset_ms: i64) -> Result<String, ApplicationErro
 
 #[cfg(test)]
 mod subtitle_match_tests {
-    use super::{shift_ass_time, subtitle_codec_matches, subtitle_names_match, track_order_for, transform_ass_document, validate_imported_font};
+    use super::{shift_ass_time, subtitle_codec_matches, subtitle_names_match, track_order_for, transform_ass_document, transform_srt_document, validate_imported_font};
     use mkvo_domain::{ContainerMetadata, FileFingerprint, MediaFile, MediaStatus, MediaTrack, TrackKind};
     use std::path::Path;
     use chrono::Utc;
@@ -1142,6 +1193,14 @@ mod subtitle_match_tests {
         let result = transform_ass_document(source, "Noto Sans", "56", "&H0000FFFF", "&H00FF0000", "3.5", 0).expect("transform");
         assert!(result.contains("Style: Default,Noto Sans,56,&H0000FFFF,&H00FF0000,3.5,-1"));
         assert!(result.contains("Dialogue: 0,0:00:01.00,0:00:02.00,{\\fnNoto Sans}Hello, world"));
+    }
+
+    #[test]
+    fn converts_srt_to_styled_ass_and_preserves_shifted_timing() {
+        let source = "1\r\n00:00:01,250 --> 00:00:03,500\r\n<i>Hello</i>\r\nworld\r\n";
+        let result = transform_srt_document(source, "Andika Basic", "52", "&H00FFFFFF", "&H00000000", "2.5", 500).expect("transform");
+        assert!(result.contains("Style: Default,Andika Basic,52,&H00FFFFFF,&H00FFFFFF,&H00000000"));
+        assert!(result.contains("Dialogue: 0,0:00:01.75,0:00:04.00,Default,,0,0,0,,{\\i1}Hello{\\i0}\\Nworld"));
     }
 
     #[test]

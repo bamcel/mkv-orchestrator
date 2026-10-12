@@ -131,7 +131,12 @@ pub(super) fn remux_description(item: &RemuxPlanItem) -> String {
         ),
         RemuxMode::ConvertToMkv => "Losslessly copy streams into MKV".to_owned(),
         RemuxMode::Remux if !item.subtitle_transforms.is_empty() => {
-            format!("Restyle {} ASS/SSA subtitle track(s)", item.subtitle_transforms.len())
+            let converted = item.subtitle_transforms.iter().filter(|track| track.source_format.eq_ignore_ascii_case("srt")).count();
+            if converted > 0 {
+                format!("Format {} text subtitle track(s), converting {converted} SRT track(s) to ASS", item.subtitle_transforms.len())
+            } else {
+                format!("Restyle {} ASS/SSA subtitle track(s)", item.subtitle_transforms.len())
+            }
         }
         RemuxMode::Remux if !item.track_order_ids.is_empty() => {
             format!("Reorder {} track(s) to match the template", item.track_order_ids.len())
