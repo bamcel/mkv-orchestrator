@@ -84,7 +84,7 @@ export function ReorderTracksPage() {
       removeUnwantedAudioLanguages: false, keepAudioLanguages: "", removeUnwantedSubtitleLanguages: false, keepSubtitleLanguages: "", removeUnwantedTrackIds: false, removeTrackIdsText: "",
       preserveChapters: true, preserveAttachments: true, preserveOriginal: false, remuxOutputSuffix: ".remuxed",
       reorderTracks: true, reorderTemplatePath: templatePath, reorderTemplateTrackIds: order,
-      formatSubtitles: false, subtitleTrackSelections: [], subtitleFontFamily: "", subtitlePrimaryColor: "#FFFFFF", subtitleOutlineColor: "#000000", subtitleOutlineSize: "2", subtitleFontFileName: "", subtitleFontDataBase64: "", subtitleTimingOffsetMs: 0,
+      formatSubtitles: false, subtitleTrackSelections: [], subtitleFontFamily: "", subtitleFontSize: "48", subtitlePrimaryColor: "#FFFFFF", subtitleOutlineColor: "#000000", subtitleOutlineSize: "2", subtitleFontFileName: "", subtitleFontDataBase64: "", subtitleTimingOffsetMs: 0,
       muxMatchingExternalSubtitles: false, manualSubtitleSelections: [], externalSubtitleLanguage: "und", externalSubtitleTrackName: null, externalSubtitleFormats: "", preserveExternalSubtitleFiles: true, skipMuxIfSubtitleAlreadyExists: false,
       extractSubtitles: false, extractSubtitleLanguages: "", extractOverwriteExistingFiles: false, convertMp4ToMkv: false, deleteMp4AfterConvert: false,
       planId: plan?.planId ?? null, planFingerprint: plan?.planFingerprint ?? null, idempotencyKey: plan?.idempotencyKey ?? null

@@ -759,6 +759,7 @@ mod tests {
             format_subtitles: false,
             subtitle_track_selections: Vec::new(),
             subtitle_font_family: String::new(),
+            subtitle_font_size: "48".to_owned(),
             subtitle_primary_color: "#FFFFFF".to_owned(),
             subtitle_outline_color: "#000000".to_owned(),
             subtitle_outline_size: "2".to_owned(),

@@ -37,10 +37,25 @@ it("keeps timing by default and formats every selected file", async () => {
   await user.click(screen.getByRole("button", { name: "Preview Summary" }));
 
   await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
-  expect(buildMuxPreview.mock.calls[0][0]).toMatchObject({ formatSubtitles: true, subtitleFontFamily: "Noto Sans", subtitleTimingOffsetMs: 0, selectedPaths: ["/media/01.mkv", "/media/02.mkv"], subtitleTrackSelections: [
+  expect(buildMuxPreview.mock.calls[0][0]).toMatchObject({ formatSubtitles: true, subtitleFontFamily: "Noto Sans", subtitleFontSize: "48", subtitleTimingOffsetMs: 0, selectedPaths: ["/media/01.mkv", "/media/02.mkv"], subtitleTrackSelections: [
     { filePath: "/media/01.mkv", trackIds: [2, 3] },
     { filePath: "/media/02.mkv", trackIds: [2, 3] }
   ] });
+});
+
+it("applies the selected font size", async () => {
+  const buildMuxPreview = vi.fn((_request: MuxPreviewRequest) => Promise.resolve({ actions: [], noChangeFiles: [], summary: "ready", status: "ready", planId: null, planFingerprint: null, idempotencyKey: null }));
+  const user = userEvent.setup();
+  renderWithBackend(<MediaLibraryProvider><OperationJobProvider><Scan/><SubtitleFormatPage/></OperationJobProvider></MediaLibraryProvider>, { buildMuxPreview });
+
+  const size = await screen.findByRole("spinbutton", { name: "Font size" });
+  await user.clear(size);
+  await user.type(size, "56");
+  await user.click(screen.getByRole("button", { name: "Preview Summary" }));
+
+  await waitFor(() => expect(buildMuxPreview).toHaveBeenCalled());
+  expect(buildMuxPreview.mock.calls[0][0].subtitleFontSize).toBe("56");
+  expect(screen.getByText("56")).toBeInTheDocument();
 });
 
 it("formats only the subtitle tracks selected for each file", async () => {

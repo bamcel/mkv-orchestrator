@@ -231,6 +231,11 @@ impl MkvoRuntime {
             if request.subtitle_font_family.trim().is_empty() {
                 return Err(RuntimeError::invalid("A subtitle font family is required."));
             }
+            let font_size = request.subtitle_font_size.trim().parse::<f32>()
+                .map_err(|_| RuntimeError::invalid("Subtitle font size must be a number."))?;
+            if !(1.0..=500.0).contains(&font_size) {
+                return Err(RuntimeError::invalid("Subtitle font size must be between 1 and 500."));
+            }
             validate_css_color(&request.subtitle_primary_color)?;
             validate_css_color(&request.subtitle_outline_color)?;
             let outline_size = request.subtitle_outline_size.trim().parse::<f32>()
@@ -341,6 +346,7 @@ impl MkvoRuntime {
                 .unwrap_or_default(),
         );
         context.attributes.insert("subtitleFontFamily".to_owned(), request.subtitle_font_family.trim().to_owned());
+        context.attributes.insert("subtitleFontSize".to_owned(), request.subtitle_font_size.trim().to_owned());
         context.attributes.insert("subtitlePrimaryColor".to_owned(), request.subtitle_primary_color.trim().to_owned());
         context.attributes.insert("subtitleOutlineColor".to_owned(), request.subtitle_outline_color.trim().to_owned());
         context.attributes.insert("subtitleOutlineSize".to_owned(), request.subtitle_outline_size.trim().to_owned());
@@ -623,13 +629,14 @@ impl MkvoRuntime {
             return Err(ApplicationError::Internal(format!("mkvextract exited with {:?}: {}", execution.exit_code, execution.stderr.trim())));
         }
         let font = attributes.get("subtitleFontFamily").map_or("", String::as_str);
+        let font_size = attributes.get("subtitleFontSize").map_or("48", String::as_str);
         let primary_color = css_to_ass_color(attributes.get("subtitlePrimaryColor").map_or("#FFFFFF", String::as_str))?;
         let outline_color = css_to_ass_color(attributes.get("subtitleOutlineColor").map_or("#000000", String::as_str))?;
         let outline_size = attributes.get("subtitleOutlineSize").map_or("2", String::as_str);
         let offset = attributes.get("subtitleTimingOffsetMs").and_then(|value| value.parse::<i64>().ok()).unwrap_or(0);
         for track in &item.subtitle_transforms {
             let content = tokio::fs::read_to_string(&track.temporary_path).await.map_err(|error| ApplicationError::Internal(format!("could not read extracted subtitle {}: {error}", track.temporary_path.display())))?;
-            let transformed = transform_ass_document(&content, font, &primary_color, &outline_color, outline_size, offset)?;
+            let transformed = transform_ass_document(&content, font, font_size, &primary_color, &outline_color, outline_size, offset)?;
             tokio::fs::write(&track.temporary_path, transformed).await.map_err(|error| ApplicationError::Internal(format!("could not write transformed subtitle {}: {error}", track.temporary_path.display())))?;
         }
         Ok(())
@@ -937,9 +944,10 @@ fn is_editable_ass_track(track: &MediaTrack) -> bool {
     codec.contains("substation") || codec == "ass" || codec == "ssa" || codec_id == "s_text/ass" || codec_id == "s_text/ssa"
 }
 
-fn transform_ass_document(content: &str, font: &str, primary_color: &str, outline_color: &str, outline_size: &str, offset_ms: i64) -> Result<String, ApplicationError> {
+fn transform_ass_document(content: &str, font: &str, font_size: &str, primary_color: &str, outline_color: &str, outline_size: &str, offset_ms: i64) -> Result<String, ApplicationError> {
     let mut section = "";
     let mut style_font_index = None;
+    let mut style_font_size_index = None;
     let mut style_primary_index = None;
     let mut style_outline_color_index = None;
     let mut style_outline_size_index = None;
@@ -957,12 +965,14 @@ fn transform_ass_document(content: &str, font: &str, primary_color: &str, outlin
             if let Some(value) = trimmed.strip_prefix("Format:") {
                 let fields = value.split(',').map(str::trim).collect::<Vec<_>>();
                 style_font_index = fields.iter().position(|field| field.eq_ignore_ascii_case("Fontname"));
+                style_font_size_index = fields.iter().position(|field| field.eq_ignore_ascii_case("Fontsize"));
                 style_primary_index = fields.iter().position(|field| field.eq_ignore_ascii_case("PrimaryColour"));
                 style_outline_color_index = fields.iter().position(|field| field.eq_ignore_ascii_case("OutlineColour"));
                 style_outline_size_index = fields.iter().position(|field| field.eq_ignore_ascii_case("Outline"));
             } else if let Some(value) = line.strip_prefix("Style:") {
                 let mut fields = value.split(',').map(str::to_owned).collect::<Vec<_>>();
                 set_ass_style_field(&mut fields, style_font_index, font);
+                set_ass_style_field(&mut fields, style_font_size_index, font_size);
                 set_ass_style_field(&mut fields, style_primary_index, primary_color);
                 set_ass_style_field(&mut fields, style_outline_color_index, outline_color);
                 set_ass_style_field(&mut fields, style_outline_size_index, outline_size);
@@ -1129,8 +1139,8 @@ mod subtitle_match_tests {
     #[test]
     fn changes_ass_fonts_without_changing_other_style_fields() {
         let source = "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, Outline, Bold\nStyle: Default,Arial,48,&H00FFFFFF,&H00000000,2,-1\n[Events]\nFormat: Layer, Start, End, Text\nDialogue: 0,0:00:01.00,0:00:02.00,{\\fnComic Sans}Hello, world\n";
-        let result = transform_ass_document(source, "Noto Sans", "&H0000FFFF", "&H00FF0000", "3.5", 0).expect("transform");
-        assert!(result.contains("Style: Default,Noto Sans,48,&H0000FFFF,&H00FF0000,3.5,-1"));
+        let result = transform_ass_document(source, "Noto Sans", "56", "&H0000FFFF", "&H00FF0000", "3.5", 0).expect("transform");
+        assert!(result.contains("Style: Default,Noto Sans,56,&H0000FFFF,&H00FF0000,3.5,-1"));
         assert!(result.contains("Dialogue: 0,0:00:01.00,0:00:02.00,{\\fnNoto Sans}Hello, world"));
     }
 

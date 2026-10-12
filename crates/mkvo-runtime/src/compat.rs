@@ -156,6 +156,8 @@ pub struct MuxPreviewRequest {
     pub subtitle_track_selections: Vec<SubtitleTrackSelection>,
     #[serde(default)]
     pub subtitle_font_family: String,
+    #[serde(default = "default_subtitle_font_size")]
+    pub subtitle_font_size: String,
     #[serde(default = "default_subtitle_primary_color")]
     pub subtitle_primary_color: String,
     #[serde(default = "default_subtitle_outline_color")]
@@ -204,6 +206,7 @@ fn default_remux_output_suffix() -> String {
 fn default_subtitle_primary_color() -> String { "#FFFFFF".to_owned() }
 fn default_subtitle_outline_color() -> String { "#000000".to_owned() }
 fn default_subtitle_outline_size() -> String { "2".to_owned() }
+fn default_subtitle_font_size() -> String { "48".to_owned() }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

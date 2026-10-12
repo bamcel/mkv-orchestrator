@@ -201,6 +201,7 @@ export function MuxRemuxPage({ workflow = "remove" }: { workflow?: MuxWorkflow }
       formatSubtitles: false,
       subtitleTrackSelections: [],
       subtitleFontFamily: "",
+      subtitleFontSize: "48",
       subtitlePrimaryColor: "#FFFFFF",
       subtitleOutlineColor: "#000000",
       subtitleOutlineSize: "2",
