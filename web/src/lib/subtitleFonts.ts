@@ -95,12 +95,25 @@ export async function resolveFontData(font: SubtitleFont): Promise<SubtitleFont>
 
 export function fileToSubtitleFont(file: File): Promise<SubtitleFont> {
   return readFileBuffer(file).then((buffer) => ({
-    id: `imported-${crypto.randomUUID()}`,
+    id: createImportedFontId(),
     family: file.name.replace(/\.(?:ttf|otf)$/i, "").replace(/[-_]+/g, " ").trim(),
     fileName: file.name,
     dataBase64: arrayBufferToBase64(buffer),
     builtIn: false
   }));
+}
+
+function createImportedFontId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `imported-${crypto.randomUUID()}`;
+  }
+
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return `imported-${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  return `imported-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 function readFileBuffer(file: File): Promise<ArrayBuffer> {
